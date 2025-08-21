@@ -1,0 +1,31 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('permissions', function (Blueprint $table) {
+            $table->id();
+            $table->string('model'); // e.g. 'Project or User or Client'
+            $table->string('type'); // e.g. route or colunm name => project_title
+            $table->string('name')->unique(); // e.g. 'Add Project'
+            $table->text('notes')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('permissions');
+    }
+};

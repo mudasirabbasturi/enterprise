@@ -1,0 +1,54 @@
+[Company Logo]
+[Company Name]
+[Company Address]
+[Phone Number] | [Email] | [Website]
+
+---------------------------------------------------------
+
+Job Offer Letter
+
+Issue Date: {{ issue_date }}
+
+To:
+{{ candidate_name }}
+{{ candidate_email }}
+{{ candidate_phone }}
+
+Subject: Offer of Employment for the Position of {{ position_applied }}
+
+Dear {{ candidate_name }},
+
+We are pleased to offer you the position of **{{ position_applied }}** at **{{ company_name }}**. After reviewing your qualifications and experience, we believe you will be a valuable asset to our team.
+
+Your starting date will be **{{ start_date }}**, and you will report directly to **[Supervisor's Name or Department]**.
+
+### Employment Details:
+- **Position**: {{ position_applied }}
+- **Type**: [Full-Time / Part-Time / Contract]
+- **Salary**: {{ salary }} per [month/year]
+- **Working Hours**: [e.g., 9:00 AM – 5:00 PM, Monday to Friday]
+- **Location**: [Workplace location or remote]
+
+### Additional Benefits:
+- Health insurance
+- Paid time off
+- Travel allowance
+- [Other perks if applicable]
+
+Please review the terms of this offer carefully. If you accept this offer, kindly sign the acceptance section below and return a scanned copy of this letter by **{{ acceptance_deadline }}**.
+
+We are excited about the possibility of you joining our team. Should you have any questions, please feel free to contact us.
+
+Sincerely,  
+[HR Manager Name]  
+[Designation]  
+{{ company_name }}  
+
+---------------------------------------------------------
+
+**Candidate’s Acceptance**
+
+I, **{{ candidate_name }}**, accept the job offer for the position of **{{ position_applied }}** at **{{ company_name }}**, under the terms outlined in this letter.
+
+Signature: _______________________  
+Date: ___________________________
