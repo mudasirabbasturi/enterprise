@@ -14,7 +14,6 @@
         @viteReactRefresh
         @routes
         @vite('resources/js/app.jsx')
-        @vite('resources/css/app.css')
         @vite('resources/css/main.css')
         @inertiaHead
     </head>

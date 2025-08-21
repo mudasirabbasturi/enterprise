@@ -7,7 +7,7 @@ import path from "path";
 export default defineConfig({
   plugins: [
     laravel({
-      input: "resources/js/app.jsx",
+      input: ["resources/js/app.jsx", "resources/css/main.css"],
       refresh: true,
     }),
     tailwindcss(),

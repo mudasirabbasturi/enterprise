@@ -342,6 +342,43 @@
       "resources/js/app.jsx"
     ]
   },
+  "resources/css/fonts/adobe/AdobeClean-Bold.ttf": {
+    "file": "assets/AdobeClean-Bold-DHqsXNc_.ttf",
+    "src": "resources/css/fonts/adobe/AdobeClean-Bold.ttf"
+  },
+  "resources/css/fonts/adobe/AdobeClean-BoldSemiCn.ttf": {
+    "file": "assets/AdobeClean-BoldSemiCn-CMtbnOG7.ttf",
+    "src": "resources/css/fonts/adobe/AdobeClean-BoldSemiCn.ttf"
+  },
+  "resources/css/fonts/adobe/AdobeClean-BoldSemiCnIt.ttf": {
+    "file": "assets/AdobeClean-BoldSemiCnIt-DTgJnPb8.ttf",
+    "src": "resources/css/fonts/adobe/AdobeClean-BoldSemiCnIt.ttf"
+  },
+  "resources/css/fonts/adobe/AdobeClean-It.ttf": {
+    "file": "assets/AdobeClean-It-DDMHH1Yp.ttf",
+    "src": "resources/css/fonts/adobe/AdobeClean-It.ttf"
+  },
+  "resources/css/fonts/adobe/AdobeClean-Light.ttf": {
+    "file": "assets/AdobeClean-Light-Bubp46Vm.ttf",
+    "src": "resources/css/fonts/adobe/AdobeClean-Light.ttf"
+  },
+  "resources/css/fonts/adobe/AdobeClean-LightIt.ttf": {
+    "file": "assets/AdobeClean-LightIt-DtpNzCVI.ttf",
+    "src": "resources/css/fonts/adobe/AdobeClean-LightIt.ttf"
+  },
+  "resources/css/fonts/adobe/AdobeClean-Regular.ttf": {
+    "file": "assets/AdobeClean-Regular-6k9KD9wV.ttf",
+    "src": "resources/css/fonts/adobe/AdobeClean-Regular.ttf"
+  },
+  "resources/css/fonts/adobe/AdobeClean-SemiCn.ttf": {
+    "file": "assets/AdobeClean-SemiCn-BmujHeSt.ttf",
+    "src": "resources/css/fonts/adobe/AdobeClean-SemiCn.ttf"
+  },
+  "resources/css/main.css": {
+    "file": "assets/main-BdXykeRc.css",
+    "src": "resources/css/main.css",
+    "isEntry": true
+  },
   "resources/js/Dashboard/Auth/Login.jsx": {
     "file": "assets/Login-BwBu-T5-.js",
     "name": "Login",
