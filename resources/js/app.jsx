@@ -7,7 +7,6 @@ createInertiaApp({
   resolve: async (name) => {
     const pages = import.meta.glob("./Dashboard/**/*.jsx");
     const importPage = pages[`./Dashboard/${name}.jsx`];
-
     if (!importPage) {
       throw new Error(`Unknown page ${name}. Is the file path correct?`);
     }
