@@ -52,8 +52,61 @@ const sideBarConfig = {
       toolPanel: "agFiltersToolPanel",
     },
   ],
-  defaultToolPanel: null, // you can set "columns" if you want it open by default
-  position: "right", // sidebar on right
+  defaultToolPanel: "columns",
+  position: "right",
 };
 
-export { AgGridReact, gridTheme, defaultColDef, sideBarConfig };
+const STORAGE_KEY = "agGridColumnState";
+const gridOptionsConfig = {
+  onGridReady: (params) => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      params.api.applyColumnState({
+        state: JSON.parse(saved),
+        applyOrder: true,
+      });
+    }
+  },
+  onColumnMoved: (params) => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(params.api.getColumnState())
+    );
+  },
+  onColumnPinned: (params) => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(params.api.getColumnState())
+    );
+  },
+  onColumnVisible: (params) => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(params.api.getColumnState())
+    );
+  },
+  onColumnResized: (params) => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(params.api.getColumnState())
+    );
+  },
+  onSortChanged: (params) => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(params.api.getColumnState())
+    );
+  },
+  resetColumnState: (api) => {
+    api.resetColumnState();
+    localStorage.removeItem(STORAGE_KEY);
+  },
+};
+
+export {
+  AgGridReact,
+  gridTheme,
+  defaultColDef,
+  sideBarConfig,
+  gridOptionsConfig,
+};

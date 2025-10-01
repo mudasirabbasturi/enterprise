@@ -4,6 +4,7 @@ import {
   gridTheme,
   defaultColDef,
   sideBarConfig,
+  gridOptionsConfig,
 } from "@agConfig/AgGridConfig";
 import {
   router,
@@ -244,7 +245,10 @@ const ProjectsTable = ({ projects, showDrawer }) => {
                             name: user.name,
                             points_gain: per.points_gain,
                           }),
-                        style: { cursor: "pointer" },
+                        style: {
+                          cursor: "pointer",
+                          backgroundColor: "#87d068",
+                        },
                       }
                     : {};
 
@@ -780,6 +784,13 @@ const ProjectsTable = ({ projects, showDrawer }) => {
         pagination={true}
         paginationAutoPageSize={true}
         sideBar={sideBarConfig}
+        // State persistence
+        onGridReady={gridOptionsConfig.onGridReady}
+        onColumnMoved={gridOptionsConfig.onColumnMoved}
+        onColumnPinned={gridOptionsConfig.onColumnPinned}
+        onColumnVisible={gridOptionsConfig.onColumnVisible}
+        onColumnResized={gridOptionsConfig.onColumnResized}
+        onSortChanged={gridOptionsConfig.onSortChanged}
       />
     </>
   );

@@ -1,5 +1,11 @@
 import { useState, useRef, useEffect, lazy, Suspense } from "react";
-import { AgGridReact, gridTheme, defaultColDef } from "@agConfig/AgGridConfig";
+import {
+  AgGridReact,
+  gridTheme,
+  defaultColDef,
+  sideBarConfig,
+  gridOptionsConfig,
+} from "@agConfig/AgGridConfig";
 import {
   Link,
   router,
@@ -276,10 +282,21 @@ const Index = ({ roles, permissions }) => {
           <AgGridReact
             rowData={rowData}
             columnDefs={colDefs}
-            defaultColDef={defaultColDef}
+            defaultColDef={{
+              ...defaultColDef,
+              flex: undefined,
+            }}
             theme={gridTheme}
             pagination={true}
             paginationAutoPageSize={true}
+            sideBar={sideBarConfig}
+            // State persistence
+            onGridReady={gridOptionsConfig.onGridReady}
+            onColumnMoved={gridOptionsConfig.onColumnMoved}
+            onColumnPinned={gridOptionsConfig.onColumnPinned}
+            onColumnVisible={gridOptionsConfig.onColumnVisible}
+            onColumnResized={gridOptionsConfig.onColumnResized}
+            onSortChanged={gridOptionsConfig.onSortChanged}
           />
         </div>
       </div>
@@ -327,6 +344,8 @@ const Index = ({ roles, permissions }) => {
             </>
           )
         }
+        motion={false}
+        maskMotion={false}
       >
         <Suspense fallback={<div>Loading form...</div>}>
           {open &&

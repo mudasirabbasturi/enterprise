@@ -148,6 +148,8 @@ const Index = ({ permissions }) => {
             Close
           </button>
         }
+        motion={false}
+        maskMotion={false}
       >
         <Suspense fallback={<div>Loading form...</div>}>
           {open && (

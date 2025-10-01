@@ -120,6 +120,8 @@ const Index = ({ candidates }) => {
             </button>
           </>
         }
+        motion={false}
+        maskMotion={false}
       >
         {open && (
           <Suspense fallback={<div>Loading...</div>}>

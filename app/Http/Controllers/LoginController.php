@@ -22,13 +22,20 @@ class LoginController extends Controller
             'email' => 'required|email',
             'password' => 'required',
         ]);
-
         $credentials = $request->only('email', 'password');
         
         if (Auth::attempt($credentials)) {
             $user = Auth::user();
+            if($user->status !== "active") {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+                return back()->with('message', 'Your account does not have active status. Please contact admin.');
+            }
             if (is_null($user->role_id)) {
                 Auth::logout(); // make sure they are not logged in
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
                 return back()->with('message', 'Your account does not have a role assigned yet. Please contact admin.');
             }
             $request->session()->regenerate();
@@ -44,8 +51,6 @@ class LoginController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
-
-        // Redirect to the login page instead of rendering it
         return redirect()->route('login');
     }
 

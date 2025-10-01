@@ -147,6 +147,8 @@ const Index = ({ clients }) => {
             </>
           )
         }
+        motion={false}
+        maskMotion={false}
       >
         <Suspense fallback={<div>Loading form...</div>}>
           {open &&

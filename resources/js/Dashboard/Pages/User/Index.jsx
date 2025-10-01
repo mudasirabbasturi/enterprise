@@ -150,6 +150,8 @@ const Index = ({ users, roles, branches, departments, designations }) => {
             </>
           )
         }
+        motion={false}
+        maskMotion={false}
       >
         <Suspense fallback={<div>Loading form...</div>}>
           {open &&

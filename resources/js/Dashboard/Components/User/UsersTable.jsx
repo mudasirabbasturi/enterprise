@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef, lazy, Suspense, use } from "react";
-import { AgGridReact, gridTheme, defaultColDef } from "@agConfig/AgGridConfig";
+import {
+  AgGridReact,
+  gridTheme,
+  defaultColDef,
+  sideBarConfig,
+  gridOptionsConfig,
+} from "@agConfig/AgGridConfig";
 import {
   router, // InertiaJS
   useRoute, // ziggy routing
@@ -343,6 +349,14 @@ const UsersTable = ({ users, showDrawer }) => {
         theme={gridTheme}
         pagination={true}
         paginationAutoPageSize={true}
+        sideBar={sideBarConfig}
+        // State persistence
+        onGridReady={gridOptionsConfig.onGridReady}
+        onColumnMoved={gridOptionsConfig.onColumnMoved}
+        onColumnPinned={gridOptionsConfig.onColumnPinned}
+        onColumnVisible={gridOptionsConfig.onColumnVisible}
+        onColumnResized={gridOptionsConfig.onColumnResized}
+        onSortChanged={gridOptionsConfig.onSortChanged}
       />
     </>
   );

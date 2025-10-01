@@ -80,12 +80,11 @@ const DashboardLayout = ({ children }) => {
       >
         <div className="header-content d-flex align-items-center justify-content-between">
           <div className="header-left d-flex align-items-center">
-            <Link href="/" className="logo-link p-1">
+            <Link href="/" className="logo-link">
               <div
                 className="logo-collapsed"
                 style={{
                   width: "64px",
-                  padding: "4px",
                 }}
               >
                 <img

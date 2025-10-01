@@ -1,5 +1,11 @@
 import { useState, useEffect } from "react";
-import { AgGridReact, gridTheme, defaultColDef } from "@agConfig/AgGridConfig";
+import {
+  AgGridReact,
+  gridTheme,
+  defaultColDef,
+  sideBarConfig,
+  gridOptionsConfig,
+} from "@agConfig/AgGridConfig";
 import {
   router,
   useRoute, // ziggy routing
@@ -297,6 +303,14 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
         theme={gridTheme}
         pagination={true}
         paginationAutoPageSize={true}
+        sideBar={sideBarConfig}
+        // State persistence
+        onGridReady={gridOptionsConfig.onGridReady}
+        onColumnMoved={gridOptionsConfig.onColumnMoved}
+        onColumnPinned={gridOptionsConfig.onColumnPinned}
+        onColumnVisible={gridOptionsConfig.onColumnVisible}
+        onColumnResized={gridOptionsConfig.onColumnResized}
+        onSortChanged={gridOptionsConfig.onSortChanged}
       />
     </>
   );

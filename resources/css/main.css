@@ -96,8 +96,8 @@ a {
 }
 
 .header {
-    height: 45px !important;
-    line-height: 45px !important;
+    height: 64px !important;
+    line-height: 64px !important;
     position: sticky;
     top: 0;
     border-bottom: 1px solid #ddd;
@@ -105,10 +105,10 @@ a {
     z-index: 100;
 }
 .sidebar {
-    height: calc(100vh - 45px);
+    height: calc(100vh - 64px);
     overflow-y: auto;
     position: sticky;
-    top: 45px;
+    top: 64px;
     border-right: 1px solid #ddd;
 }
 

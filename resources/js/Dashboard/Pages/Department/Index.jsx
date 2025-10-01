@@ -4,6 +4,7 @@ import {
   gridTheme,
   defaultColDef,
   sideBarConfig,
+  gridOptionsConfig,
 } from "@agConfig/AgGridConfig";
 
 import {
@@ -241,12 +242,21 @@ const Index = ({ departments, branches }) => {
           <AgGridReact
             rowData={rowData}
             columnDefs={colDefs}
-            defaultColDef={defaultColDef}
+            defaultColDef={{
+              ...defaultColDef,
+              flex: undefined,
+            }}
             theme={gridTheme}
             pagination={true}
             paginationAutoPageSize={true}
             sideBar={sideBarConfig}
-            pivotMode={true}
+            // State persistence
+            onGridReady={gridOptionsConfig.onGridReady}
+            onColumnMoved={gridOptionsConfig.onColumnMoved}
+            onColumnPinned={gridOptionsConfig.onColumnPinned}
+            onColumnVisible={gridOptionsConfig.onColumnVisible}
+            onColumnResized={gridOptionsConfig.onColumnResized}
+            onSortChanged={gridOptionsConfig.onSortChanged}
           />
         </div>
       </div>
@@ -293,6 +303,8 @@ const Index = ({ departments, branches }) => {
             </>
           )
         }
+        motion={false}
+        maskMotion={false}
       >
         <Suspense fallback={<div>Loading form...</div>}>
           {open &&

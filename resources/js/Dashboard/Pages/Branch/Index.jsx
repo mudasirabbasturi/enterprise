@@ -1,9 +1,15 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
-import { AgGridReact, gridTheme, defaultColDef } from "@agConfig/AgGridConfig";
+import {
+  AgGridReact,
+  gridTheme,
+  defaultColDef,
+  sideBarConfig,
+  gridOptionsConfig,
+} from "@agConfig/AgGridConfig";
+
 import axios from "axios";
 import {
   Link,
-  router,
   useRoute,
   Breadcrumb,
   Tooltip,
@@ -23,6 +29,7 @@ import { notification } from "antd";
 const Index = ({ branches }) => {
   const [api, contextHolder] = notification.useNotification();
   const route = useRoute();
+
   const [rowData, setRowData] = useState(branches || []);
   const [colDefs, setColDefs] = useState([
     {
@@ -130,13 +137,9 @@ const Index = ({ branches }) => {
     },
   ]);
 
-  // useEffect(() => {
-  //   setRowData(branches);
-  // }, [branches]);
-
   useEffect(() => {
     setRowData(branches);
-  }, []);
+  }, [branches]);
 
   // Add \ View \ Edit Branch
   const [loading, setLoading] = useState(false);
@@ -210,10 +213,21 @@ const Index = ({ branches }) => {
           <AgGridReact
             rowData={rowData}
             columnDefs={colDefs}
-            defaultColDef={defaultColDef}
+            defaultColDef={{
+              ...defaultColDef,
+              flex: undefined,
+            }}
             theme={gridTheme}
             pagination={true}
             paginationAutoPageSize={true}
+            sideBar={sideBarConfig}
+            // State persistence
+            onGridReady={gridOptionsConfig.onGridReady}
+            onColumnMoved={gridOptionsConfig.onColumnMoved}
+            onColumnPinned={gridOptionsConfig.onColumnPinned}
+            onColumnVisible={gridOptionsConfig.onColumnVisible}
+            onColumnResized={gridOptionsConfig.onColumnResized}
+            onSortChanged={gridOptionsConfig.onSortChanged}
           />
         </div>
       </div>
@@ -228,7 +242,7 @@ const Index = ({ branches }) => {
         }
         closable={{ "aria-label": "Close Button" }}
         placement="left"
-        width={"40%"}
+        width={"90%"}
         onClose={onClose}
         open={open}
         maskClosable={false}
