@@ -93,7 +93,11 @@ class PermissionSeeder extends Seeder
 
             // ['model' => 'Candidate', 'type' => 'route', 'name' => 'View Job Application'],
             // ['model' => 'Candidate', 'type' => 'route', 'name' => 'Edit Job Application'],
-
+            
+            // ['model' => 'ProjectTeamMember', 'type' => 'route', 'name' => 'View Project Team'],
+            // ['model' => 'ProjectTeamMember', 'type' => 'route', 'name' => 'View Score Details'],
+            // ['model' => 'ProjectTeamMember', 'type' => 'route', 'name' => 'View Personal Score Details'],
+            // ['model' => 'ProjectTeamMember', 'type' => 'route', 'name' => 'Add/Update Score'],
         ];
 
         foreach ($permissions as $perm) {

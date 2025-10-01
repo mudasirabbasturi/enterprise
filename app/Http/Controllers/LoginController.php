@@ -26,9 +26,12 @@ class LoginController extends Controller
         $credentials = $request->only('email', 'password');
         
         if (Auth::attempt($credentials)) {
+            $user = Auth::user();
+            if (is_null($user->role_id)) {
+                Auth::logout(); // make sure they are not logged in
+                return back()->with('message', 'Your account does not have a role assigned yet. Please contact admin.');
+            }
             $request->session()->regenerate();
-            // return redirect()->intended('/dashboard')
-            //     ->with('success', 'Login successful!');
             return redirect()->route('home.index')->with('message', 'Login successful!');
         }
 

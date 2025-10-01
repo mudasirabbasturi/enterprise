@@ -6,10 +6,9 @@ import {
   Select,
   DatePicker,
   dayjs,
-  PhoneInput,
 } from "@shared/ui";
 const { TextArea } = Input;
-
+import axios from "axios";
 import { Editor } from "@tinymce/tinymce-react";
 import "tinymce/tinymce";
 import "tinymce/icons/default";
@@ -22,7 +21,16 @@ import "tinymce/plugins/link";
 import "tinymce/skins/ui/oxide/skin.css";
 const AddUser = forwardRef(
   (
-    { onClose, roles, branches, departments, designations, setParentLoading },
+    {
+      onClose,
+      roles,
+      branches,
+      departments,
+      designations,
+      setParentLoading,
+      setRowData,
+      api,
+    },
     ref
   ) => {
     const route = useRoute();
@@ -78,29 +86,57 @@ const AddUser = forwardRef(
       });
     };
 
-    const handleSubmit = () => {
-      setLoading(true);
-      setParentLoading?.(true);
-      router.post(route("user.store"), values, {
-        preserveScroll: true,
-        onSuccess: () => {
-          setValues(defaultValues);
-          onClose();
-        },
-        onError: () => {
-          setParentLoading?.(false);
-          setLoading(false);
-        },
-        onFinish: () => {
-          setParentLoading?.(false);
-          setLoading(false);
-        },
-      });
+    // const handleSubmit = () => {
+    //   setLoading(true);
+    //   setParentLoading?.(true);
+    //   router.post(route("user.store"), values, {
+    //     preserveScroll: true,
+    //     onSuccess: () => {
+    //       setValues(defaultValues);
+    //       onClose();
+    //     },
+    //     onError: () => {
+    //       setParentLoading?.(false);
+    //       setLoading(false);
+    //     },
+    //     onFinish: () => {
+    //       setParentLoading?.(false);
+    //       setLoading(false);
+    //     },
+    //   });
+    // };
+
+    const handleSubmit = async () => {
+      try {
+        setLoading(true);
+        setParentLoading?.(true);
+        const { data } = await axios.post(route("user.store"), values);
+        setValues(defaultValues);
+        onClose();
+        if (data.user) {
+          api.success({
+            message: "success",
+            description: data.message,
+            placement: "topRight",
+          });
+          setRowData((prev) => [data.user, ...prev]);
+        }
+      } catch (error) {
+        api.error({
+          message: "error",
+          description: "Failed to create branch",
+          placement: "topRight",
+        });
+      } finally {
+        setLoading(false);
+        setParentLoading?.(false);
+      }
     };
 
     useImperativeHandle(ref, () => ({
       submitForm: handleSubmit,
     }));
+
     return (
       <>
         <div className="container m-0 mb-4">
@@ -121,8 +157,6 @@ const AddUser = forwardRef(
                   >
                     Full Name:
                     <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
                   </label>
                   <Input
                     placeholder="User Full Name"
@@ -140,8 +174,6 @@ const AddUser = forwardRef(
                   >
                     User Email:
                     <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
                   </label>
                   <Input
                     className="me-1"
@@ -157,8 +189,6 @@ const AddUser = forwardRef(
                     htmlFor="name"
                   >
                     Password:
-                    <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
                     <hr className="mb-1 mt-0"></hr>
                   </label>
                   <Input.Password
@@ -177,8 +207,6 @@ const AddUser = forwardRef(
                     htmlFor="phone"
                   >
                     User Phone:
-                    <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
                     <hr className="mb-1 mt-0"></hr>
                   </label>
                   <Input
@@ -208,8 +236,6 @@ const AddUser = forwardRef(
                   >
                     Branch:
                     <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
                   </label>
                   <Select
                     className="me-1 w-100"
@@ -235,7 +261,6 @@ const AddUser = forwardRef(
                     htmlFor="department"
                   >
                     Department:<hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
                     <hr className="mb-1 mt-0"></hr>
                   </label>
                   {values.branch_id ? (
@@ -271,8 +296,6 @@ const AddUser = forwardRef(
                     htmlFor="designation"
                   >
                     Designation:
-                    <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
                     <hr className="mb-1 mt-0"></hr>
                   </label>
                   {values.department_id ? (
@@ -317,9 +340,6 @@ const AddUser = forwardRef(
                         style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
                       >
                         Country:
-                        <hr className="mb-1 mt-0"></hr>
-                        <hr className="mb-1 mt-0"></hr>
-                        <hr className="mb-1 mt-0"></hr>
                         <hr className="mb-0 mt-0"></hr>
                       </label>
                     </div>
@@ -345,9 +365,6 @@ const AddUser = forwardRef(
                       >
                         State:
                         <hr className="mb-1 mt-0"></hr>
-                        <hr className="mb-1 mt-0"></hr>
-                        <hr className="mb-1 mt-0"></hr>
-                        <hr className="mb-0 mt-0"></hr>
                       </label>
                     </div>
                     <div className="me-1 w-100">
@@ -370,9 +387,6 @@ const AddUser = forwardRef(
                       >
                         City:
                         <hr className="mb-1 mt-0"></hr>
-                        <hr className="mb-1 mt-0"></hr>
-                        <hr className="mb-1 mt-0"></hr>
-                        <hr className="mb-0 mt-0"></hr>
                       </label>
                     </div>
                     <div className="me-1 w-100">
@@ -405,8 +419,6 @@ const AddUser = forwardRef(
                   >
                     Postal/Zip Code:
                     <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
                   </label>
                   <Input
                     placeholder="Postal Or Zip Code"
@@ -425,10 +437,6 @@ const AddUser = forwardRef(
                     style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
                   >
                     Permanent Address:
-                    <hr className="m-1 mt-0"></hr>
-                    <hr className="m-1 mt-0"></hr>
-                    <hr className="m-1 mt-0"></hr>
-                    <hr className="m-1 mt-0"></hr>
                     <hr className="m-1 mt-0"></hr>
                   </label>
                   <TextArea
@@ -449,10 +457,6 @@ const AddUser = forwardRef(
                     style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
                   >
                     Current Address:
-                    <hr className="m-1 mt-0"></hr>
-                    <hr className="m-1 mt-0"></hr>
-                    <hr className="m-1 mt-0"></hr>
-                    <hr className="m-1 mt-0"></hr>
                     <hr className="m-1 mt-0"></hr>
                   </label>
                   <TextArea
@@ -535,8 +539,6 @@ const AddUser = forwardRef(
                     >
                       DOB:
                       <hr className="mb-1 mt-0"></hr>
-                      <hr className="mb-1 mt-0"></hr>
-                      <hr className="mb-1 mt-0"></hr>
                     </label>
                     <DatePicker
                       className="me-1 w-100"
@@ -554,8 +556,6 @@ const AddUser = forwardRef(
                       style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
                     >
                       User Status:
-                      <hr className="mb-1 mt-0"></hr>
-                      <hr className="mb-1 mt-0"></hr>
                       <hr className="mb-1 mt-0"></hr>
                     </label>
                     <Select
@@ -593,8 +593,6 @@ const AddUser = forwardRef(
                   >
                     Joining Date:
                     <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
                   </label>
                   <DatePicker
                     className="me-1 w-100"
@@ -614,8 +612,6 @@ const AddUser = forwardRef(
                     style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
                   >
                     Hiring Date:
-                    <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
                     <hr className="mb-1 mt-0"></hr>
                   </label>
                   <DatePicker
@@ -639,8 +635,6 @@ const AddUser = forwardRef(
                   >
                     Leaving Date:
                     <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
                   </label>
                   <DatePicker
                     className="me-1 w-100"
@@ -662,8 +656,6 @@ const AddUser = forwardRef(
                     htmlFor="role"
                   >
                     Role:
-                    <hr className="mb-1 mt-0"></hr>
-                    <hr className="mb-1 mt-0"></hr>
                     <hr className="mb-1 mt-0"></hr>
                   </label>
                   <Select

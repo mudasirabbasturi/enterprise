@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   usePage,
   useForm, // InertiaJS
@@ -18,11 +18,13 @@ import {
 
 const { Title, Text } = Typography;
 const Login = () => {
+  const [loading, setLoading] = useState(null);
   const { data, setData, post } = useForm({
     email: "",
     password: "",
   });
   const handleSubmit = (e) => {
+    setLoading(true);
     e.preventDefault();
     post("/login");
   };
@@ -32,11 +34,14 @@ const Login = () => {
   const [api, contextHolder] = notification.useNotification();
   useEffect(() => {
     if (flash.message) {
-      api.success({
-        message: "Success",
-        description: flash.message,
-        placement: "topRight",
-      });
+      api.success(
+        {
+          message: "Success",
+          description: flash.message,
+          placement: "topRight",
+        },
+        setLoading(false)
+      );
     }
   }, [flash]);
   useEffect(() => {
@@ -51,6 +56,7 @@ const Login = () => {
           placement: "topRight",
         });
       });
+      setLoading(false);
     }
   }, [errors]);
   return (
@@ -78,7 +84,7 @@ const Login = () => {
         >
           <div style={{ textAlign: "center", marginBottom: "24px" }}>
             <Title level={3} style={{ color: "#1890ff", marginBottom: "8px" }}>
-              Welcome Back
+              Bidwinners Enterprise
             </Title>
             <Text type="secondary">Sign in to your account</Text>
           </div>
@@ -98,6 +104,7 @@ const Login = () => {
                 onChange={(e) => setData("email", e.target.value)}
                 placeholder="Email"
                 allowClear
+                disabled={loading}
               />
               <label htmlFor="password">
                 Your Password:
@@ -113,8 +120,10 @@ const Login = () => {
                 placeholder="Password"
                 autoComplete="new-password"
                 allowClear
+                disabled={loading}
               />
               <Button
+                disabled={loading}
                 className="mb-3"
                 type="primary"
                 htmlType="submit"
@@ -125,9 +134,9 @@ const Login = () => {
               >
                 Sign In
               </Button>
-              <div style={{ textAlign: "center", marginBottom: "16px" }}>
+              {/* <div style={{ textAlign: "center", marginBottom: "16px" }}>
                 <a style={{ color: "#1890ff" }}>Forgot password?</a>
-              </div>
+              </div> */}
 
               <Divider plain style={{ color: "#8c8c8c" }}>
                 Or continue with
@@ -140,9 +149,9 @@ const Login = () => {
                   gap: "16px",
                 }}
               >
-                <Button shape="circle" icon={<GoogleOutlined />} />
-                <Button shape="circle" icon={<FacebookOutlined />} />
-                <Button shape="circle" icon={<TwitterOutlined />} />
+                <Button disabled shape="circle" icon={<GoogleOutlined />} />
+                <Button disabled shape="circle" icon={<FacebookOutlined />} />
+                <Button disabled shape="circle" icon={<TwitterOutlined />} />
               </div>
             </fieldset>
           </form>

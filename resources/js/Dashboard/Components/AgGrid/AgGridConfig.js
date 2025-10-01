@@ -34,4 +34,26 @@ const defaultColDef = {
   resizable: true,
   editable: true,
 };
-export { AgGridReact, gridTheme, defaultColDef };
+
+const sideBarConfig = {
+  toolPanels: [
+    {
+      id: "columns",
+      labelDefault: "Columns",
+      labelKey: "columns",
+      iconKey: "columns",
+      toolPanel: "agColumnsToolPanel",
+    },
+    {
+      id: "filters",
+      labelDefault: "Filters",
+      labelKey: "filters",
+      iconKey: "filter",
+      toolPanel: "agFiltersToolPanel",
+    },
+  ],
+  defaultToolPanel: null, // you can set "columns" if you want it open by default
+  position: "right", // sidebar on right
+};
+
+export { AgGridReact, gridTheme, defaultColDef, sideBarConfig };

@@ -39,4 +39,12 @@ export default defineConfig({
       "@pages": path.resolve(__dirname, "resources/js/Dashboard/Pages"),
     },
   },
+  server: {
+    host: "localhost", // or '0.0.0.0' if you want LAN access
+    port: 5173,
+    strictPort: true,
+    hmr: {
+      host: "localhost", // force HMR to use localhost instead of [::1]
+    },
+  },
 });

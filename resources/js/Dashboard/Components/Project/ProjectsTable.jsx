@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { AgGridReact, gridTheme, defaultColDef } from "@agConfig/AgGridConfig";
+import {
+  AgGridReact,
+  gridTheme,
+  defaultColDef,
+  sideBarConfig,
+} from "@agConfig/AgGridConfig";
 import {
   router,
   usePage,
@@ -14,14 +19,33 @@ import {
   LockOutlined,
   UnlockOutlined,
 } from "@shared/ui";
-import echo from "@/echo";
+
 const ProjectsTable = ({ projects, showDrawer }) => {
   const hasPermission = (userpermission, permName) =>
     userpermission?.some((p) => p.name === permName);
   const { auth } = usePage().props;
   const { props } = usePage();
-  const userPermissions = props.auth.user?.role?.permissions || [];
+  const userPermissions = props?.auth?.user?.role?.permissions ?? [];
   const can = (perm) => hasPermission(userPermissions, perm);
+
+  const user = props?.auth?.user ?? {};
+  const permissions = props?.permissions ?? []; // master list
+
+  const hasViewProjectTeamPermission =
+    Array.isArray(userPermissions) &&
+    userPermissions.some((perm) => perm.name === "View Project Team");
+
+  const hasViewScoreDetailsPermission =
+    Array.isArray(userPermissions) &&
+    userPermissions.some((perm) => perm.name === "View Score Details");
+
+  const hasViewPersonalScoreDetailsPermission =
+    Array.isArray(userPermissions) &&
+    userPermissions.some((perm) => perm.name === "View Personal Score Details");
+
+  const hasUpdateScorePermission =
+    Array.isArray(userPermissions) &&
+    userPermissions.some((perm) => perm.name === "Add/Update Score");
 
   const route = useRoute();
 
@@ -144,16 +168,21 @@ const ProjectsTable = ({ projects, showDrawer }) => {
                   <LockOutlined />
                 </Tooltip>
               )}
-              <Tooltip
-                title="Team Full Detail"
-                className="btn btn-sm btn-info text-white me-1"
-                color="green"
-                placement="top"
-                onClick={() => showDrawer("ViewJoinMemberDetail", params.data)}
-              >
-                <EyeOutlined />
-              </Tooltip>
-              <Avatar.Group>
+              {hasViewProjectTeamPermission && (
+                <Tooltip
+                  title="Team Full Detail"
+                  className="btn btn-sm btn-info text-white me-1"
+                  color="green"
+                  placement="top"
+                  onClick={() =>
+                    showDrawer("ViewJoinMemberDetail", params.data)
+                  }
+                >
+                  <EyeOutlined />
+                </Tooltip>
+              )}
+
+              {/* <Avatar.Group>
                 {members.map((per, index) => {
                   const user = per.user;
                   const profileMedia = user?.media?.[0];
@@ -189,6 +218,52 @@ const ProjectsTable = ({ projects, showDrawer }) => {
                             backgroundColor: "#87d068",
                             cursor: "pointer",
                           }}
+                        />
+                      )}
+                    </Tooltip>
+                  );
+                })}
+              </Avatar.Group> */}
+              <Avatar.Group>
+                {members.map((per, index) => {
+                  const user = per.user;
+                  const profileMedia = user?.media?.[0];
+                  const canViewAllScores = hasViewScoreDetailsPermission;
+                  const canViewOwnScore =
+                    hasViewPersonalScoreDetailsPermission &&
+                    user?.id === auth.user.id;
+
+                  const isClickable = canViewAllScores || canViewOwnScore;
+
+                  const avatarProps = isClickable
+                    ? {
+                        onClick: () =>
+                          showDrawer("AddEditPoint", {
+                            ...params.data,
+                            member_id: per.id,
+                            name: user.name,
+                            points_gain: per.points_gain,
+                          }),
+                        style: { cursor: "pointer" },
+                      }
+                    : {};
+
+                  return (
+                    <Tooltip title={user?.name} key={index}>
+                      {profileMedia ? (
+                        <Avatar
+                          src={`/storage/${profileMedia.file_path}`}
+                          alt={user.name}
+                          {...avatarProps}
+                        />
+                      ) : (
+                        <Avatar
+                          icon={<UserOutlined />}
+                          style={{
+                            backgroundColor: "#87d068",
+                            ...avatarProps.style,
+                          }}
+                          {...avatarProps}
                         />
                       )}
                     </Tooltip>
@@ -704,6 +779,7 @@ const ProjectsTable = ({ projects, showDrawer }) => {
         theme={gridTheme}
         pagination={true}
         paginationAutoPageSize={true}
+        sideBar={sideBarConfig}
       />
     </>
   );

@@ -1,6 +1,5 @@
 import { useState, useImperativeHandle, forwardRef } from "react";
 import {
-  router,
   useRoute, // ziggy routing
   Input,
 } from "@shared/ui";
@@ -15,289 +14,285 @@ import "tinymce/plugins/code";
 import "tinymce/plugins/lists";
 import "tinymce/plugins/link";
 import "tinymce/skins/ui/oxide/skin.css";
+import axios from "axios";
 
 const { TextArea } = Input;
-const AddBranch = forwardRef(({ onClose, setParentLoading }, ref) => {
-  const route = useRoute();
+const AddBranch = forwardRef(
+  ({ onClose, setParentLoading, setRowData, api }, ref) => {
+    const route = useRoute();
 
-  const defaultValues = {
-    name: "",
-    is_main: false,
-    type: "",
-    status: "active",
-    email: "",
-    phone: "",
-    fax: "",
-    country: "",
-    state: "",
-    city: "",
-    address: "",
-    postal_zip_code: "",
-    notes: "",
-  };
-  const [values, setValues] = useState(defaultValues);
-  const [loading, setLoading] = useState(false);
+    const defaultValues = {
+      name: "",
+      is_main: false,
+      type: "",
+      status: "active",
+      email: "",
+      phone: "",
+      fax: "",
+      country: "",
+      state: "",
+      city: "",
+      address: "",
+      postal_zip_code: "",
+      notes: "",
+    };
+    const [values, setValues] = useState(defaultValues);
+    const [loading, setLoading] = useState(false);
 
-  const onChangeValue = (key, value) => {
-    setValues((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
+    const onChangeValue = (key, value) => {
+      setValues((prev) => ({
+        ...prev,
+        [key]: value,
+      }));
+    };
 
-  const handleSubmit = () => {
-    setLoading(true);
-    setParentLoading?.(true);
-    router.post(route("branch.store"), values, {
-      preserveScroll: true,
-      onSuccess: () => {
+    const handleSubmit = async () => {
+      try {
+        setLoading(true);
+        setParentLoading?.(true);
+        const { data } = await axios.post(route("branch.store"), values);
         setValues(defaultValues);
         onClose();
-      },
-      onError: () => {
-        setParentLoading?.(false);
+        if (data.branch) {
+          api.success({
+            message: "success",
+            description: data.message,
+            placement: "topRight",
+          });
+          setRowData((prev) => [data.branch, ...prev]);
+        }
+      } catch (error) {
+        api.error({
+          message: "error",
+          description: "Failed to create branch",
+          placement: "topRight",
+        });
+      } finally {
         setLoading(false);
-      },
-      onFinish: () => {
         setParentLoading?.(false);
-        setLoading(false);
-      },
-    });
-  };
+      }
+    };
 
-  useImperativeHandle(ref, () => ({
-    submitForm: handleSubmit,
-  }));
+    useImperativeHandle(ref, () => ({
+      submitForm: handleSubmit,
+    }));
 
-  return (
-    <>
-      <div className="container-fluid">
-        <div className="row">
-          <div className="col-12 col-md-6">
-            <div className="mb-2">
-              <div className="d-flex align-items-center">
+    return (
+      <>
+        <div className="container-fluid">
+          <div className="row">
+            <div className="col-12">
+              <div className="mb-2">
+                <div className="d-flex align-items-center">
+                  <label
+                    className="me-1 w-auto"
+                    style={{ whiteSpace: "nowrap" }}
+                    for="name"
+                  >
+                    Branch Name:
+                    <hr className="mt-0 mb-1" />
+                  </label>
+                  <Input
+                    className="me-1 w-100"
+                    placeholder="Branch Name"
+                    allowClear
+                    value={values.name}
+                    onChange={(e) => onChangeValue("name", e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+              <div className="mb-2">
+                <div className="d-flex align-items-center">
+                  <label
+                    className="me-1 w-auto"
+                    style={{ whiteSpace: "nowrap" }}
+                    for="email"
+                  >
+                    Branch Email:
+                    <hr className="mt-0 mb-1" />
+                  </label>
+                  <Input
+                    className="me-1 w-100"
+                    placeholder="Branch Email"
+                    type="email"
+                    allowClear
+                    value={values.email}
+                    onChange={(e) => onChangeValue("email", e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+              <div className="mb-2">
+                <div className="d-flex align-items-center">
+                  <label
+                    className="me-1 w-auto"
+                    style={{ whiteSpace: "nowrap" }}
+                    for="phone"
+                  >
+                    Branch Phone:
+                    <hr className="mt-0 mb-1" />
+                  </label>
+                  <Input
+                    className="me-1 w-100"
+                    placeholder="Branch Phone"
+                    allowClear
+                    value={values.phone}
+                    onChange={(e) => onChangeValue("phone", e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+              <div className="mb-2">
+                <div className="d-flex align-items-center">
+                  <label
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                    for="fax"
+                  >
+                    Branch Fax:
+                    <hr className="mt-0 mb-1" />
+                  </label>
+                  <Input
+                    className="me-1 w-100"
+                    placeholder="Branch Fax"
+                    allowClear
+                    value={values.fax}
+                    onChange={(e) => onChangeValue("fax", e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+              <div className="mb-2">
+                <div className="d-flex align-items-center">
+                  <label
+                    className="me-1 w-auto"
+                    style={{ whiteSpace: "nowrap" }}
+                    for="country"
+                  >
+                    Branch Country:
+                    <hr className="mt-0 mb-1" />
+                  </label>
+                  <Input
+                    className="me-1 w-100"
+                    placeholder="Branch Country"
+                    allowClear
+                    value={values.country}
+                    onChange={(e) => onChangeValue("country", e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+              <div className="mb-2">
+                <div className="d-flex align-items-center">
+                  <label
+                    className="me-1 w-auto"
+                    style={{ whiteSpace: "nowrap" }}
+                    for="state"
+                  >
+                    Branch State:
+                    <hr className="mt-0 mb-1" />
+                  </label>
+                  <Input
+                    className="me-1 w-100"
+                    placeholder="Branch State"
+                    allowClear
+                    value={values.state}
+                    onChange={(e) => onChangeValue("state", e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+              <div className="mb-2">
+                <div className="d-flex align-items-center">
+                  <label
+                    className="me-1 w-auto"
+                    style={{ whiteSpace: "nowrap" }}
+                    for="city"
+                  >
+                    Branch City:
+                    <hr className="mt-0 mb-1" />
+                  </label>
+                  <Input
+                    className="me-1 w-100"
+                    placeholder="Branch City"
+                    allowClear
+                    value={values.city}
+                    onChange={(e) => onChangeValue("city", e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+              <div className="mb-2">
                 <label
-                  className="me-1 w-auto"
+                  className="mb-1 w-auto"
                   style={{ whiteSpace: "nowrap" }}
-                  for="name"
+                  for="postal_zip_code"
                 >
-                  Branch Name:
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
+                  Zip/Postal Code:
                 </label>
                 <Input
-                  className="me-1 w-100"
-                  placeholder="Branch Name"
+                  className="w-100"
+                  placeholder="Branch Zip/Postal Code"
+                  type="text"
                   allowClear
-                  value={values.name}
-                  onChange={(e) => onChangeValue("name", e.target.value)}
+                  value={values.postal_zip_code}
+                  onChange={(e) =>
+                    onChangeValue("postal_zip_code", e.target.value)
+                  }
                   disabled={loading}
                 />
               </div>
             </div>
-            <div className="mb-2">
-              <div className="d-flex align-items-center">
+            <div className="col-12">
+              <div className="mb-2">
                 <label
-                  className="me-1 w-auto"
+                  className="w-auto"
                   style={{ whiteSpace: "nowrap" }}
-                  for="email"
+                  for="address"
                 >
-                  Branch Email:
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
+                  Branch Address:
                 </label>
-                <Input
-                  className="me-1 w-100"
-                  placeholder="Branch Email"
-                  type="email"
+                <TextArea
+                  className="mb-2"
+                  autoSize={{ minRows: 3 }}
+                  placeholder="456 Elm Street, Suite 3, Los Angeles, CA 90001, USA"
                   allowClear
-                  value={values.email}
-                  onChange={(e) => onChangeValue("email", e.target.value)}
+                  value={values.address}
+                  onChange={(e) => onChangeValue("address", e.target.value)}
                   disabled={loading}
                 />
               </div>
-            </div>
-            <div className="mb-2">
-              <div className="d-flex align-items-center">
+              <div className="mb-2">
                 <label
-                  className="me-1 w-auto"
+                  className="w-auto"
                   style={{ whiteSpace: "nowrap" }}
-                  for="phone"
+                  for="notes"
                 >
-                  Branch Phone:
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
+                  Notes:
                 </label>
-                <Input
-                  className="me-1 w-100"
-                  placeholder="Branch Phone"
-                  allowClear
-                  value={values.phone}
-                  onChange={(e) => onChangeValue("phone", e.target.value)}
+                <Editor
                   disabled={loading}
+                  init={{
+                    height: 180,
+                    menubar: false,
+                    plugins: "table code lists link",
+                    toolbar:
+                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
+                    skin: false,
+                    content_css: false,
+                  }}
+                  value={values.notes}
+                  onEditorChange={(content, editor) => {
+                    onChangeValue("notes", content);
+                  }}
                 />
               </div>
-            </div>
-            <div className="mb-2">
-              <div className="d-flex align-items-center">
-                <label
-                  className="me-1"
-                  style={{ whiteSpace: "nowrap" }}
-                  for="fax"
-                >
-                  Branch Fax:
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
-                </label>
-                <Input
-                  className="me-1 w-100"
-                  placeholder="Branch Fax"
-                  allowClear
-                  value={values.fax}
-                  onChange={(e) => onChangeValue("fax", e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-            </div>
-            <div className="mb-2">
-              <div className="d-flex align-items-center">
-                <label
-                  className="me-1 w-auto"
-                  style={{ whiteSpace: "nowrap" }}
-                  for="country"
-                >
-                  Branch Country:
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
-                </label>
-                <Input
-                  className="me-1 w-100"
-                  placeholder="Branch Country"
-                  allowClear
-                  value={values.country}
-                  onChange={(e) => onChangeValue("country", e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-            </div>
-            <div className="mb-2">
-              <div className="d-flex align-items-center">
-                <label
-                  className="me-1 w-auto"
-                  style={{ whiteSpace: "nowrap" }}
-                  for="state"
-                >
-                  Branch State:
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
-                </label>
-                <Input
-                  className="me-1 w-100"
-                  placeholder="Branch State"
-                  allowClear
-                  value={values.state}
-                  onChange={(e) => onChangeValue("state", e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-            </div>
-            <div className="mb-2">
-              <div className="d-flex align-items-center">
-                <label
-                  className="me-1 w-auto"
-                  style={{ whiteSpace: "nowrap" }}
-                  for="city"
-                >
-                  Branch City:
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
-                </label>
-                <Input
-                  className="me-1 w-100"
-                  placeholder="Branch City"
-                  allowClear
-                  value={values.city}
-                  onChange={(e) => onChangeValue("city", e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-            </div>
-            <div className="mb-2">
-              <label
-                className="mb-1 w-auto"
-                style={{ whiteSpace: "nowrap" }}
-                for="postal_zip_code"
-              >
-                Zip/Postal Code:
-              </label>
-              <Input
-                className="w-100"
-                placeholder="Branch Zip/Postal Code"
-                type="text"
-                allowClear
-                value={values.postal_zip_code}
-                onChange={(e) =>
-                  onChangeValue("postal_zip_code", e.target.value)
-                }
-                disabled={loading}
-              />
-            </div>
-          </div>
-          <div className="col-12 col-md-6">
-            <div className="mb-2">
-              <label
-                className="w-auto"
-                style={{ whiteSpace: "nowrap" }}
-                for="address"
-              >
-                Branch Address:
-              </label>
-              <TextArea
-                className="mb-2"
-                autoSize={{ minRows: 3 }}
-                placeholder="456 Elm Street, Suite 3, Los Angeles, CA 90001, USA"
-                allowClear
-                value={values.address}
-                onChange={(e) => onChangeValue("address", e.target.value)}
-                disabled={loading}
-              />
-            </div>
-            <div className="mb-2">
-              <label
-                className="w-auto"
-                style={{ whiteSpace: "nowrap" }}
-                for="notes"
-              >
-                Notes:
-              </label>
-              <Editor
-                disabled={loading}
-                init={{
-                  height: 180,
-                  menubar: false,
-                  plugins: "table code lists link",
-                  toolbar:
-                    "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                  skin: false,
-                  content_css: false,
-                }}
-                value={values.notes}
-                onEditorChange={(content, editor) => {
-                  onChangeValue("notes", content);
-                }}
-              />
             </div>
           </div>
         </div>
-      </div>
-    </>
-  );
-});
+      </>
+    );
+  }
+);
 export default AddBranch;

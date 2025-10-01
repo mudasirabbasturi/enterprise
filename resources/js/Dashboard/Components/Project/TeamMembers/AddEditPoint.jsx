@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { InputNumber, Select, useRoute, router } from "@shared/ui";
+import { InputNumber, Select, useRoute, router, usePage } from "@shared/ui";
 
 const toNum = (v) => {
   const n = Number(v);
@@ -14,6 +14,15 @@ const AddEditPoint = ({
   onClose,
   setParentLoading,
 }) => {
+  const { auth } = usePage().props;
+  const { props } = usePage();
+  const userPermissions = props?.auth?.user?.role?.permissions ?? [];
+  const user = props?.auth?.user ?? {};
+  const permissions = props?.permissions ?? []; // master list
+  const hasUpdateScorePermission =
+    Array.isArray(userPermissions) &&
+    userPermissions.some((perm) => perm.name === "Add/Update Score");
+
   const route = useRoute();
   const members = project?.project_team_members ?? [];
   const totalPoints = toNum(project?.project_points);
@@ -129,40 +138,42 @@ const AddEditPoint = ({
         </ul>
 
         {/* Update Form */}
-        <ul style={{ listStyle: "circle", fontStyle: "italic" }}>
-          <li className="d-flex align-items-center justify-content-between w-100">
-            <Select
-              options={
-                members.map((member) => ({
-                  value: member.id,
-                  label: member.user?.name || "Unknown",
-                })) || []
-              }
-              placeholder="Choose a member"
-              value={values.id}
-              onChange={onChangeMember}
-              disabled={loading}
-            />
+        {hasUpdateScorePermission ? (
+          <ul style={{ listStyle: "circle", fontStyle: "italic" }}>
+            <li className="d-flex align-items-center justify-content-between w-100">
+              <Select
+                options={
+                  members.map((member) => ({
+                    value: member.id,
+                    label: member.user?.name || "Unknown",
+                  })) || []
+                }
+                placeholder="Choose a member"
+                value={values.id}
+                onChange={onChangeMember}
+                disabled={loading}
+              />
 
-            <InputNumber
-              className="w-100 ms-1"
-              placeholder={`Enter Points (max ${maxForSelected})`}
-              value={values.points_gain}
-              onChange={(value) => onChangeValue("points_gain", value)}
-              min={0}
-              max={maxForSelected}
-              disabled={loading}
-            />
+              <InputNumber
+                className="w-100 ms-1"
+                placeholder={`Enter Points (max ${maxForSelected})`}
+                value={values.points_gain}
+                onChange={(value) => onChangeValue("points_gain", value)}
+                min={0}
+                max={maxForSelected}
+                disabled={loading}
+              />
 
-            <button
-              className="ms-1 btn btn-sm btn-primary"
-              disabled={loading}
-              onClick={onSubmit}
-            >
-              Update
-            </button>
-          </li>
-        </ul>
+              <button
+                className="ms-1 btn btn-sm btn-primary"
+                disabled={loading}
+                onClick={onSubmit}
+              >
+                Update
+              </button>
+            </li>
+          </ul>
+        ) : null}
       </div>
     </div>
   );

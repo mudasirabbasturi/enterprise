@@ -1,31 +1,29 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { AgGridReact, gridTheme, defaultColDef } from "@agConfig/AgGridConfig";
-
+import axios from "axios";
 import {
   Link,
   router,
-  usePage, // InertiaJS
-  useRoute, // ziggy routing
+  useRoute,
   Breadcrumb,
-  notification,
   Tooltip,
   Popconfirm,
   Drawer,
   EditOutlined,
   EyeOutlined,
   DeleteOutlined,
-  CloseOutlined,
-  SyncOutlined, // ant icon
+  SyncOutlined,
 } from "@shared/ui";
 import MyRichTextEditor from "@component/Shared/MyRichTextEditor";
 // Lazy-load the Branch components
 const AddBranch = lazy(() => import("@component/Branch/AddBranch"));
 const EditBranch = lazy(() => import("@component/Branch/EditBranch"));
 const ViewBranch = lazy(() => import("@component/Branch/ViewBranch"));
-
+import { notification } from "antd";
 const Index = ({ branches }) => {
+  const [api, contextHolder] = notification.useNotification();
   const route = useRoute();
-  const [rowData, setRowData] = useState([]);
+  const [rowData, setRowData] = useState(branches || []);
   const [colDefs, setColDefs] = useState([
     {
       headerName: "Branch Name",
@@ -132,9 +130,13 @@ const Index = ({ branches }) => {
     },
   ]);
 
+  // useEffect(() => {
+  //   setRowData(branches);
+  // }, [branches]);
+
   useEffect(() => {
     setRowData(branches);
-  }, [branches]);
+  }, []);
 
   // Add \ View \ Edit Branch
   const [loading, setLoading] = useState(false);
@@ -159,46 +161,27 @@ const Index = ({ branches }) => {
   };
 
   // Popconfirm Branch Delete
-  const confirmDelBranch = (id) =>
-    new Promise((resolve) => {
-      const url = route("branch.destroy", id);
-      router.delete(url, {
-        preserveScroll: true,
-        onSuccess: () => {
-          resolve();
-        },
-        onError: () => {
-          message.error("Failed to delete department");
-        },
-      });
-    });
-
-  // Flash Messages
-  const { flash, errors } = usePage().props;
-  const [api, contextHolder] = notification.useNotification();
-  useEffect(() => {
-    if (flash.message) {
-      api.success({
-        message: "Success",
-        description: flash.message,
+  const confirmDelBranch = async (id) => {
+    try {
+      const { data } = await axios.delete(route("branch.destroy", id));
+      if (data.branch) {
+        api.success({
+          message: "success",
+          description: data.message,
+          placement: "topRight",
+        });
+        setRowData((prev) =>
+          prev.filter((item) => item.id !== Number(data.branch.id))
+        );
+      }
+    } catch (error) {
+      api.error({
+        message: "error",
+        description: "Failed to delete branch",
         placement: "topRight",
       });
     }
-  }, [flash]);
-  useEffect(() => {
-    if (errors && Object.keys(errors).length > 0) {
-      Object.entries(errors).forEach(([field, messages]) => {
-        const errorText = Array.isArray(messages)
-          ? messages.join(", ")
-          : messages;
-        api.error({
-          message: "Validation Error",
-          description: errorText,
-          placement: "topRight",
-        });
-      });
-    }
-  }, [errors]);
+  };
 
   return (
     <>
@@ -245,7 +228,7 @@ const Index = ({ branches }) => {
         }
         closable={{ "aria-label": "Close Button" }}
         placement="left"
-        width={"90%"}
+        width={"40%"}
         onClose={onClose}
         open={open}
         maskClosable={false}
@@ -285,6 +268,8 @@ const Index = ({ branches }) => {
                 setParentLoading={setLoading}
                 ref={childRef}
                 onClose={onClose}
+                setRowData={setRowData}
+                api={api}
               />
             ) : drawerMode === "edit" ? (
               <EditBranch

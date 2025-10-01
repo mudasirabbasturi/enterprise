@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
-import { AgGridReact, gridTheme, defaultColDef } from "@agConfig/AgGridConfig";
+import {
+  AgGridReact,
+  gridTheme,
+  defaultColDef,
+  sideBarConfig,
+} from "@agConfig/AgGridConfig";
 
 import {
   Link,
@@ -240,6 +245,8 @@ const Index = ({ departments, branches }) => {
             theme={gridTheme}
             pagination={true}
             paginationAutoPageSize={true}
+            sideBar={sideBarConfig}
+            pivotMode={true}
           />
         </div>
       </div>

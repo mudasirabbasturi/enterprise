@@ -50,7 +50,7 @@ const UsersTable = ({ users, showDrawer }) => {
       field: "name",
       editable: false,
       cellRenderer: (params) => {
-        return params.data?.name ? params.data.name : "⭕❌❌🚫";
+        return params.data?.name ? params.data.name : "❌❌❌";
       },
     },
     {
@@ -60,7 +60,7 @@ const UsersTable = ({ users, showDrawer }) => {
       editable: false,
       filter: false,
       cellRenderer: () => {
-        return "➰➰➰➰➰";
+        return "🔐🔐🔐🔐";
       },
     },
     {
@@ -69,7 +69,7 @@ const UsersTable = ({ users, showDrawer }) => {
       field: "role_id",
       editable: false,
       cellRenderer: (params) => {
-        return params.data.role?.name ? params.data.role.name : "⭕❌❌🚫";
+        return params.data.role?.name ? params.data.role.name : "❌❌❌";
       },
     },
     {
@@ -78,7 +78,7 @@ const UsersTable = ({ users, showDrawer }) => {
       field: "email",
       editable: false,
       cellRenderer: (params) => {
-        return params.data?.email ? params.data.email : "⭕❌❌🚫";
+        return params.data?.email ? params.data.email : "❌❌❌";
       },
     },
     {
@@ -87,7 +87,7 @@ const UsersTable = ({ users, showDrawer }) => {
       field: "phone",
       editable: false,
       cellRenderer: (params) => {
-        return params.data?.phone ? params.data.phone : "⭕❌❌🚫";
+        return params.data?.phone ? params.data.phone : "❌❌❌";
       },
     },
     {
@@ -96,7 +96,7 @@ const UsersTable = ({ users, showDrawer }) => {
       field: "branch_id",
       editable: false,
       cellRenderer: (params) => {
-        return params.data.branch?.name ? params.data.branch.name : "⭕❌❌🚫";
+        return params.data.branch?.name ? params.data.branch.name : "❌❌❌";
       },
     },
     {
@@ -107,7 +107,7 @@ const UsersTable = ({ users, showDrawer }) => {
       cellRenderer: (params) => {
         return params.data.department?.name
           ? params.data.department.name
-          : "⭕❌❌🚫";
+          : "❌❌❌";
       },
     },
     {
@@ -118,7 +118,7 @@ const UsersTable = ({ users, showDrawer }) => {
       cellRenderer: (params) => {
         return params.data.designation?.name
           ? params.data.designation.name
-          : "⭕❌❌🚫";
+          : "❌❌❌";
       },
     },
     {
@@ -127,7 +127,7 @@ const UsersTable = ({ users, showDrawer }) => {
       field: "country",
       editable: false,
       cellRenderer: (params) => {
-        return params.data?.country ? params.data.country : "⭕❌❌🚫";
+        return params.data?.country ? params.data.country : "❌❌❌";
       },
     },
     {
@@ -136,7 +136,7 @@ const UsersTable = ({ users, showDrawer }) => {
       field: "state",
       editable: false,
       cellRenderer: (params) => {
-        return params.data?.state ? params.data.state : "⭕❌❌🚫";
+        return params.data?.state ? params.data.state : "❌❌❌";
       },
     },
     {
@@ -145,7 +145,7 @@ const UsersTable = ({ users, showDrawer }) => {
       field: "city",
       editable: false,
       cellRenderer: (params) => {
-        return params.data?.city ? params.data.city : "⭕❌❌🚫";
+        return params.data?.city ? params.data.city : "❌❌❌";
       },
     },
     {
@@ -156,7 +156,7 @@ const UsersTable = ({ users, showDrawer }) => {
       cellRenderer: (params) => {
         return params.data?.postal_or_zip_code
           ? params.data.postal_or_zip_code
-          : "⭕❌❌🚫";
+          : "❌❌❌";
       },
     },
     {
@@ -167,7 +167,7 @@ const UsersTable = ({ users, showDrawer }) => {
       cellRenderer: (params) => {
         return params.data?.current_address
           ? params.data.current_address
-          : "⭕❌❌🚫";
+          : "❌❌❌";
       },
     },
     {
@@ -178,7 +178,7 @@ const UsersTable = ({ users, showDrawer }) => {
       cellRenderer: (params) => {
         return params.data?.permanent_address
           ? params.data.permanent_address
-          : "⭕❌❌🚫";
+          : "❌❌❌";
       },
     },
     {
@@ -187,7 +187,7 @@ const UsersTable = ({ users, showDrawer }) => {
       field: "dob",
       editable: false,
       cellRenderer: (params) => {
-        return params.data?.dob ? params.data.dob : "⭕❌❌🚫";
+        return params.data?.dob ? params.data.dob : "❌❌❌";
       },
     },
     {
@@ -196,9 +196,7 @@ const UsersTable = ({ users, showDrawer }) => {
       field: "joining_date",
       editable: false,
       cellRenderer: (params) => {
-        return params.data?.joining_date
-          ? params.data.joining_date
-          : "⭕❌❌🚫";
+        return params.data?.joining_date ? params.data.joining_date : "❌❌❌";
       },
     },
     {
@@ -207,7 +205,7 @@ const UsersTable = ({ users, showDrawer }) => {
       field: "hiring_date",
       editable: false,
       cellRenderer: (params) => {
-        return params.data?.hiring_date ? params.data.hiring_date : "⭕❌❌🚫";
+        return params.data?.hiring_date ? params.data.hiring_date : "❌❌❌";
       },
     },
     {
@@ -216,9 +214,7 @@ const UsersTable = ({ users, showDrawer }) => {
       field: "leaving_date",
       editable: false,
       cellRenderer: (params) => {
-        return params.data?.leaving_date
-          ? params.data.leaving_date
-          : "⭕❌❌🚫";
+        return params.data?.leaving_date ? params.data.leaving_date : "❌❌❌";
       },
     },
     {
@@ -324,7 +320,7 @@ const UsersTable = ({ users, showDrawer }) => {
     });
 
   const gridOptions = {
-    onCellClicked: (params) => {
+    onCellDoubleClicked: (params) => {
       if (params.colDef.field === "actions") return;
       showDrawer("EditUserColumn", {
         ...params.data, // Spread all row data

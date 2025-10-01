@@ -13,9 +13,9 @@ const Sidebar = ({
 }) => {
   const route = useRoute();
   const { props } = usePage();
-  const user = props.auth.user;
-  const permissions = props.permissions;
-  const userPermissions = props.auth.user.role.permissions;
+  const user = props?.auth?.user ?? {};
+  const permissions = props?.permissions ?? [];
+  const userPermissions = props?.auth?.user?.role?.permissions ?? [];
 
   const {
     token: { colorBgContainer },

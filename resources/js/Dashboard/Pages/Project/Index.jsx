@@ -22,6 +22,15 @@ const AddEditPoint = lazy(() =>
 );
 
 const Index = ({ projects, clients }) => {
+  const { props } = usePage();
+  const user = props?.auth?.user ?? {};
+  const permissions = props?.permissions ?? []; // master list
+  const userPermissions = props?.auth?.user?.role?.permissions ?? []; // user's perms
+
+  const hasProjectDataTablePermission =
+    Array.isArray(userPermissions) &&
+    userPermissions.some((perm) => perm.name === "View Projects Data Table");
+
   const [open, setOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState("add");
   const [selectedProject, setSelectedProject] = useState(null);
@@ -73,40 +82,54 @@ const Index = ({ projects, clients }) => {
     <>
       {contextHolder}
       <div className="container-fluid p-0">
-        <div className="d-flex justify-content-between align-items-center ps-2 pe-2 mt-2">
-          <Suspense
-            fallback={
-              <div
-                style={{
-                  width: "100%",
-                  textAlign: "center",
-                }}
+        {hasProjectDataTablePermission ? (
+          <>
+            <div className="d-flex justify-content-between align-items-center ps-2 pe-2 mt-2">
+              <Suspense
+                fallback={
+                  <div
+                    style={{
+                      width: "100%",
+                      textAlign: "center",
+                    }}
+                  >
+                    Loading...
+                  </div>
+                }
               >
-                Loading...
-              </div>
-            }
-          >
-            <ProjectHeader showDrawer={showDrawer} />
-          </Suspense>
-        </div>
-        <div className="ag-grid-wrapper">
-          <Suspense
-            fallback={
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  height: "100%",
-                }}
+                <ProjectHeader showDrawer={showDrawer} />
+              </Suspense>
+            </div>
+            <div className="ag-grid-wrapper">
+              <Suspense
+                fallback={
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      height: "100%",
+                    }}
+                  >
+                    Loading...
+                  </div>
+                }
               >
-                Loading...
-              </div>
-            }
-          >
-            <ProjectsTable projects={projects} showDrawer={showDrawer} />
-          </Suspense>
-        </div>
+                <ProjectsTable projects={projects} showDrawer={showDrawer} />
+              </Suspense>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="">
+              <h4 className="mb-1 mt-3 text-center">
+                You do not have permission to view projects. Please contact
+                admin
+              </h4>
+              <h4 className="text-center">or go to other route from menu.</h4>
+            </div>
+          </>
+        )}
       </div>
 
       <Drawer
@@ -173,6 +196,8 @@ const Index = ({ projects, clients }) => {
             </>
           )
         }
+        motion={false}
+        maskMotion={false}
       >
         {open && (
           <Suspense fallback={<div>Loading...</div>}>
