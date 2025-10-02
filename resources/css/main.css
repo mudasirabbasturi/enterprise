@@ -112,6 +112,14 @@ a {
     border-right: 1px solid #ddd;
 }
 
+
+@media screen and (max-width: 576px) {
+  .sidebar {
+    position: absolute;
+    z-index: 12;
+    display: none;
+  }
+}
 .sidebar ul li ul li {
     padding-left: 38px !important;
 }
@@ -159,7 +167,7 @@ a {
 }
 
 .ag-grid-wrapper {
-    height: calc(100vh - 104px);
+    height: calc(100vh - 122px);
     margin: 8px;
 }
 

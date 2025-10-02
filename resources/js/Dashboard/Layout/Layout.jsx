@@ -1,4 +1,16 @@
 import React, { useState, useEffect } from "react";
+import Echo from "laravel-echo";
+import Pusher from "pusher-js";
+
+window.Pusher = Pusher;
+
+window.Echo = new Echo({
+  broadcaster: "pusher",
+  key: "5158315c26b8f6732773",
+  cluster: "ap2",
+  forceTLS: true,
+});
+
 import {
   /**
    * @inertiajs/react
@@ -13,7 +25,6 @@ import {
   MenuUnfoldOutlined,
   UserOutlined,
   CaretDownOutlined,
-  SettingOutlined,
   LogoutOutlined,
 
   /**
@@ -21,11 +32,13 @@ import {
    */
   useRoute,
 } from "@shared/ui";
-import { Layout, Button, Dropdown, Avatar } from "antd";
+import { Layout, Button, Dropdown, Avatar, notification } from "antd";
+
 import Sidebar from "@component/Sidebar/Sidebar";
 const { Header, Content } = Layout;
 
 const DashboardLayout = ({ children }) => {
+  const [api, contextHolder] = notification.useNotification();
   const route = useRoute();
   const { props } = usePage();
   const user = props.auth.user;
@@ -72,30 +85,45 @@ const DashboardLayout = ({ children }) => {
     },
   ];
 
+  useEffect(() => {
+    const channel = window.Echo.channel("my-channel");
+    const handler = (data) => {
+      api.success({
+        description: data.message,
+      });
+    };
+    channel.listen(".my-event", handler);
+    return () => {
+      channel.stopListening(".my-event", handler);
+    };
+  }, []);
+
   return (
-    <Layout>
-      <Header
-        className="header w-100 ps-2 pe-2"
-        style={{ background: "white" }}
-      >
-        <div className="header-content d-flex align-items-center justify-content-between">
-          <div className="header-left d-flex align-items-center">
-            <Link href="/" className="logo-link">
-              <div
-                className="logo-collapsed"
-                style={{
-                  width: "64px",
-                }}
-              >
-                <img
+    <>
+      {contextHolder}
+      <Layout>
+        <Header
+          className="header w-100 ps-2 pe-2"
+          style={{ background: "white" }}
+        >
+          <div className="header-content d-flex align-items-center justify-content-between">
+            <div className="header-left d-flex align-items-center">
+              <Link href="/" className="logo-link">
+                <div
+                  className="d-flex align-items-center logo-collapsed"
                   style={{
-                    width: "60%",
-                    height: "auto",
+                    width: "64px",
                   }}
-                  src="/storage/uploads/images/logo-collapse.png"
-                  alt="Logo Collapse"
-                />
-                {/* <svg
+                >
+                  <img
+                    style={{
+                      width: "60%",
+                      height: "auto",
+                    }}
+                    src="/storage/uploads/images/logo-collapse.png"
+                    alt="Logo Collapse"
+                  />
+                  {/* <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 700 150"
                   preserveAspectRatio="xMidYMid meet"
@@ -115,81 +143,82 @@ const DashboardLayout = ({ children }) => {
                     fill="#0d70cc"
                   >
                     Enterprise
-                  </text> 
-                </svg>*/}
-              </div>
-              {/* <div className="logo-expanded"></div> */}
-            </Link>
-            <Button
-              type="text"
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => {
-                if (!collapsed) {
-                  setSavedOpenKeys(openKeys);
-                  setOpenKeys([]);
-                } else {
-                  setOpenKeys(savedOpenKeys);
-                }
-                setCollapsed(!collapsed);
-              }}
-              style={{
-                fontSize: "16px",
-                width: 64,
-                height: 45,
-              }}
-            />
-          </div>
-          <div className="right">
-            <Dropdown
-              menu={{
-                items: userMenuItems,
-              }}
-              trigger={["click"]}
-              placement="bottomRight"
-            >
-              <div className="user-dropdown" style={{ cursor: "pointer" }}>
-                <div className="d-flex justify-content-center align-items-center">
-                  {user?.media.length > 0 ? (
-                    <img
-                      className="me-1"
-                      src={`/storage/${user.media[0].file_path}`}
-                      alt="Profile"
-                      style={{
-                        width: "35px",
-                        height: "35px",
-                        borderRadius: "50%",
-                      }}
-                    />
-                  ) : (
-                    <Avatar
-                      size="small"
-                      icon={<UserOutlined />}
-                      className="user-avatar me-1"
-                    />
-                  )}
-                  <span className="user-name">{user.name}:</span>
-                  <CaretDownOutlined className="dropdown-icon" />
+                  </text>
+                </svg> */}
                 </div>
-              </div>
-            </Dropdown>
+                {/* <div className="logo-expanded"></div> */}
+              </Link>
+              <Button
+                type="text"
+                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                onClick={() => {
+                  if (!collapsed) {
+                    setSavedOpenKeys(openKeys);
+                    setOpenKeys([]);
+                  } else {
+                    setOpenKeys(savedOpenKeys);
+                  }
+                  setCollapsed(!collapsed);
+                }}
+                style={{
+                  fontSize: "16px",
+                  width: 64,
+                  height: 45,
+                }}
+              />
+            </div>
+            <div className="right">
+              <Dropdown
+                menu={{
+                  items: userMenuItems,
+                }}
+                trigger={["click"]}
+                placement="bottomRight"
+              >
+                <div className="user-dropdown" style={{ cursor: "pointer" }}>
+                  <div className="d-flex justify-content-center align-items-center">
+                    {user?.media.length > 0 ? (
+                      <img
+                        className="me-1"
+                        src={`/storage/${user.media[0].file_path}`}
+                        alt="Profile"
+                        style={{
+                          width: "35px",
+                          height: "35px",
+                          borderRadius: "50%",
+                        }}
+                      />
+                    ) : (
+                      <Avatar
+                        size="small"
+                        icon={<UserOutlined />}
+                        className="user-avatar me-1"
+                      />
+                    )}
+                    <span className="user-name">{user.name}:</span>
+                    <CaretDownOutlined className="dropdown-icon" />
+                  </div>
+                </div>
+              </Dropdown>
+            </div>
           </div>
-        </div>
-      </Header>
+        </Header>
 
-      <Layout>
-        <Sidebar
-          collapsed={collapsed}
-          setCollapsed={setCollapsed}
-          openKeys={openKeys}
-          setOpenKeys={setOpenKeys}
-          savedOpenKeys={savedOpenKeys}
-          setSavedOpenKeys={setSavedOpenKeys}
-        />
         <Layout>
-          <Content style={{ backgroundColor: "white" }}>{children}</Content>
+          <Sidebar
+            collapsed={collapsed}
+            setCollapsed={setCollapsed}
+            openKeys={openKeys}
+            setOpenKeys={setOpenKeys}
+            savedOpenKeys={savedOpenKeys}
+            setSavedOpenKeys={setSavedOpenKeys}
+          />
+          <Layout>
+            <Content style={{ backgroundColor: "white" }}>{children}</Content>
+          </Layout>
         </Layout>
       </Layout>
-    </Layout>
+    </>
   );
 };
 

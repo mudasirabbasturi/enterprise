@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
-
 class Project extends Model
 {
     use SoftDeletes;
@@ -53,4 +52,5 @@ class Project extends Model
     {
         return $this->morphMany(Media::class, 'model');
     }
+
 }

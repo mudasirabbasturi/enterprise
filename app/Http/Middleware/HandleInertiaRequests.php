@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Inertia\Middleware;
 use App\Models\Role;
 use App\Models\Permission;
+use App\Models\Project;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -53,6 +54,19 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
                 'message' => fn () => $request->session()->get('message'),
+            ],
+
+            'projectCounts' => fn () => [
+                'Total'   => Project::count(),
+                'Planned' => Project::where('project_status', 'Planned')->count(),
+                'Pending' => Project::where('project_status', 'Pending')->count(),
+                'TakeoffOnProgress' => Project::where('project_status', 'Takeoff On Progress')->count(),
+                'PricingOnProgress' => Project::where('project_status', 'Pricing On Progress')->count(),
+                'Completed' => Project::where('project_status', 'Completed')->count(),
+                'Hold' => Project::where('project_status', 'Hold')->count(),
+                'Revision' => Project::where('project_status', 'Revision')->count(),
+                'Cancelled' => Project::where('project_status', 'Cancelled')->count(),
+                'Deliver' => Project::where('project_status', 'Deliver')->count(),
             ],
         ]);
     }

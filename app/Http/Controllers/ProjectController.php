@@ -12,6 +12,7 @@ use App\Models\Project;
 use App\Models\Client;
 use App\Models\ProjectTeamMember;
 use Illuminate\Support\Facades\DB;
+use Pusher\Pusher;
 
 
 class ProjectController extends Controller
@@ -19,9 +20,6 @@ class ProjectController extends Controller
 
     public function Index()
     {
-        // if (!Gate::allows('viewAny', Project::class)) {
-        //     abort(403, 'Unauthorized access to projects.');
-        // }
         $projects = Project::with([
             'projectTeamMembers.user.media' => function($query) {
                 $query->where('category', 'profile')->latest()->limit(1);
@@ -37,8 +35,26 @@ class ProjectController extends Controller
 
     public function Store(StoreProjectRequest $request)
     {
+        $userName =  Auth::user()->name;
         $validated = $request->validated();
-        Project::create($validated);
+        $project = Project::create($validated);
+        $options = [
+            'cluster' => config('broadcasting.connections.pusher.options.cluster'),
+            'useTLS' => true,
+        ];
+        $options = [ 
+            'cluster' => config('broadcasting.connections.pusher.options.cluster'), 
+            'useTLS' => true, 
+        ];
+        $pusher = new Pusher(
+            config('broadcasting.connections.pusher.key'),
+            config('broadcasting.connections.pusher.secret'),
+            config('broadcasting.connections.pusher.app_id'),
+            $options
+        );
+        $pusher->trigger('my-channel', 'my-event', [
+            'message' => 'New Project Is Added By ' . $userName,
+        ]);
         return redirect()->back()->with('message', 'Project created successfully.');
     }
     

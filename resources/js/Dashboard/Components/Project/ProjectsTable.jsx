@@ -751,7 +751,7 @@ const ProjectsTable = ({ projects, showDrawer }) => {
     });
 
   const gridOptions = {
-    onCellClicked: (params) => {
+    onCellDoubleClicked: (params) => {
       if (
         params.colDef.field === "actions" ||
         params.colDef.field === "teams" ||
