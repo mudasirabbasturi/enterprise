@@ -8,7 +8,7 @@ use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Models\User;
 use App\Models\Role;
-use App\Models\branch;
+use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Designation;
 use Illuminate\Support\Facades\Hash;

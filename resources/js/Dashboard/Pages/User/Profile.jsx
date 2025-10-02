@@ -101,7 +101,7 @@ const Profile = ({ user, roles, branches, departments, designations }) => {
                 >
                   {user?.media.length > 0 ? (
                     <img
-                      src={`/storage/${user.media[0].file_path}`}
+                      src={`${user.media[0].file_path}`}
                       alt="Profile"
                       style={{
                         width: "85px",

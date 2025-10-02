@@ -63,12 +63,10 @@ const Index = ({ ownerId }) => {
         const idCardBackPath = response.data.idCardBack?.file_path;
         const resumePath = response.data.resume?.file_path;
 
-        setProfileUrl(profilePath ? `/storage/${profilePath}` : null);
-        setIdCardFrontUrl(
-          idCardFrontPath ? `/storage/${idCardFrontPath}` : null
-        );
-        setIdCardBackUrl(idCardBackPath ? `/storage/${idCardBackPath}` : null);
-        setCvUrl(resumePath ? `/storage/${resumePath}` : null);
+        setProfileUrl(profilePath ? `${profilePath}` : null);
+        setIdCardFrontUrl(idCardFrontPath ? `${idCardFrontPath}` : null);
+        setIdCardBackUrl(idCardBackPath ? `${idCardBackPath}` : null);
+        setCvUrl(resumePath ? `${resumePath}` : null);
 
         const mediaList = response.data.media || [];
         setMedia(mediaList);
@@ -249,7 +247,7 @@ const Index = ({ ownerId }) => {
         {renderUploadSection({
           title: "User Profile",
           fileUrl: profileUrl,
-          defaultImg: "/storage/uploads/media/default/profile.svg",
+          defaultImg: "uploads/media/default/profile.svg",
           fileList: profileFileList,
           setFileList: setProfileFileList,
           category: "profile",
@@ -257,7 +255,7 @@ const Index = ({ ownerId }) => {
         {renderUploadSection({
           title: "ID Card Front",
           fileUrl: idCardFrontUrl,
-          defaultImg: "/storage/uploads/media/default/id_card_front.svg",
+          defaultImg: "uploads/media/default/id_card_front.svg",
           fileList: frontFileList,
           setFileList: setFrontFileList,
           category: "id_card_front",
@@ -265,7 +263,7 @@ const Index = ({ ownerId }) => {
         {renderUploadSection({
           title: "ID Card Back",
           fileUrl: idCardBackUrl,
-          defaultImg: "/storage/uploads/media/default/id_card_back.svg",
+          defaultImg: "uploads/media/default/id_card_back.svg",
           fileList: backFileList,
           setFileList: setBackFileList,
           category: "id_card_back",
@@ -273,7 +271,7 @@ const Index = ({ ownerId }) => {
         {renderUploadSection({
           title: "Resume",
           fileUrl: cvUrl,
-          defaultImg: "/storage/uploads/media/default/cv.svg",
+          defaultImg: "uploads/media/default/cv.svg",
           fileList: cvFileList,
           setFileList: setCvFileList,
           category: "resume",
@@ -331,7 +329,7 @@ const Index = ({ ownerId }) => {
       </div>
       <div className="row">
         {media.map((item, index) => {
-          const fileUrl = `/storage/${item.file_path}`;
+          const fileUrl = `${item.file_path}`;
           const fileType = getFileType(fileUrl);
           const category = item.category;
           return (

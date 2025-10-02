@@ -55,6 +55,26 @@ class MediaController extends Controller
         ]);
     }
 
+    // public function Upload(Request $request)
+    // {
+    //     $request->validate([
+    //         'file' => 'required|file|mimes:jpeg,png,pdf,jpg|max:20480',
+    //         'user_id' => 'required|exists:users,id',
+    //         'category' => 'nullable|string',
+    //     ]);
+
+    //     $file = $request->file('file');
+    //     $path = $file->store('uploads/media', 'public');
+
+    //     Media::create([
+    //         'user_id' => $request->user_id,
+    //         'file_path' => $path,
+    //         'category' => $request->category,
+    //     ]);
+
+    //     return redirect()->back()->with('message', 'File uploaded successfully.');
+    // }
+
     public function Upload(Request $request)
     {
         $request->validate([
@@ -64,16 +84,17 @@ class MediaController extends Controller
         ]);
 
         $file = $request->file('file');
-        $path = $file->store('uploads/media', 'public');
-
+        $filename = time() . '_' . $file->getClientOriginalName();
+        $file->move(public_path('uploads/media'), $filename);
         Media::create([
             'user_id' => $request->user_id,
-            'file_path' => $path,
+            'file_path' => 'uploads/media/' . $filename, // note: no storage prefix
             'category' => $request->category,
         ]);
 
         return redirect()->back()->with('message', 'File uploaded successfully.');
     }
+
 
     public function destroy($id)
     {
