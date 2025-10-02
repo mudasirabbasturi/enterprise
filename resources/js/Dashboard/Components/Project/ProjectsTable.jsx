@@ -182,48 +182,6 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api }) => {
                 </Tooltip>
               )}
 
-              {/* <Avatar.Group>
-                {members.map((per, index) => {
-                  const user = per.user;
-                  const profileMedia = user?.media?.[0];
-
-                  return (
-                    <Tooltip title={user?.name} key={index}>
-                      {profileMedia ? (
-                        <Avatar
-                          src={`/storage/${profileMedia.file_path}`}
-                          alt={user.name}
-                          onClick={() =>
-                            showDrawer("AddEditPoint", {
-                              ...params.data,
-                              member_id: per.id,
-                              name: user.name,
-                              points_gain: per.points_gain,
-                            })
-                          }
-                          style={{ cursor: "pointer" }}
-                        />
-                      ) : (
-                        <Avatar
-                          icon={<UserOutlined />}
-                          onClick={() =>
-                            showDrawer("AddEditPoint", {
-                              ...params.data,
-                              member_id: per.id,
-                              name: user.name,
-                              points_gain: per.points_gain,
-                            })
-                          }
-                          style={{
-                            backgroundColor: "#87d068",
-                            cursor: "pointer",
-                          }}
-                        />
-                      )}
-                    </Tooltip>
-                  );
-                })}
-              </Avatar.Group> */}
               <Avatar.Group>
                 {members.map((per, index) => {
                   const user = per.user;
@@ -255,7 +213,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api }) => {
                     <Tooltip title={user?.name} key={index}>
                       {profileMedia ? (
                         <Avatar
-                          src={`/storage/${profileMedia.file_path}`}
+                          src={`${profileMedia.file_path}`}
                           alt={user.name}
                           {...avatarProps}
                         />

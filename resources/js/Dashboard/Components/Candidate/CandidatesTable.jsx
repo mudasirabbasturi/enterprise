@@ -51,7 +51,7 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
         if (!latestCV) return <>No CV</>;
         return (
           <a
-            href={`/storage/${latestCV.file_path}`}
+            href={`/${latestCV.file_path}`}
             target="_blank"
             rel="noopener noreferrer"
             className="d-inline-block"
@@ -89,7 +89,7 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
         return (
           <div className="d-flex">
             <a
-              href={`/storage/${jobLetter.file_path}`}
+              href={`/${jobLetter.file_path}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-sm btn-info me-1 text-white"

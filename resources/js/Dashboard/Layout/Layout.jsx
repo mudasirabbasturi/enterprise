@@ -133,7 +133,7 @@ const DashboardLayout = ({ children }) => {
                       width: "60%",
                       height: "auto",
                     }}
-                    src="/storage/uploads/images/logo-collapse.png"
+                    src="/uploads/images/logo-collapse.png"
                     alt="Logo Collapse"
                   />
                   {/* <svg
@@ -193,7 +193,7 @@ const DashboardLayout = ({ children }) => {
                     {user?.media.length > 0 ? (
                       <img
                         className="me-1"
-                        src={`/storage/${user.media[0].file_path}`}
+                        src={`/${user.media[0].file_path}`}
                         alt="Profile"
                         style={{
                           width: "35px",

@@ -247,7 +247,7 @@ const Index = ({ ownerId }) => {
         {renderUploadSection({
           title: "User Profile",
           fileUrl: profileUrl,
-          defaultImg: "uploads/media/default/profile.svg",
+          defaultImg: "/uploads/media/default/profile.svg",
           fileList: profileFileList,
           setFileList: setProfileFileList,
           category: "profile",
@@ -255,7 +255,7 @@ const Index = ({ ownerId }) => {
         {renderUploadSection({
           title: "ID Card Front",
           fileUrl: idCardFrontUrl,
-          defaultImg: "uploads/media/default/id_card_front.svg",
+          defaultImg: "/uploads/media/default/id_card_front.svg",
           fileList: frontFileList,
           setFileList: setFrontFileList,
           category: "id_card_front",
@@ -263,7 +263,7 @@ const Index = ({ ownerId }) => {
         {renderUploadSection({
           title: "ID Card Back",
           fileUrl: idCardBackUrl,
-          defaultImg: "uploads/media/default/id_card_back.svg",
+          defaultImg: "/uploads/media/default/id_card_back.svg",
           fileList: backFileList,
           setFileList: setBackFileList,
           category: "id_card_back",
@@ -271,7 +271,7 @@ const Index = ({ ownerId }) => {
         {renderUploadSection({
           title: "Resume",
           fileUrl: cvUrl,
-          defaultImg: "uploads/media/default/cv.svg",
+          defaultImg: "/uploads/media/default/cv.svg",
           fileList: cvFileList,
           setFileList: setCvFileList,
           category: "resume",

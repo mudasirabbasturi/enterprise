@@ -82,16 +82,16 @@ class MediaController extends Controller
             'user_id' => 'required|exists:users,id',
             'category' => 'nullable|string',
         ]);
-
         $file = $request->file('file');
         $filename = time() . '_' . $file->getClientOriginalName();
+
         $file->move(public_path('uploads/media'), $filename);
+        // Save the relative path in the database
         Media::create([
             'user_id' => $request->user_id,
             'file_path' => 'uploads/media/' . $filename, // note: no storage prefix
             'category' => $request->category,
         ]);
-
         return redirect()->back()->with('message', 'File uploaded successfully.');
     }
 
