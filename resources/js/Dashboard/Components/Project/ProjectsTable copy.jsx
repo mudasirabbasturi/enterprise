@@ -725,7 +725,10 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api }) => {
     const channel = window.Echo.channel("project-channel");
     const handler = (data) => {
       if (data.project) {
-        setRowData((prev) => [data.project, ...prev]);
+        setRowData((prev) => {
+          if (prev.some((p) => p.id === data.project.id)) return prev;
+          return [data.project, ...prev];
+        });
       }
     };
     channel.listen(".event-project-created", handler);
@@ -734,20 +737,19 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api }) => {
     };
   }, []);
 
-  useEffect(() => {
-    const channel = window.Echo.channel("project-channel");
-    const handler = (data) => {
-      if (data.project) {
-        setRowData((prev) =>
-          prev.map((p) => (p.id === data.project.id ? data.project : p))
-        );
-      }
-    };
-    channel.listen(".event-project-joined", handler);
-    return () => {
-      channel.stopListening(".event-project-joined", handler);
-    };
-  }, []);
+  // const confirmDelProject = (id) =>
+  //   new Promise((resolve) => {
+  //     const url = route("project.destroy", id);
+  //     router.delete(url, {
+  //       preserveScroll: true,
+  //       onSuccess: () => {
+  //         resolve();
+  //       },
+  //       onError: () => {
+  //         message.error("Failed to delete project");
+  //       },
+  //     });
+  //   });
 
   const confirmDelProject = async (id) => {
     try {

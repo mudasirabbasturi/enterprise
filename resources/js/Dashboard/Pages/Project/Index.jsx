@@ -30,7 +30,7 @@ const Index = ({ projects, clients }) => {
   const hasProjectDataTablePermission =
     Array.isArray(userPermissions) &&
     userPermissions.some((perm) => perm.name === "View Projects Data Table");
-
+  const [rowData, setRowData] = useState(projects || []);
   const [open, setOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState("add");
   const [selectedProject, setSelectedProject] = useState(null);
@@ -52,7 +52,6 @@ const Index = ({ projects, clients }) => {
     }
   };
 
-  // Flash Messages
   const { flash, errors } = usePage().props;
   const [api, contextHolder] = notification.useNotification();
   useEffect(() => {
@@ -78,6 +77,9 @@ const Index = ({ projects, clients }) => {
       });
     }
   }, [errors]);
+  {
+    /** Flash Messages End */
+  }
   return (
     <>
       {contextHolder}
@@ -115,7 +117,12 @@ const Index = ({ projects, clients }) => {
                   </div>
                 }
               >
-                <ProjectsTable projects={projects} showDrawer={showDrawer} />
+                <ProjectsTable
+                  projects={rowData}
+                  showDrawer={showDrawer}
+                  setRowData={setRowData}
+                  api={api}
+                />
               </Suspense>
             </div>
           </>
@@ -207,6 +214,8 @@ const Index = ({ projects, clients }) => {
                 ref={childRef}
                 onClose={onClose}
                 clients={clients}
+                setRowData={setRowData}
+                api={api}
               />
             ) : drawerMode === "edit" ? (
               <EditProject
@@ -224,6 +233,8 @@ const Index = ({ projects, clients }) => {
                 ref={childRef}
                 project={selectedProject}
                 onClose={onClose}
+                setRowData={setRowData}
+                api={api}
               />
             ) : drawerMode === "EditJoinProject" ? (
               <EditJoinProject

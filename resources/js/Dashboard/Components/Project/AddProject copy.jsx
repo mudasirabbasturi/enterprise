@@ -1,5 +1,6 @@
 import React, { useState, useImperativeHandle, forwardRef } from "react";
 import {
+  router,
   useRoute, // ziggy routing
   Input,
   Select,
@@ -7,7 +8,7 @@ import {
   dayjs,
   InputNumber,
 } from "@shared/ui";
-import axios from "axios";
+
 import { Editor } from "@tinymce/tinymce-react";
 import "tinymce/tinymce";
 import "tinymce/icons/default";
@@ -58,6 +59,26 @@ const AddProject = forwardRef(
         [key]: value,
       }));
     };
+
+    // const handleSubmit = () => {
+    //   setLoading(true);
+    //   setParentLoading?.(true);
+    //   router.post(route("project.store"), values, {
+    //     preserveScroll: true,
+    //     onSuccess: () => {
+    //       setValues(defaultValues);
+    //       onClose();
+    //     },
+    //     onError: () => {
+    //       setParentLoading?.(false);
+    //       setLoading(false);
+    //     },
+    //     onFinish: () => {
+    //       setParentLoading?.(false);
+    //       setLoading(false);
+    //     },
+    //   });
+    // };
 
     const handleSubmit = async () => {
       try {

@@ -8,8 +8,9 @@ import {
   Spin,
   Input,
 } from "@shared/ui";
+import axios from "axios";
 const JoinProject = forwardRef(
-  ({ project, onClose, setParentLoading }, ref) => {
+  ({ project, onClose, setParentLoading, api, setRowData }, ref) => {
     const { auth } = usePage().props;
     const route = useRoute();
 
@@ -60,28 +61,65 @@ const JoinProject = forwardRef(
       setNewStepInput(""); // clear input
     };
 
-    const handleSubmit = () => {
-      setLoading(true);
-      setParentLoading?.(true);
+    // const handleSubmit = () => {
+    //   setLoading(true);
+    //   setParentLoading?.(true);
 
-      router.post(route("JoinProject", { ProjectId: project.id }), values, {
-        preserveScroll: true,
-        onSuccess: () => {
-          setValues(initValues);
-          setSelectedSteps([]);
-          setCustomSteps([]);
-          setNewStepInput("");
-          onClose();
-        },
-        onError: () => {
-          setParentLoading?.(false);
-          setLoading(false);
-        },
-        onFinish: () => {
-          setParentLoading?.(false);
-          setLoading(false);
-        },
-      });
+    //   router.post(route("JoinProject", { ProjectId: project.id }), values, {
+    //     preserveScroll: true,
+    //     onSuccess: () => {
+    //       setValues(initValues);
+    //       setSelectedSteps([]);
+    //       setCustomSteps([]);
+    //       setNewStepInput("");
+    //       onClose();
+    //     },
+    //     onError: () => {
+    //       setParentLoading?.(false);
+    //       setLoading(false);
+    //     },
+    //     onFinish: () => {
+    //       setParentLoading?.(false);
+    //       setLoading(false);
+    //     },
+    //   });
+    // };
+    const handleSubmit = async () => {
+      try {
+        setLoading(true);
+        setParentLoading?.(true);
+        const { data } = await axios.post(
+          route("JoinProject", project.id),
+          values
+        );
+        // Reset form values
+        setValues(initValues);
+        setSelectedSteps([]);
+        setCustomSteps([]);
+        setNewStepInput("");
+        onClose();
+        if (data.project) {
+          api.success({
+            message: "Success",
+            description: data.message,
+            placement: "topRight",
+          });
+          // Update rowData in parent immediately
+          setRowData((prev) =>
+            prev.map((p) => (p.id === data.project.id ? data.project : p))
+          );
+        }
+      } catch (error) {
+        api.error({
+          message: "Error",
+          description:
+            error.response?.data?.message || "Failed to join project",
+          placement: "topRight",
+        });
+      } finally {
+        setLoading(false);
+        setParentLoading?.(false);
+      }
     };
 
     useImperativeHandle(ref, () => ({

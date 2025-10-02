@@ -86,15 +86,28 @@ const DashboardLayout = ({ children }) => {
   ];
 
   useEffect(() => {
-    const channel = window.Echo.channel("my-channel");
+    const channel = window.Echo.channel("project-channel");
     const handler = (data) => {
       api.success({
         description: data.message,
       });
     };
-    channel.listen(".my-event", handler);
+    channel.listen(".event-project-created", handler);
     return () => {
-      channel.stopListening(".my-event", handler);
+      channel.stopListening(".event-project-created", handler);
+    };
+  }, []);
+
+  useEffect(() => {
+    const channel = window.Echo.channel("project-channel");
+    const handler = (data) => {
+      api.success({
+        description: data.message,
+      });
+    };
+    channel.listen(".event-project-joined", handler);
+    return () => {
+      channel.stopListening(".event-project-joined", handler);
     };
   }, []);
 
