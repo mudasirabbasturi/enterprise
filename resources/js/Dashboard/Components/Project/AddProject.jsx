@@ -75,7 +75,7 @@ const AddProject = forwardRef(
           setRowData((prev) => [data.project, ...prev]);
         }
       } catch (error) {
-        // console.log(error.response?.data);
+        console.log(error.response?.data);
         api.error({
           message: "error",
           description: "Failed to create project",
@@ -86,7 +86,6 @@ const AddProject = forwardRef(
         setParentLoading?.(false);
       }
     };
-
     useImperativeHandle(ref, () => ({
       submitForm: handleSubmit,
     }));

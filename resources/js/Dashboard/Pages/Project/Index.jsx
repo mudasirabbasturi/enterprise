@@ -24,6 +24,7 @@ const AddEditPoint = lazy(() =>
 const Index = ({ projects, clients }) => {
   const { props } = usePage();
   const user = props?.auth?.user ?? {};
+
   const permissions = props?.permissions ?? []; // master list
   const userPermissions = props?.auth?.user?.role?.permissions ?? []; // user's perms
 

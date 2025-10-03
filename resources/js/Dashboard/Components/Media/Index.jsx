@@ -63,10 +63,10 @@ const Index = ({ ownerId }) => {
         const idCardBackPath = response.data.idCardBack?.file_path;
         const resumePath = response.data.resume?.file_path;
 
-        setProfileUrl(profilePath ? `${profilePath}` : null);
-        setIdCardFrontUrl(idCardFrontPath ? `${idCardFrontPath}` : null);
-        setIdCardBackUrl(idCardBackPath ? `${idCardBackPath}` : null);
-        setCvUrl(resumePath ? `${resumePath}` : null);
+        setProfileUrl(profilePath ? `/${profilePath}` : null);
+        setIdCardFrontUrl(idCardFrontPath ? `/${idCardFrontPath}` : null);
+        setIdCardBackUrl(idCardBackPath ? `/${idCardBackPath}` : null);
+        setCvUrl(resumePath ? `/${resumePath}` : null);
 
         const mediaList = response.data.media || [];
         setMedia(mediaList);
@@ -329,7 +329,7 @@ const Index = ({ ownerId }) => {
       </div>
       <div className="row">
         {media.map((item, index) => {
-          const fileUrl = `${item.file_path}`;
+          const fileUrl = `/${item.file_path}`;
           const fileType = getFileType(fileUrl);
           const category = item.category;
           return (

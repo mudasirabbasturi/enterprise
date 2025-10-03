@@ -85,12 +85,15 @@ const DashboardLayout = ({ children }) => {
     },
   ];
 
+  // Add Project
   useEffect(() => {
     const channel = window.Echo.channel("project-channel");
     const handler = (data) => {
-      api.success({
-        description: data.message,
-      });
+      if (user.email !== data.userEmail) {
+        api.success({
+          description: data.message,
+        });
+      }
     };
     channel.listen(".event-project-created", handler);
     return () => {
@@ -98,16 +101,51 @@ const DashboardLayout = ({ children }) => {
     };
   }, []);
 
+  // Delete Project
   useEffect(() => {
     const channel = window.Echo.channel("project-channel");
     const handler = (data) => {
-      api.success({
-        description: data.message,
-      });
+      if (user.email !== data.userEmail) {
+        api.success({
+          description: data.message,
+        });
+      }
+    };
+    channel.listen(".event-project-delete", handler);
+    return () => {
+      channel.stopListening(".event-project-delete", handler);
+    };
+  }, []);
+
+  // Joint Project
+  useEffect(() => {
+    const channel = window.Echo.channel("project-channel");
+    const handler = (data) => {
+      if (user.email !== data.userEmail) {
+        api.success({
+          description: data.message,
+        });
+      }
     };
     channel.listen(".event-project-joined", handler);
     return () => {
       channel.stopListening(".event-project-joined", handler);
+    };
+  }, []);
+
+  // leave Joint Project
+  useEffect(() => {
+    const channel = window.Echo.channel("project-channel");
+    const handler = (data) => {
+      if (user.email !== data.userEmail) {
+        api.success({
+          description: data.message,
+        });
+      }
+    };
+    channel.listen(".event-project-leave", handler);
+    return () => {
+      channel.stopListening(".event-project-leave", handler);
     };
   }, []);
 
@@ -136,30 +174,7 @@ const DashboardLayout = ({ children }) => {
                     src="/uploads/images/logo-collapse.png"
                     alt="Logo Collapse"
                   />
-                  {/* <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 700 150"
-                  preserveAspectRatio="xMidYMid meet"
-                  style={{
-                    display: "block",
-                    background: "transparent",
-                  }}
-                >
-                  <text
-                    x="50%"
-                    y="50%"
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial"
-                    fontWeight="600"
-                    fontSize="160"
-                    fill="#0d70cc"
-                  >
-                    Enterprise
-                  </text>
-                </svg> */}
                 </div>
-                {/* <div className="logo-expanded"></div> */}
               </Link>
               <Button
                 type="text"

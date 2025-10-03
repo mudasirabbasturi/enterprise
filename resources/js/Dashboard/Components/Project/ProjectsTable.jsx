@@ -7,7 +7,6 @@ import {
   gridOptionsConfig,
 } from "@agConfig/AgGridConfig";
 import {
-  router,
   usePage,
   useRoute,
   Tooltip,
@@ -25,13 +24,13 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api }) => {
   const hasPermission = (userpermission, permName) =>
     userpermission?.some((p) => p.name === permName);
   const { auth } = usePage().props;
+
   const { props } = usePage();
   const userPermissions = props?.auth?.user?.role?.permissions ?? [];
   const can = (perm) => hasPermission(userPermissions, perm);
 
   const user = props?.auth?.user ?? {};
   const permissions = props?.permissions ?? []; // master list
-
   const hasViewProjectTeamPermission =
     Array.isArray(userPermissions) &&
     userPermissions.some((perm) => perm.name === "View Project Team");
@@ -47,6 +46,10 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api }) => {
   const hasUpdateScorePermission =
     Array.isArray(userPermissions) &&
     userPermissions.some((perm) => perm.name === "Add/Update Score");
+
+  const hasDeleteProjectPermission =
+    Array.isArray(userPermissions) &&
+    userPermissions.some((perm) => perm.name === "Delete Project");
 
   const route = useRoute();
 
@@ -656,19 +659,21 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api }) => {
             >
               <EditOutlined />
             </Tooltip>
-            <Tooltip title={`Delete Project`} color="red" placement="leftTop">
-              <Popconfirm
-                title={`Are you sure you want to delete project`}
-                onConfirm={() => confirmDelProject(params.data.id)}
-                okText="Yes"
-                cancelText="No"
-              >
-                <DeleteOutlined
-                  style={{ border: "1px dashed red" }}
-                  className="btn btn-sm btn-danger"
-                />
-              </Popconfirm>
-            </Tooltip>
+            {hasDeleteProjectPermission && (
+              <Tooltip title={`Delete Project`} color="red" placement="leftTop">
+                <Popconfirm
+                  title={`Are you sure you want to delete project`}
+                  onConfirm={() => confirmDelProject(params.data.id)}
+                  okText="Yes"
+                  cancelText="No"
+                >
+                  <DeleteOutlined
+                    style={{ border: "1px dashed red" }}
+                    className="btn btn-sm btn-danger"
+                  />
+                </Popconfirm>
+              </Tooltip>
+            )}
           </div>
         </>
       ),
@@ -679,11 +684,14 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api }) => {
     setRowData(projects);
   }, [projects]);
 
+  // add project channel
   useEffect(() => {
     const channel = window.Echo.channel("project-channel");
     const handler = (data) => {
       if (data.project) {
-        setRowData((prev) => [data.project, ...prev]);
+        if (user.email !== data.userEmail) {
+          setRowData((prev) => [data.project, ...prev]);
+        }
       }
     };
     channel.listen(".event-project-created", handler);
@@ -692,18 +700,59 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api }) => {
     };
   }, []);
 
+  // join project channel
   useEffect(() => {
     const channel = window.Echo.channel("project-channel");
     const handler = (data) => {
       if (data.project) {
-        setRowData((prev) =>
-          prev.map((p) => (p.id === data.project.id ? data.project : p))
-        );
+        if (user.email !== data.userEmail) {
+          setRowData((prev) =>
+            prev.map((p) => (p.id === data.project.id ? data.project : p))
+          );
+        }
       }
     };
     channel.listen(".event-project-joined", handler);
     return () => {
       channel.stopListening(".event-project-joined", handler);
+    };
+  }, []);
+
+  // delete project channel
+  useEffect(() => {
+    const channel = window.Echo.channel("project-channel");
+    const handler = (data) => {
+      if (data.project) {
+        if (user.email !== data.userEmail) {
+          setRowData((prev) =>
+            prev.filter((item) => item.id !== Number(data.project.id))
+          );
+        }
+      }
+    };
+    channel.listen(".event-project-delete", handler);
+    return () => {
+      channel.stopListening(".event-project-delete", handler);
+    };
+  }, []);
+
+  // leave join project
+  useEffect(() => {
+    const channel = window.Echo.channel("project-channel");
+    const handler = (data) => {
+      if (data.project) {
+        if (user.email !== data.userEmail) {
+          setRowData((prev) =>
+            prev.map((proj) =>
+              proj.id === data.project.id ? data.project : proj
+            )
+          );
+        }
+      }
+    };
+    channel.listen(".event-project-leave", handler);
+    return () => {
+      channel.stopListening(".event-project-leave", handler);
     };
   }, []);
 
@@ -728,20 +777,6 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api }) => {
       });
     }
   };
-
-  // const confirmDelJoinedProject = (id) =>
-  //   new Promise((resolve) => {
-  //     const url = route("DeleteJoinProject", id);
-  //     router.delete(url, {
-  //       preserveScroll: true,
-  //       onSuccess: () => {
-  //         resolve();
-  //       },
-  //       onError: () => {
-  //         message.error("Failed to delete from joined project");
-  //       },
-  //     });
-  //   });
 
   const confirmDelJoinedProject = async (id) => {
     try {

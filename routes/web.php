@@ -102,6 +102,14 @@ Route::middleware(['auth'])->group(function () {
 
 });
 
-Route::get('/c', function() {
-    return view('pdf');
+Route::get('/test-pusher', function() {
+    return [
+        'key' => config('broadcasting.connections.pusher.key'),
+        'secret' => config('broadcasting.connections.pusher.secret'),
+        'app_id' => config('broadcasting.connections.pusher.app_id'),
+    ];
+});
+
+Route::get('/env', function() {
+    return env('APP_ENV');
 });

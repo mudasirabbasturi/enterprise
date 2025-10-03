@@ -33,50 +33,12 @@ class ProjectController extends Controller
         ]);
     }
 
-    // public function Store(StoreProjectRequest $request)
-    // {
-    //     $userName =  Auth::user()->name;
-    //     $validated = $request->validated();
-    //     $project = Project::create($validated);
-    //     $options = [
-    //         'cluster' => config('broadcasting.connections.pusher.options.cluster'),
-    //         'useTLS' => true,
-    //     ];
-    //     $options = [ 
-    //         'cluster' => config('broadcasting.connections.pusher.options.cluster'), 
-    //         'useTLS' => true, 
-    //     ];
-    //     $pusher = new Pusher(
-    //         config('broadcasting.connections.pusher.key'),
-    //         config('broadcasting.connections.pusher.secret'),
-    //         config('broadcasting.connections.pusher.app_id'),
-    //         $options
-    //     );
-    //     $pusher->trigger('project-channel', 'event-project-created', [
-    //         'message' => 'New Project Is Added By ' . $userName,
-    //     ]);
-    //     $project = Project::create($request->validated());
-    //     $project = Project::with([
-    //         'projectTeamMembers.user.media' => function ($query) {
-    //             $query->where('category', 'profile')->latest()->limit(1);
-    //         },
-    //         'client'
-    //     ])->find($project->id);
-    //     return response()->json([
-    //         'message' => 'Project Created Successfully.',
-    //         'project' => $project,
-    //     ]);
-        
-    // }
     public function Store(StoreProjectRequest $request)
     {
         $userName = Auth::user()->name;
+        $userEmail = Auth::user()->email;
         $validated = $request->validated();
-
-        // Create project only once
         $project = Project::create($validated);
-
-        // Reload with relations
         $project = Project::with([
             'projectTeamMembers.user.media' => function ($query) {
                 $query->where('category', 'profile')->latest()->limit(1);
@@ -84,23 +46,32 @@ class ProjectController extends Controller
             'client'
         ])->find($project->id);
 
-        // Trigger Pusher AFTER full project is loaded
+        // $options = [ 
+        //     'cluster' => config('broadcasting.connections.pusher.options.cluster'), 
+        //     'useTLS' => true, 
+        // ];
+        // $pusher = new Pusher(
+        //     config('broadcasting.connections.pusher.key'),
+        //     config('broadcasting.connections.pusher.secret'),
+        //     config('broadcasting.connections.pusher.app_id'),
+        //     $options
+        // );
+
         $options = [ 
-            'cluster' => config('broadcasting.connections.pusher.options.cluster'), 
+            'cluster' => 'ap2', 
             'useTLS' => true, 
         ];
         $pusher = new Pusher(
-            config('broadcasting.connections.pusher.key'),
-            config('broadcasting.connections.pusher.secret'),
-            config('broadcasting.connections.pusher.app_id'),
+            '5158315c26b8f6732773', // app key
+            '9ba1bfd3baa3f4ec2a4c', // app secret
+            '2057639', // app id
             $options
         );
         $pusher->trigger('project-channel', 'event-project-created', [
-            'message' => 'New Project Is Added By ' . $userName,
-            'project' => $project, // send the full project if needed
+            'message' => $userName . ' added new project ' . $project->project_title,
+            'userEmail' => $userEmail,
+            'project' => $project,
         ]);
-
-        // Return JSON for Axios call
         return response()->json([
             'message' => 'Project Created Successfully.',
             'project' => $project,
@@ -117,9 +88,25 @@ class ProjectController extends Controller
 
     public function Destroy($id)
     {
+        $userName = Auth::user()->name;
+        $userEmail = Auth::user()->email;
         $project = Project::findOrFail($id);
         $project->delete();
-        // return back()->with('message', 'Project deleted successfully!');
+        $options = [ 
+            'cluster' => 'ap2', 
+            'useTLS' => true, 
+        ];
+        $pusher = new Pusher(
+            '5158315c26b8f6732773', // app key
+            '9ba1bfd3baa3f4ec2a4c', // app secret
+            '2057639', // app id
+            $options
+        );
+        $pusher->trigger('project-channel', 'event-project-delete', [
+            'message' => $userName . ' delete the project ' . $project->project_title,
+            'userEmail' => $userEmail,
+            'project' => $project,
+        ]);
         return response()->json([
             'message' => 'Project deleted successfully.',
             'project' => $project, 
@@ -201,16 +188,13 @@ class ProjectController extends Controller
     public function projectColumnUpdate(Request $request, $id)
     {
         $project = Project::findOrFail($id);
-        // Authorize the update (using Laravel Gates/Policies if you have them)
         $validated = $request->validate([
             'id' => 'required|exists:projects,id',
             'field' => ['required', 'string', Rule::in($this->allowedFields)],
             $request->field => $this->validationRules[$request->field] ?? 'nullable',
         ]);
-
         $field = $validated['field'];
         $value = $validated[$field] ?? null;
-
         if ($field === 'project_due_date' && !empty($value)) {
             $value = \Carbon\Carbon::parse($value)->format('Y-m-d');
         }
@@ -224,22 +208,19 @@ class ProjectController extends Controller
     public function JoinProject(Request $request, $id)
     {
         $userName = Auth::user()->name;
+        $userEmail = Auth::user()->email;
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
             'steps' => 'required|array',
             'steps.*' => 'string',
             'status' => 'string'
         ]);
-
         $project = Project::find($id);
-        
         if (!$project) {
             return back()->withErrors([
                 'project' => 'The specified project does not exist'
             ]);
         }
-
-        // Check if user is already a member
         $existingMember = ProjectTeamMember::where([
             'project_id' => $id,
             'user_id' => $validated['user_id']
@@ -276,18 +257,19 @@ class ProjectController extends Controller
             ])->find($id);
             // Trigger Pusher AFTER full project is loaded
             $options = [ 
-                'cluster' => config('broadcasting.connections.pusher.options.cluster'), 
+                'cluster' => 'ap2', 
                 'useTLS' => true, 
             ];
             $pusher = new Pusher(
-                config('broadcasting.connections.pusher.key'),
-                config('broadcasting.connections.pusher.secret'),
-                config('broadcasting.connections.pusher.app_id'),
+                '5158315c26b8f6732773', // app key
+                '9ba1bfd3baa3f4ec2a4c', // app secret
+                '2057639', // app id
                 $options
             );
             $pusher->trigger('project-channel', 'event-project-joined', [
-                'message' => 'Successfully joined project By ' . $userName,
-                'project' => $project, // send the full project if needed
+                'message' =>  $userName . ' joined project: ' . $project->project_title,
+                'userEmail' => $userEmail,
+                'project' => $project,
             ]);
             return response()->json([
                 'message' => 'Successfully joined project.',
@@ -352,18 +334,13 @@ class ProjectController extends Controller
             ]);
         }
     }
-    // public function DeleteJoinProject($id) {
-    //     $teamMember = ProjectTeamMember::findOrFail($id);
-    //     $teamMember->delete();
-    //     return back()->with('message', 'You Have Successfully Remove Yourself From Joined Task!');
-    // }
 
     public function DeleteJoinProject($id) {
+        $userName = Auth::user()->name;
+        $userEmail = Auth::user()->email;
         $teamMember = ProjectTeamMember::findOrFail($id);
         $projectId = $teamMember->project_id;
         $teamMember->delete();
-
-        // Reload project with relations
         $project = Project::with([
             'projectTeamMembers.user.media' => function ($query) {
                 $query->where('category', 'profile')->latest()->limit(1);
@@ -371,13 +348,27 @@ class ProjectController extends Controller
             'client'
         ])->find($projectId);
 
+        $options = [ 
+            'cluster' => 'ap2', 
+            'useTLS' => true, 
+        ];
+        $pusher = new Pusher(
+            '5158315c26b8f6732773',
+            '9ba1bfd3baa3f4ec2a4c',
+            '2057639',
+            $options
+        );
+        $pusher->trigger('project-channel', 'event-project-leave', [
+            'message' =>  $userName . ' leave project: ' . $project->project_title,
+            'userEmail' => $userEmail,
+            'project' => $project,
+        ]);
         return response()->json([
             'message' => 'Successfully removed from joined project.',
             'project' => $project,
             'error' => false,
         ]);
     }
-
 
     /**
      * Add or edit score for a team member.
