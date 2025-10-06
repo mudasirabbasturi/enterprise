@@ -9,7 +9,6 @@ import {
   IntegratedChartsModule,
 } from "ag-grid-enterprise";
 import { AgChartsEnterpriseModule } from "ag-charts-enterprise";
-
 import { AgGridReact } from "ag-grid-react";
 ModuleRegistry.registerModules([
   AllCommunityModule,
@@ -21,7 +20,6 @@ ModuleRegistry.registerModules([
 // LicenseManager.prototype.outputMissingLicenseKey = function () {};
 // LicenseManager.prototype.outputExpiredKey = function () {};
 LicenseManager.setLicenseKey("test");
-
 const gridTheme = themeAlpine.withParams({
   spacing: 6,
   accentColor: "blue",
@@ -36,7 +34,6 @@ const defaultColDef = {
   resizable: true,
   editable: true,
 };
-
 const sideBarConfig = {
   toolPanels: [
     {
@@ -57,7 +54,6 @@ const sideBarConfig = {
   defaultToolPanel: "columns",
   position: "right",
 };
-
 const STORAGE_KEY = "agGridColumnState";
 const gridOptionsConfig = {
   onGridReady: (params) => {
@@ -104,7 +100,6 @@ const gridOptionsConfig = {
     localStorage.removeItem(STORAGE_KEY);
   },
 };
-
 export {
   AgGridReact,
   gridTheme,

@@ -191,7 +191,7 @@ const EditColumn = forwardRef(
                     onChange={setCurrentValue}
                     disabled={loading}
                     formatter={(value) =>
-                      `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                      `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                     }
                   />
                 );

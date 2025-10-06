@@ -3,7 +3,6 @@ import {
   useRoute, // ziggy routing
   Input,
 } from "@shared/ui";
-
 import { Editor } from "@tinymce/tinymce-react";
 import "tinymce/tinymce";
 import "tinymce/icons/default";
@@ -15,12 +14,10 @@ import "tinymce/plugins/lists";
 import "tinymce/plugins/link";
 import "tinymce/skins/ui/oxide/skin.css";
 import axios from "axios";
-
 const { TextArea } = Input;
 const AddBranch = forwardRef(
   ({ onClose, setParentLoading, setRowData, api }, ref) => {
     const route = useRoute();
-
     const defaultValues = {
       name: "",
       is_main: false,
@@ -38,14 +35,12 @@ const AddBranch = forwardRef(
     };
     const [values, setValues] = useState(defaultValues);
     const [loading, setLoading] = useState(false);
-
     const onChangeValue = (key, value) => {
       setValues((prev) => ({
         ...prev,
         [key]: value,
       }));
     };
-
     const handleSubmit = async () => {
       try {
         setLoading(true);
@@ -72,11 +67,9 @@ const AddBranch = forwardRef(
         setParentLoading?.(false);
       }
     };
-
     useImperativeHandle(ref, () => ({
       submitForm: handleSubmit,
     }));
-
     return (
       <>
         <div className="container-fluid">

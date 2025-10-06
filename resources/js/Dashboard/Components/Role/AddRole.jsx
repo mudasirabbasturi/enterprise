@@ -100,8 +100,6 @@ const AddRole = forwardRef(
                 >
                   Enter Role:
                   <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
                 </label>
                 <Input
                   value={values.name}

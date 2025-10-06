@@ -28,8 +28,6 @@ const ViewRole = lazy(() => import("@component/Role/ViewRole"));
 
 const Index = ({ roles, permissions }) => {
   const { auth } = usePage().props;
-  const currentUserRole = auth.user?.role?.name;
-  const isCurrentUserSuperAdmin = currentUserRole === "Super Admin";
 
   const route = useRoute();
   const [rowData, setRowData] = useState([]);
@@ -40,7 +38,6 @@ const Index = ({ roles, permissions }) => {
       field: "name",
       cellEditor: "agLargeTextCellEditor",
       cellEditorPopup: true,
-      pinned: "left",
     },
     {
       headerName: "Notes",
@@ -52,108 +49,12 @@ const Index = ({ roles, permissions }) => {
         return params.data.notes ? params.data.notes : "None";
       },
     },
-    // {
-    //   headerName: "Action",
-    //   filter: false,
-    //   editable: false,
-    //   sortable: false,
-    //   pinned: "right",
-    //   cellRenderer: (params) => (
-    //     <>
-    //       <div className="btn-group btn-group-sm">
-    //         <Tooltip
-    //           title={`View Role With Full Record`}
-    //           color="green"
-    //           placement="leftTop"
-    //         >
-    //           <button
-    //             className="btn btn-success btn-sm me-1"
-    //             onClick={() => showDrawer("view", params.data)}
-    //           >
-    //             <EyeOutlined />
-    //           </button>
-    //         </Tooltip>
-    //         <Tooltip title={`Edit Role`} color="orange" placement="leftTop">
-    //           <button
-    //             className={`btn btn-warning btn-sm me-1 ${
-    //               params.data.name === "Super Admin" ? "disabled" : ""
-    //             }`}
-    //             style={{
-    //               cursor:
-    //                 params.data.name === "Super Admin"
-    //                   ? "not-allowed"
-    //                   : "pointer",
-    //             }}
-    //             onClick={() => showDrawer("edit", params.data)}
-    //             disabled={params.data.name === "Super Admin"}
-    //           >
-    //             <EditOutlined />
-    //           </button>
-    //         </Tooltip>
-    //         <Tooltip
-    //           title={
-    //             params.data.name === "Super Admin"
-    //               ? "Not Allowed"
-    //               : "Delete Role"
-    //           }
-    //           color="red"
-    //           placement="leftTop"
-    //         >
-    //           <Popconfirm
-    //             title={`Are you sure you want to delete "${params.data.name}"?`}
-    //             onConfirm={() => confirmDelRole(params.data.id)}
-    //             okText="Yes"
-    //             cancelText="No"
-    //             disabled={params.data.name === "Super Admin"}
-    //           >
-    //             <DeleteOutlined
-    //               className={`btn btn-danger btn-sm ${
-    //                 params.data.name === "Super Admin" ? "disabled" : ""
-    //               }`}
-    //               style={{
-    //                 cursor:
-    //                   params.data.name === "Super Admin"
-    //                     ? "not-allowed"
-    //                     : "pointer",
-    //               }}
-    //               disabled={params.data.name === "Super Admin"}
-    //             />
-    //           </Popconfirm>
-    //         </Tooltip>
-    //       </div>
-    //     </>
-    //   ),
-    // },
     {
       headerName: "Action",
       filter: false,
       editable: false,
       sortable: false,
-      pinned: "right",
       cellRenderer: (params) => {
-        const isRowSuperAdmin = params.data.name === "Super Admin";
-
-        // If row is Super Admin and current user is NOT Super Admin, hide edit/delete buttons
-        if (isRowSuperAdmin && !isCurrentUserSuperAdmin) {
-          return (
-            <div className="btn-group btn-group-sm">
-              <Tooltip
-                title={`View Role With Full Record`}
-                color="green"
-                placement="leftTop"
-              >
-                <button
-                  className="btn btn-success btn-sm"
-                  onClick={() => showDrawer("view", params.data)}
-                >
-                  <EyeOutlined />
-                </button>
-              </Tooltip>
-            </div>
-          );
-        }
-
-        // Normal buttons for all other cases
         return (
           <div className="btn-group btn-group-sm">
             <Tooltip
@@ -330,10 +231,7 @@ const Index = ({ roles, permissions }) => {
               <button
                 className="btn btn-primary btn-sm"
                 onClick={handleParentSubmit}
-                disabled={
-                  loading ||
-                  (!isCurrentUserSuperAdmin && data.name === "Super Admin")
-                }
+                disabled={loading}
               >
                 {drawerMode === "add"
                   ? "Add Role"

@@ -28,9 +28,9 @@ const Index = ({ projects, clients }) => {
   const permissions = props?.permissions ?? []; // master list
   const userPermissions = props?.auth?.user?.role?.permissions ?? []; // user's perms
 
-  const hasProjectDataTablePermission =
+  const hasProjectsPermission =
     Array.isArray(userPermissions) &&
-    userPermissions.some((perm) => perm.name === "View Projects Data Table");
+    userPermissions.some((perm) => perm.name === "View Projects");
   const [rowData, setRowData] = useState(projects || []);
   const [open, setOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState("add");
@@ -85,7 +85,7 @@ const Index = ({ projects, clients }) => {
     <>
       {contextHolder}
       <div className="container-fluid p-0">
-        {hasProjectDataTablePermission ? (
+        {hasProjectsPermission ? (
           <>
             <div className="d-flex justify-content-between align-items-center ps-2 pe-2 mt-2">
               <Suspense
@@ -123,6 +123,7 @@ const Index = ({ projects, clients }) => {
                   showDrawer={showDrawer}
                   setRowData={setRowData}
                   api={api}
+                  onClose={onClose}
                 />
               </Suspense>
             </div>
@@ -225,6 +226,8 @@ const Index = ({ projects, clients }) => {
                 onClose={onClose}
                 project={selectedProject}
                 clients={clients}
+                setRowData={setRowData}
+                api={api}
               />
             ) : drawerMode === "view" ? (
               <ViewProject onClose={onClose} project={selectedProject} />

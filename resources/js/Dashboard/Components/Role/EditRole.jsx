@@ -5,8 +5,6 @@ const { TextArea } = Input;
 const EditRole = forwardRef(
   ({ onClose, data, permissions, setParentLoading }, ref) => {
     const { auth } = usePage().props;
-    const currentUserRole = auth.user?.role?.name;
-    const isCurrentUserSuperAdmin = currentUserRole === "Super Admin";
 
     const modules = useMemo(() => {
       const grouped = {};
@@ -97,8 +95,6 @@ const EditRole = forwardRef(
                 >
                   Edit Role Name:
                   <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
-                  <hr className="mt-0 mb-1" />
                 </label>
                 <Input
                   value={values.name}
@@ -107,15 +103,7 @@ const EditRole = forwardRef(
                   disabled={data.name === "Super Admin"}
                 />
               </div>
-              <div>
-                {!isCurrentUserSuperAdmin && data.name === "Super Admin" ? (
-                  <p className="text-danger">
-                    You Can Not Edit Super Admin role.
-                  </p>
-                ) : (
-                  "Checked / Unchecked Permission For Role:"
-                )}
-              </div>
+              <div>Checked / Unchecked Permission For Role:</div>
               <hr className="mt-1" />
             </div>
             <div className="col-md-6">
@@ -124,9 +112,6 @@ const EditRole = forwardRef(
                 <TextArea
                   value={values.notes}
                   onChange={(e) => onChangeValue("notes", e.target.value)}
-                  disabled={
-                    !isCurrentUserSuperAdmin && data.name === "Super Admin"
-                  }
                 />
               </div>
             </div>
@@ -153,9 +138,6 @@ const EditRole = forwardRef(
                 <Checkbox
                   checked={isAllSelected(modelName)}
                   onChange={() => toggleSelectAll(modelName)}
-                  disabled={
-                    !isCurrentUserSuperAdmin && data.name === "Super Admin"
-                  }
                 >
                   Select All
                 </Checkbox>
@@ -170,10 +152,6 @@ const EditRole = forwardRef(
                       <Checkbox
                         checked={isChecked(perm.id)}
                         onChange={() => togglePermission(perm.id)}
-                        disabled={
-                          !isCurrentUserSuperAdmin &&
-                          data.name === "Super Admin"
-                        }
                       >
                         {perm.name}
                       </Checkbox>

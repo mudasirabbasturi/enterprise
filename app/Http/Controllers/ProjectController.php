@@ -83,7 +83,11 @@ class ProjectController extends Controller
         $project = Project::findOrFail($id);
         $validated = $request->validated();
         $project->update($validated);
-        return redirect()->back()->with('message', 'Project updated successfully.');
+        return response()->json([
+            'message' => 'Project updated successfully.',
+            'project' => $project,
+        ]);
+        // return redirect()->back()->with('message', 'Project updated successfully.');
     }
 
     public function Destroy($id)
@@ -377,41 +381,6 @@ class ProjectController extends Controller
      * @param int $teamMemberId
      * @return \Illuminate\Http\RedirectResponse
      */
-    // public function AddEditScore(Request $request, $teamMemberId)
-    // {
-    //     $request->validate([
-    //         'points_gain' => 'required|numeric|min:0'
-    //     ]);
-    //     try {
-    //         DB::beginTransaction();
-    //         $teamMember = ProjectTeamMember::findOrFail($teamMemberId);
-    //         $project = $teamMember->project;
-    //         $totalUsedPoints = $project->projectTeamMembers()
-    //             ->where('id', '!=', $teamMemberId)
-    //             ->sum('points_gain');
-    //         $newTotalPoints = $totalUsedPoints + $request->points_gain;
-    //         if ($newTotalPoints > $project->project_points) {
-    //             return back()->withErrors([
-    //                 'points_gain' => 'Total points exceed project limit. Available: ' . 
-    //                                 ($project->project_points - $totalUsedPoints)
-    //             ]);
-    //         }
-    //         $teamMember->update([
-    //             'points_gain' => $request->points_gain
-    //         ]);
-    //         DB::commit();
-    //         return back()->with('message', 'Points updated successfully!');
-            
-    //     } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-    //         DB::rollBack();
-    //         return back()->withErrors(['message' => 'Team member not found.']);
-            
-    //     } catch (\Exception $e) {
-    //         DB::rollBack();
-    //         return back()->withErrors(['message' => 'Error updating points: ' . $e->getMessage()]);
-    //     }
-    // }
-
     
     public function AddEditScore(Request $request, $teamMemberId)
     {
@@ -445,5 +414,33 @@ class ProjectController extends Controller
             return back()->withErrors(['message' => 'Error updating points: ' . $e->getMessage()]);
         }
     }
+
+    public function BulkUpdateScores(Request $request, $projectId)
+    {
+        $project = Project::with('projectTeamMembers')->findOrFail($projectId);
+
+        $members = $request->input('members', []);
+
+        $totalProjectPoints = (int) $project->project_points;
+        $totalUsed = collect($members)->sum(fn($m) => (int) ($m['points_gain'] ?? 0));
+
+        if ($totalUsed > $totalProjectPoints) {
+            return response()->json([
+                'message' => 'Total assigned points exceed total project points.',
+            ], 422);
+        }
+
+        foreach ($members as $m) {
+            ProjectTeamMember::where('id', $m['id'])
+                ->where('project_id', $projectId)
+                ->update(['points_gain' => (int) $m['points_gain']]);
+        }
+
+        return response()->json([
+            'message' => 'All member scores updated successfully!',
+            'project' => $project->fresh(['projectTeamMembers.user']),
+        ]);
+    }
+
 
 }

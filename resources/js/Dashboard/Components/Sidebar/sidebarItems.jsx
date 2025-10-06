@@ -26,7 +26,158 @@ export const getSidebarItems = ({
 
   return [
     // Project Management
-    ...(can("View Projects Data Table")
+    // ...(can("View Projects")
+    //   ? [
+    //       {
+    //         key: "project",
+    //         label: "Project Management",
+    //         icon: <ProjectOutlined style={{ fontSize: "20px" }} />,
+    //         children: [
+    //           ...(can("View All Projects")
+    //             ? [
+    //                 {
+    //                   key: "all-projects",
+    //                   label: (
+    //                     <Link href={route("project.index")}>All Projects</Link>
+    //                   ),
+    //                   icon: <CheckCircleOutlined />,
+    //                 },
+    //               ]
+    //             : []),
+
+    //           ...(can("View Pending")
+    //             ? [
+    //                 {
+    //                   key: "pending",
+    //                   label: (
+    //                     <Link
+    //                       href={route("project.status", { status: "Pending" })}
+    //                     >
+    //                       Project Pending
+    //                     </Link>
+    //                   ),
+    //                   icon: <CheckCircleOutlined />,
+    //                 },
+    //               ]
+    //             : []),
+    //           ...(can("View Takeoff On Progress")
+    //             ? [
+    //                 {
+    //                   key: "takeoff-in-progress",
+    //                   label: (
+    //                     <Link
+    //                       href={route("project.status", {
+    //                         status: "Takeoff On Progress",
+    //                       })}
+    //                     >
+    //                       Takeoff In Progress
+    //                     </Link>
+    //                   ),
+    //                   icon: <CheckCircleOutlined />,
+    //                 },
+    //               ]
+    //             : []),
+    //           ...(can("View Pricing On Progress")
+    //             ? [
+    //                 {
+    //                   key: "pricing-in-progress",
+    //                   label: (
+    //                     <Link
+    //                       href={route("project.status", {
+    //                         status: "Pricing On Progress",
+    //                       })}
+    //                     >
+    //                       Pricing In Progress
+    //                     </Link>
+    //                   ),
+    //                   icon: <CheckCircleOutlined />,
+    //                 },
+    //               ]
+    //             : []),
+    //           ...(can("View Completed")
+    //             ? [
+    //                 {
+    //                   key: "completed",
+    //                   label: (
+    //                     <Link
+    //                       href={route("project.status", {
+    //                         status: "Completed",
+    //                       })}
+    //                     >
+    //                       Project Completed
+    //                     </Link>
+    //                   ),
+    //                   icon: <CheckCircleOutlined />,
+    //                 },
+    //               ]
+    //             : []),
+    //           ...(can("View Revision")
+    //             ? [
+    //                 {
+    //                   key: "revision",
+    //                   label: (
+    //                     <Link
+    //                       href={route("project.status", { status: "Revision" })}
+    //                     >
+    //                       Project Revision
+    //                     </Link>
+    //                   ),
+    //                   icon: <CheckCircleOutlined />,
+    //                 },
+    //               ]
+    //             : []),
+    //           ...(can("View Hold")
+    //             ? [
+    //                 {
+    //                   key: "hold",
+    //                   label: (
+    //                     <Link
+    //                       href={route("project.status", { status: "Hold" })}
+    //                     >
+    //                       Project Hold
+    //                     </Link>
+    //                   ),
+    //                   icon: <CheckCircleOutlined />,
+    //                 },
+    //               ]
+    //             : []),
+    //           ...(can("View Deliver")
+    //             ? [
+    //                 {
+    //                   key: "deliver",
+    //                   label: (
+    //                     <Link
+    //                       href={route("project.status", { status: "Deliver" })}
+    //                     >
+    //                       Project Deliver
+    //                     </Link>
+    //                   ),
+    //                   icon: <CheckCircleOutlined />,
+    //                 },
+    //               ]
+    //             : []),
+    //           ...(can("View Cancelled")
+    //             ? [
+    //                 {
+    //                   key: "hold",
+    //                   label: (
+    //                     <Link
+    //                       href={route("project.status", {
+    //                         status: "Cancelled",
+    //                       })}
+    //                     >
+    //                       Project Cancelled
+    //                     </Link>
+    //                   ),
+    //                   icon: <CheckCircleOutlined />,
+    //                 },
+    //               ]
+    //             : []),
+    //         ],
+    //       },
+    //     ]
+    //   : []),
+    ...(can("View Projects")
       ? [
           {
             key: "project",
@@ -45,7 +196,7 @@ export const getSidebarItems = ({
                   ]
                 : []),
 
-              ...(can("View Pending")
+              ...(can("View Pending Projects")
                 ? [
                     {
                       key: "pending",
@@ -60,7 +211,7 @@ export const getSidebarItems = ({
                     },
                   ]
                 : []),
-              ...(can("View Takeoff On Progress")
+              ...(can("View Takeoff On Progress Projects")
                 ? [
                     {
                       key: "takeoff-in-progress",
@@ -77,7 +228,7 @@ export const getSidebarItems = ({
                     },
                   ]
                 : []),
-              ...(can("View Pricing On Progress")
+              ...(can("View Pricing On Progress Projects")
                 ? [
                     {
                       key: "pricing-in-progress",
@@ -94,7 +245,7 @@ export const getSidebarItems = ({
                     },
                   ]
                 : []),
-              ...(can("View Completed")
+              ...(can("View Completed Projects")
                 ? [
                     {
                       key: "completed",
@@ -111,7 +262,7 @@ export const getSidebarItems = ({
                     },
                   ]
                 : []),
-              ...(can("View Revision")
+              ...(can("View Revision Projects")
                 ? [
                     {
                       key: "revision",
@@ -126,7 +277,7 @@ export const getSidebarItems = ({
                     },
                   ]
                 : []),
-              ...(can("View Hold")
+              ...(can("View Hold Projects")
                 ? [
                     {
                       key: "hold",
@@ -141,7 +292,7 @@ export const getSidebarItems = ({
                     },
                   ]
                 : []),
-              ...(can("View Deliver")
+              ...(can("View Deliver Projects")
                 ? [
                     {
                       key: "deliver",
@@ -156,10 +307,10 @@ export const getSidebarItems = ({
                     },
                   ]
                 : []),
-              ...(can("View Cancelled")
+              ...(can("View Cancelled Projects")
                 ? [
                     {
-                      key: "hold",
+                      key: "cancelled",
                       label: (
                         <Link
                           href={route("project.status", {

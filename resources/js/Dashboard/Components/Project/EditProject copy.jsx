@@ -7,7 +7,6 @@ import {
   Select,
   DatePicker,
   dayjs,
-  usePage,
 } from "@shared/ui";
 import { Editor } from "@tinymce/tinymce-react";
 import "tinymce/tinymce";
@@ -33,108 +32,6 @@ const EditProject = forwardRef(
     },
     ref
   ) => {
-    const hasPermission = (userpermission, permName) =>
-      userpermission?.some((p) => p.name === permName);
-    const { auth } = usePage().props;
-
-    const { props } = usePage();
-    const userPermissions = props?.auth?.user?.role?.permissions ?? [];
-    const can = (perm) => hasPermission(userPermissions, perm);
-
-    const user = props?.auth?.user ?? {};
-    const permissions = props?.permissions ?? []; // master list
-    // 🔐 Project column permissions (Add)
-    const hasUpdateProjectTitlePermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Project Title");
-
-    const hasUpdateProjectAddressPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Project Address");
-
-    const hasUpdateProjectClientPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Project Client");
-
-    const hasUpdateProjectPricingPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Project Pricing");
-
-    const hasUpdateProjectAreaPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Project Area");
-
-    const hasUpdateConstructionTypePermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Construction Type");
-
-    const hasUpdateLineItemsPricingPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update LineItems Pricing");
-
-    const hasUpdateFloorNumberPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Floor Number");
-
-    const hasUpdateMainScopePermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Main Scope");
-
-    const hasUpdateScopeDetailsPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Scope Details");
-
-    const hasUpdateProjectTemplatePermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Project Template");
-
-    const hasUpdateInitialLinkPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Initial Link");
-
-    const hasUpdateFinalLinkPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Final Link");
-
-    const hasUpdateAdminNotesPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Admin Notes");
-
-    const hasUpdateEstimatorNotesPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Estimator Notes");
-
-    const hasUpdateClientAdminNotesPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update ClientAdmin Notes");
-
-    const hasUpdateBudgetPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Budget");
-
-    const hasUpdateDeductionPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Deduction");
-
-    const hasUpdateDueDatePermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Due Date");
-
-    const hasUpdateProjectPointsPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Project Points");
-
-    const hasUpdateProjectStatusPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Project Status");
-
-    const hasUpdateProjectSourcePermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Project Source");
-
-    const hasUpdatePreviewStatusPermission =
-      Array.isArray(userPermissions) &&
-      userPermissions.some((perm) => perm.name === "Update Preview Status");
     const route = useRoute();
     const defaultValues = {
       id: selectedProject.id,
@@ -173,6 +70,26 @@ const EditProject = forwardRef(
         [key]: value,
       }));
     };
+
+    // const handleSubmit = () => {
+    //   setLoading(true);
+    //   setParentLoading?.(true);
+    //   router.put(route("project.update", values.id), values, {
+    //     preserveScroll: true,
+    //     onSuccess: () => {
+    //       setValues(defaultValues);
+    //       onClose();
+    //     },
+    //     onError: () => {
+    //       setParentLoading?.(false);
+    //       setLoading(false);
+    //     },
+    //     onFinish: () => {
+    //       setParentLoading?.(false);
+    //       setLoading(false);
+    //     },
+    //   });
+    // };
 
     const handleSubmit = async () => {
       try {
@@ -223,11 +140,11 @@ const EditProject = forwardRef(
             <div className="col-6">
               {/* Project Title, Client, Address */}
               <div>
-                <hr className="mt-2 mb-2" />
+                <hr className="mt-2 mb-2"></hr>
                 <h6 className="m-0" style={{ color: "blue" }}>
                   Project Title, Client, Address
                 </h6>
-                <hr className="mt-2 mb-2" />
+                <hr className="mt-2 mb-2"></hr>
                 <div className="d-flex align-items-center mb-3">
                   <label
                     className="me-1"
@@ -236,6 +153,8 @@ const EditProject = forwardRef(
                   >
                     Project Title:
                     <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
                   </label>
                   <Input
                     placeholder="Add Project Title"
@@ -243,13 +162,13 @@ const EditProject = forwardRef(
                     onChange={(e) =>
                       onChangeValue("project_title", e.target.value)
                     }
-                    disabled={loading || !hasUpdateProjectTitlePermission}
+                    disabled={loading}
                   />
                 </div>
                 <div className="mb-3">
                   <label htmlFor="project_address">Project Address:</label>
                   <Editor
-                    disabled={loading || !hasUpdateProjectAddressPermission}
+                    disabled={loading}
                     init={{
                       height: 150,
                       menubar: false,
@@ -260,22 +179,20 @@ const EditProject = forwardRef(
                       content_css: false,
                     }}
                     value={values.project_address}
-                    onEditorChange={(content) =>
-                      onChangeValue("project_address", content)
-                    }
+                    onEditorChange={(content, editor) => {
+                      onChangeValue("project_address", content);
+                    }}
                   />
                 </div>
               </div>
 
-              {/* Client */}
               <div className="d-flex flex-column mb-3">
                 <label
                   className="mb-1"
                   style={{ whiteSpace: "nowrap" }}
                   htmlFor="client_id"
                 >
-                  Select Client:
-                  <hr className="m-0" />
+                  Select Client:<hr className="m-0"></hr>
                 </label>
                 <div className="d-flex flex-column">
                   <Select
@@ -283,9 +200,9 @@ const EditProject = forwardRef(
                     placeholder="Select Client"
                     allowClear
                     showSearch
-                    options={clients.map((c) => ({
-                      label: c.name,
-                      value: c.id,
+                    options={clients.map((client) => ({
+                      label: client.name,
+                      value: client.id,
                     }))}
                     optionFilterProp="label"
                     value={values.client_id || null}
@@ -296,8 +213,10 @@ const EditProject = forwardRef(
                       onChangeValue("client_id", id ?? null);
                       onChangeValue("notes", selectedClient?.notes ?? "");
                     }}
-                    disabled={loading || !hasUpdateProjectClientPermission}
+                    disabled={loading}
                   />
+
+                  {/* Editor only shows if a client is selected */}
                   {values.client_id && (
                     <Editor
                       disabled={true}
@@ -312,34 +231,50 @@ const EditProject = forwardRef(
                         content_css: false,
                       }}
                       value={values.notes}
+                      onEditorChange={(content) => {
+                        onChangeValue("notes", content);
+                      }}
                     />
                   )}
                 </div>
               </div>
 
-              {/* Pricing, Area, Construction Type, Template, Floor, LineItems */}
+              {/* Pricing, Area, Construction Type, Project Template, Line Items Pricing, Floor Number Start */}
               <div>
-                <hr className="mt-2 mb-2" />
+                <hr className="mt-2 mb-2"></hr>
                 <h6 className="m-0" style={{ color: "blue" }}>
                   Project Metrics & Configuration:
                 </h6>
-                <hr className="mt-2 mb-2" />
-
+                <hr className="mt-2 mb-2"></hr>
                 <div className="d-flex align-items-center mb-3">
-                  <label className="me-1" style={{ whiteSpace: "nowrap" }}>
+                  <label
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                    htmlFor="project_pricing"
+                  >
                     Pricing:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
                   </label>
                   <Input
+                    className="me-1"
                     placeholder="Add Project Pricing"
                     value={values.project_pricing}
                     onChange={(e) =>
                       onChangeValue("project_pricing", e.target.value)
                     }
-                    disabled={loading || !hasUpdateProjectPricingPermission}
+                    disabled={loading}
                   />
-
-                  <label className="me-1" style={{ whiteSpace: "nowrap" }}>
+                  <label
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                    htmlFor="project_area"
+                  >
                     Area:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
                   </label>
                   <Input
                     placeholder="Add Project Area"
@@ -347,12 +282,20 @@ const EditProject = forwardRef(
                     onChange={(e) =>
                       onChangeValue("project_area", e.target.value)
                     }
-                    disabled={loading || !hasUpdateProjectAreaPermission}
+                    disabled={loading}
                   />
                 </div>
-
                 <div className="d-flex align-items-center mb-3">
-                  <label className="me-1">Construction Type:</label>
+                  <label
+                    htmlFor="project_construction_type"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Construction Type:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                  </label>
                   <Select
                     className="me-1 w-100"
                     placeholder="Select Construction Type"
@@ -362,25 +305,46 @@ const EditProject = forwardRef(
                       { value: "commercial", label: "Commercial" },
                       { value: "residential", label: "Residential" },
                     ]}
+                    optionFilterProp="label"
                     value={values.project_construction_type || null}
-                    onChange={(val) =>
-                      onChangeValue("project_construction_type", val ?? null)
+                    onChange={(project_construction_type) =>
+                      onChangeValue(
+                        "project_construction_type",
+                        project_construction_type ?? null
+                      )
                     }
-                    disabled={loading || !hasUpdateConstructionTypePermission}
+                    disabled={loading}
                   />
-                  <label className="me-1">Project Template:</label>
+                  <label
+                    htmlFor="project_template"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Project Template:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                  </label>
                   <Input
                     placeholder="Project Template"
                     value={values.project_template}
                     onChange={(e) =>
                       onChangeValue("project_template", e.target.value)
                     }
-                    disabled={loading || !hasUpdateProjectTemplatePermission}
+                    disabled={loading}
                   />
                 </div>
-
                 <div className="d-flex align-items-center mb-3">
-                  <label className="me-1">Line Items Pricing:</label>
+                  <label
+                    htmlFor="project_line_items_pricing"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Line Items Pricing:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                  </label>
                   <Input
                     className="me-1"
                     placeholder="Add Project Line Items Pricing"
@@ -391,62 +355,101 @@ const EditProject = forwardRef(
                         e.target.value
                       )
                     }
-                    disabled={loading || !hasUpdateLineItemsPricingPermission}
+                    disabled={loading}
                   />
-                  <label className="me-1">Floor Number:</label>
+                  <label
+                    htmlFor="project_floor_number"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Floor Number:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                  </label>
                   <Input
                     placeholder="Add Project Floor Number"
                     value={values.project_floor_number}
                     onChange={(e) =>
                       onChangeValue("project_floor_number", e.target.value)
                     }
-                    disabled={loading || !hasUpdateFloorNumberPermission}
+                    disabled={loading}
                   />
                 </div>
               </div>
+              {/* Pricing, Area, Construction Type, Project Template, Line Items Pricing, Floor Number End */}
 
-              {/* Links */}
+              {/* Projects Links Start */}
               <div>
-                <hr className="mt-2 mb-2" />
+                <hr className="mt-2 mb-2"></hr>
                 <h6 className="m-0" style={{ color: "blue" }}>
                   Initial & Final Project Links:
                 </h6>
-                <hr className="mt-2 mb-2" />
+                <hr className="mt-2 mb-2"></hr>
                 <div className="d-flex align-items-center mb-3">
-                  <label className="me-1">Initial Link:</label>
+                  <label
+                    htmlFor="project_init_link"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Initial Link:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                  </label>
                   <Input
                     className="me-1"
-                    placeholder="Project Initial link"
+                    placeholder="Project Initial link( By Admin or Supervisor )"
                     value={values.project_init_link}
                     onChange={(e) =>
                       onChangeValue("project_init_link", e.target.value)
                     }
-                    disabled={loading || !hasUpdateInitialLinkPermission}
+                    disabled={loading}
                   />
-                  <label className="me-1">Final Link:</label>
+                  <label
+                    htmlFor="project_final_link"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Final Link:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                  </label>
                   <Input
-                    placeholder="Project Final Link"
+                    placeholder="Project Final Link, When Project Completed"
                     value={values.project_final_link}
                     onChange={(e) =>
                       onChangeValue("project_final_link", e.target.value)
                     }
-                    disabled={loading || !hasUpdateFinalLinkPermission}
+                    disabled={loading}
                   />
                 </div>
               </div>
+              {/* Projects Links End */}
 
-              {/* Due Date & Points */}
+              {/* Due Dates, Points, Start.... */}
               <div>
-                <hr className="mt-2 mb-2" />
+                <hr className="mt-2 mb-2"></hr>
                 <h6 className="m-0" style={{ color: "blue" }}>
                   Due Date & Points
                 </h6>
-                <hr className="mt-2 mb-2" />
+                <hr className="mt-2 mb-2"></hr>
                 <div className="d-flex align-items-center mb-3">
-                  <label className="me-1">Due Date:</label>
+                  <label
+                    htmlFor="project_due_date"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Due Date:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                  </label>
                   <DatePicker
                     className="me-1 w-100"
                     placeholder="Project Due Date"
+                    allowClear
                     value={
                       values.project_due_date
                         ? dayjs(values.project_due_date)
@@ -455,57 +458,111 @@ const EditProject = forwardRef(
                     onChange={(date, dateString) =>
                       onChangeValue("project_due_date", dateString)
                     }
-                    disabled={loading || !hasUpdateDueDatePermission}
+                    disabled={loading}
                   />
-                  <label className="me-1">Project Points:</label>
+                  <label
+                    htmlFor="project_points"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Project Points:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                  </label>
                   <Input
                     placeholder="Number Of Points Of The Project"
                     value={values.project_points}
                     onChange={(e) =>
                       onChangeValue("project_points", e.target.value)
                     }
-                    disabled={loading || !hasUpdateProjectPointsPermission}
+                    disabled={loading}
                   />
                 </div>
               </div>
+              {/*  Due Dates, Points End */}
 
-              {/* Budgeting */}
+              {/* Budgeting, Status and Visibility Start */}
               <div>
-                <hr className="mt-2 mb-2" />
+                <hr className="mt-2 mb-2"></hr>
                 <h6 className="m-0" style={{ color: "blue" }}>
                   Budgeting, Status and Visibility:
                 </h6>
-                <hr className="mt-2 mb-2" />
+                <hr className="mt-2 mb-2"></hr>
                 <div className="d-flex align-items-center mb-3">
-                  <label className="me-1">Project Budget:</label>
+                  <label
+                    htmlFor="project_init_link"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Project Budget:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                  </label>
                   <InputNumber
                     className="me-1 w-100"
                     min={1}
+                    placeholder="Project Budget"
                     value={values.budget_total}
-                    onChange={(v) => onChangeValue("budget_total", v ?? null)}
-                    disabled={loading || !hasUpdateBudgetPermission}
+                    onChange={(value) =>
+                      onChangeValue("budget_total", value ?? null)
+                    }
+                    disabled={loading}
                   />
-                  <label className="me-1">Deduction:</label>
+                  <label
+                    htmlFor="project_final_link"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Deduction Amount:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                  </label>
                   <InputNumber
                     className="w-100"
                     min={1}
+                    placeholder="Deduction"
                     value={values.deduction_amount}
-                    onChange={(v) =>
-                      onChangeValue("deduction_amount", v ?? null)
+                    onChange={(value) =>
+                      onChangeValue("deduction_amount", value ?? null)
                     }
-                    disabled={loading || !hasUpdateDeductionPermission}
+                    disabled={loading}
                   />
                 </div>
                 <div className="d-flex align-items-center mb-3">
-                  <label className="me-1">Final Price:</label>
+                  <label
+                    htmlFor="project_init_link"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Final Price:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                  </label>
                   <Input
                     className="me-1"
+                    placeholder="Project Budget"
                     value={values.budget_total - values.deduction_amount}
-                    disabled
+                    disabled={true}
                   />
-                  <label className="me-1">Project Status:</label>
+                  <label
+                    htmlFor="project_final_link"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Project Status:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                  </label>
                   <Select
                     className="me-1 w-100"
+                    placeholder="Select Project Status"
+                    allowClear={values.project_status !== "Pending"}
+                    showSearch
                     options={[
                       { value: "Planned", label: "Planned" },
                       { value: "Pending", label: "Pending" },
@@ -523,57 +580,95 @@ const EditProject = forwardRef(
                       { value: "Cancelled", label: "Cancelled" },
                       { value: "Deliver", label: "Deliver" },
                     ]}
+                    optionFilterProp="label"
                     value={values.project_status || "Pending"}
-                    onChange={(v) =>
-                      onChangeValue("project_status", v ?? "Pending")
+                    onChange={(project_status) =>
+                      onChangeValue(
+                        "project_status",
+                        project_status ?? "Pending"
+                      )
                     }
-                    disabled={loading || !hasUpdateProjectStatusPermission}
+                    disabled={loading}
                   />
                 </div>
                 <div className="d-flex align-items-center mb-3">
-                  <label className="me-1">Preview Status:</label>
+                  <label
+                    htmlFor="project_final_link"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Preview Status:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                  </label>
                   <Select
                     className="me-1 w-100"
+                    placeholder="Select Project Preview Status"
+                    allowClear={values.preview_status !== "active"}
+                    showSearch
                     options={[
                       { value: "active", label: "Active" },
                       { value: "draft", label: "Draft" },
                     ]}
+                    optionFilterProp="label"
                     value={values.preview_status || "active"}
-                    onChange={(v) =>
-                      onChangeValue("preview_status", v ?? "active")
+                    onChange={
+                      (preview_status) =>
+                        onChangeValue(
+                          "preview_status",
+                          preview_status ?? "active"
+                        ) // fallback to active
                     }
-                    disabled={loading || !hasUpdatePreviewStatusPermission}
+                    disabled={loading}
                   />
-                  <label className="me-1">Project Source:</label>
+                  <label
+                    htmlFor="project_final_link"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Project Source:
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                    <hr className="mb-1 m-0" />
+                  </label>
                   <Select
                     className="me-1 w-100"
+                    placeholder="Select Project Source"
+                    allowClear={values.project_source !== "InSource"}
+                    showSearch
                     options={[
                       { value: "InSource", label: "In Source" },
                       { value: "OutSource", label: "Out Source" },
                     ]}
-                    value={values.project_source || "InSource"}
-                    onChange={(v) =>
-                      onChangeValue("project_source", v ?? "InSource")
+                    optionFilterProp="label"
+                    value={values.project_source || "InSource"} // fallback to active
+                    onChange={(project_source) =>
+                      onChangeValue(
+                        "project_source",
+                        project_source ?? "InSource"
+                      )
                     }
-                    disabled={loading || !hasUpdateProjectSourcePermission}
+                    disabled={loading}
                   />
                 </div>
               </div>
+              {/* Budgeting, Status and Visibility End */}
             </div>
-
-            {/* RIGHT SIDE (Scopes & Notes) */}
             <div className="col-6">
-              {/* Main Scope */}
+              {/* Main Scope & Scope Details Start */}
               <div>
-                <hr className="mt-2 mb-2" />
+                <hr className="mt-2 mb-2"></hr>
                 <h6 className="m-0" style={{ color: "blue" }}>
                   Main Scope & Scope Details:
                 </h6>
-                <hr className="mt-2 mb-2" />
+                <hr className="mt-2 mb-2"></hr>
                 <div className="mb-3">
-                  <label>Project Main Scope:</label>
+                  <label htmlFor="project_main_scope">
+                    Project Main Scope:
+                  </label>
                   <Editor
-                    disabled={loading || !hasUpdateMainScopePermission}
+                    disabled={loading}
                     init={{
                       height: 150,
                       menubar: false,
@@ -584,15 +679,17 @@ const EditProject = forwardRef(
                       content_css: false,
                     }}
                     value={values.project_main_scope}
-                    onEditorChange={(content) =>
-                      onChangeValue("project_main_scope", content)
-                    }
+                    onEditorChange={(content, editor) => {
+                      onChangeValue("project_main_scope", content);
+                    }}
                   />
                 </div>
                 <div className="mb-3">
-                  <label>Project Scope Details:</label>
+                  <label htmlFor="project_scope_details">
+                    Project Scope Details:
+                  </label>
                   <Editor
-                    disabled={loading || !hasUpdateScopeDetailsPermission}
+                    disabled={loading}
                     init={{
                       height: 150,
                       menubar: false,
@@ -603,24 +700,31 @@ const EditProject = forwardRef(
                       content_css: false,
                     }}
                     value={values.project_scope_details}
-                    onEditorChange={(content) =>
-                      onChangeValue("project_scope_details", content)
-                    }
+                    onEditorChange={(content, editor) => {
+                      onChangeValue("project_scope_details", content);
+                    }}
                   />
                 </div>
               </div>
+              {/* Main Scope & Scope Details End */}
 
-              {/* Notes */}
+              {/* Notes Start */}
               <div>
-                <hr className="mt-2 mb-2" />
+                <hr className="mt-2 mb-2"></hr>
                 <h6 className="m-0" style={{ color: "blue" }}>
-                  Admin, Estimator & Private Notes:
+                  Admin Or Supervisor, Estimator & Private Notes:
                 </h6>
-                <hr className="mt-2 mb-2" />
+                <hr className="mt-2 mb-2"></hr>
                 <div className="mb-3">
-                  <label>Admin Or Supervisor Notes:</label>
+                  <label
+                    htmlFor="project_notes_owner_or_supervisor"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Admin Or Supervisor Notes:<hr className="m-0"></hr>
+                  </label>
                   <Editor
-                    disabled={loading || !hasUpdateAdminNotesPermission}
+                    disabled={loading}
                     init={{
                       height: 150,
                       menubar: false,
@@ -631,15 +735,24 @@ const EditProject = forwardRef(
                       content_css: false,
                     }}
                     value={values.project_notes_owner_or_supervisor}
-                    onEditorChange={(c) =>
-                      onChangeValue("project_notes_owner_or_supervisor", c)
-                    }
+                    onEditorChange={(content, editor) => {
+                      onChangeValue(
+                        "project_notes_owner_or_supervisor",
+                        content
+                      );
+                    }}
                   />
                 </div>
                 <div className="mb-3">
-                  <label>Estimator Notes:</label>
+                  <label
+                    htmlFor="project_notes_estimator"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Estimator Notes:<hr className="m-0"></hr>
+                  </label>
                   <Editor
-                    disabled={loading || !hasUpdateEstimatorNotesPermission}
+                    disabled={loading}
                     init={{
                       height: 150,
                       menubar: false,
@@ -650,31 +763,38 @@ const EditProject = forwardRef(
                       content_css: false,
                     }}
                     value={values.project_notes_estimator}
-                    onEditorChange={(c) =>
-                      onChangeValue("project_notes_estimator", c)
-                    }
+                    onEditorChange={(content, editor) => {
+                      onChangeValue("project_notes_estimator", content);
+                    }}
                   />
                 </div>
-                {hasUpdateClientAdminNotesPermission && (
-                  <div>
-                    <label>Client Notes Admin Only:</label>
-                    <Editor
-                      disabled={loading}
-                      init={{
-                        height: 150,
-                        menubar: false,
-                        plugins: "table code lists link",
-                        toolbar:
-                          "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                        skin: false,
-                        content_css: false,
-                      }}
-                      value={values.notes_private}
-                      onEditorChange={(c) => onChangeValue("notes_private", c)}
-                    />
-                  </div>
-                )}
+                <div>
+                  <label
+                    htmlFor="notes_private"
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Client Notes Admin Only:<hr className="m-0"></hr>
+                  </label>
+                  <Editor
+                    disabled={loading}
+                    init={{
+                      height: 150,
+                      menubar: false,
+                      plugins: "table code lists link",
+                      toolbar:
+                        "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
+                      skin: false,
+                      content_css: false,
+                    }}
+                    value={values.notes_private}
+                    onEditorChange={(content, editor) => {
+                      onChangeValue("notes_private", content);
+                    }}
+                  />
+                </div>
               </div>
+              {/* Notes End */}
             </div>
           </div>
         </div>

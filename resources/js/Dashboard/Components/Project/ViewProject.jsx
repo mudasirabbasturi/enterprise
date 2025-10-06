@@ -235,7 +235,7 @@ const ViewProject = (props) => {
                             style={{
                               marginLeft: index > 0 ? 1 : 0,
                             }}
-                            src={`/storage/${per.user.media[0].file_path}`}
+                            src={`/${per.user.media[0].file_path}`}
                             alt={per.user.name}
                           />
                         ) : (

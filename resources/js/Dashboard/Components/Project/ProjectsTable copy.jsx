@@ -93,9 +93,6 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
       headerName: "Project Points",
       headerTooltip: "Estimator Points",
       field: "project_points",
-      editable: false,
-      filter: false,
-      sortable: false,
       cellRenderer: "agGroupCellRenderer",
       cellRendererParams: {
         innerRenderer: (params) => {
@@ -278,35 +275,59 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         );
       },
     },
-    {
-      headerName: "Project Title",
-      headerTooltip: "Project Title",
-      field: "project_title",
-      cellRenderer: (params) => {
-        if (params.data?.project_title) {
-          return params.data?.project_title;
-        }
-        return "⭕❌❌🚫";
-      },
-    },
-    {
-      headerName: "Address",
-      headerTooltip: "Project Address",
-      field: "project_address",
-
-      cellRenderer: (params) => {
-        if (params.data?.project_address) {
-          const div = document.createElement("div");
-          div.innerHTML = params.value || "<i>No Address</i>";
-          const text = div.textContent || div.innerText || "";
-          return text.length > 100 ? text.substring(0, 100) + "..." : text;
-        } else {
-          return "⭕❌❌🚫";
-        }
-      },
-    },
     ...(can("View Client")
       ? [
+          {
+            headerName: "Client Tile",
+            headerTooltip: "Client Title",
+            field: "client_id",
+            cellRenderer: (params) => {
+              if (params.data.client?.title) {
+                return params.data.client?.title;
+              } else {
+                return "⭕⭕❌❌🚫🚫";
+              }
+            },
+          },
+          {
+            headerName: "Client Name",
+            headerTooltip: "Client Name",
+            field: "client.name",
+
+            cellRenderer: (params) => {
+              if (params.data.client?.name) {
+                return params.data.client?.name;
+              } else {
+                return "⭕⭕❌❌🚫🚫";
+              }
+            },
+          },
+          {
+            headerName: "Client Email",
+            headerTooltip: "Client Email",
+            field: "client.email",
+
+            cellRenderer: (params) => {
+              if (params.data.client?.email) {
+                return params.data.client?.email;
+              } else {
+                return "⭕⭕❌❌🚫🚫";
+              }
+            },
+          },
+          {
+            headerName: "Client Phone",
+            headerTooltip: "Client Phone",
+            field: "client.phone",
+
+            cellRenderer: (params) => {
+              if (params.data.client?.phone) {
+                return params.data.client?.phone;
+              } else {
+                return "⭕⭕❌❌🚫🚫";
+              }
+            },
+          },
           {
             headerName: "Client Notes",
             headerTooltip: "Client Notes",
@@ -405,7 +426,33 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
           },
         ]
       : []),
+    {
+      headerName: "Project Title",
+      headerTooltip: "Project Title",
+      field: "project_title",
+      cellRenderer: (params) => {
+        if (params.data?.project_title) {
+          return params.data?.project_title;
+        }
+        return "⭕❌❌🚫";
+      },
+    },
+    {
+      headerName: "Address",
+      headerTooltip: "Project Address",
+      field: "project_address",
 
+      cellRenderer: (params) => {
+        if (params.data?.project_address) {
+          const div = document.createElement("div");
+          div.innerHTML = params.value || "<i>No Address</i>";
+          const text = div.textContent || div.innerText || "";
+          return text.length > 100 ? text.substring(0, 100) + "..." : text;
+        } else {
+          return "⭕❌❌🚫";
+        }
+      },
+    },
     {
       headerName: "Project Pricing",
       headerTooltip: "Project Pricing",
@@ -789,25 +836,24 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
   const gridOptions = {
     masterDetail: true,
     detailRowAutoHeight: true,
-    // onCellDoubleClicked: (params) => {
-    //   if (
-    //     params.colDef.field === "actions" ||
-    //     params.colDef.field === "teams" ||
-    //     params.colDef.field === "client.name" ||
-    //     params.colDef.field === "client.email" ||
-    //     params.colDef.field === "client.phone" ||
-    //     params.colDef.field === "client.notes" ||
-    //     params.colDef.field === "final_Price" ||
-    //     params.colDef.field === "project_points"
-    //   )
-    //     return;
-    //   showDrawer("EditColumn", {
-    //     ...params.data,
-    //     field: params.colDef.field,
-    //     value: params.value,
-    //     id: params.data.id,
-    //   });
-    // },
+    onCellDoubleClicked: (params) => {
+      if (
+        params.colDef.field === "actions" ||
+        params.colDef.field === "teams" ||
+        params.colDef.field === "client.name" ||
+        params.colDef.field === "client.email" ||
+        params.colDef.field === "client.phone" ||
+        params.colDef.field === "client.notes" ||
+        params.colDef.field === "final_Price"
+      )
+        return;
+      showDrawer("EditColumn", {
+        ...params.data, // Spread all row data
+        field: params.colDef.field, // Column field name
+        value: params.value, // Current cell value
+        id: params.data.id, // Row ID
+      });
+    },
   };
 
   const DetailCellRenderer = (props) => {
@@ -905,30 +951,24 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
             <ul style={{ listStyle: "circle", fontStyle: "italic" }}>
               {members.map((m) => (
                 <li key={m.id} className="mb-1">
-                  {m.user?.name || "Unknown"}:
-                  {hasUpdateScorePermission ? (
-                    <InputNumber
-                      size="small"
-                      value={Number(m.points_gain || 0)}
-                      min={0}
-                      onChange={(v) => handleChange(m.id, v)}
-                    />
-                  ) : (
-                    m.points_gain || 0
-                  )}{" "}
+                  {m.user?.name || "Unknown"}:{" "}
+                  <InputNumber
+                    size="small"
+                    value={Number(m.points_gain || 0)}
+                    min={0}
+                    onChange={(v) => handleChange(m.id, v)}
+                  />{" "}
                   Points
                 </li>
               ))}
             </ul>
-            {hasUpdateScorePermission && (
-              <button
-                className="btn btn-sm btn-primary mt-2"
-                disabled={loading}
-                onClick={handleUpdate}
-              >
-                {loading ? "Updating..." : "Update All"}
-              </button>
-            )}
+            <button
+              className="btn btn-sm btn-primary mt-2"
+              disabled={loading}
+              onClick={handleUpdate}
+            >
+              {loading ? "Updating..." : "Update All"}
+            </button>
           </>
         ) : (
           <p className="italic text-gray-500 mt-3">

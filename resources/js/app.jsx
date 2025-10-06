@@ -1,8 +1,11 @@
 import "./bootstrap";
 import { createInertiaApp } from "@inertiajs/react";
 import { createRoot } from "react-dom/client";
-import MainLayout from "@layout";
+import NProgress from "nprogress";
+// import "nprogress/nprogress.css";
+// NProgress.configure({ showSpinner: false, speed: 400 });
 
+import MainLayout from "@layout";
 createInertiaApp({
   resolve: async (name) => {
     const pages = import.meta.glob("./Dashboard/**/*.jsx");
@@ -18,7 +21,6 @@ createInertiaApp({
 
     return module;
   },
-
   setup({ el, App, props }) {
     createRoot(el).render(<App {...props} />);
   },

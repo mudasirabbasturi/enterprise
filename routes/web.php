@@ -14,6 +14,9 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\CandidateController;
 
+use Illuminate\Support\Facades\DB;
+
+
 /**
  * Public Routes
  */
@@ -80,6 +83,7 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/project/team-member/update/{TeamMemberId}', [ProjectController::class, 'EditJoinProject'])->name('EditJoinProject');
     Route::delete('/project/team-member/delete/{TeamMemberId}', [ProjectController::class, 'DeleteJoinProject'])->name('DeleteJoinProject');
     Route::put('/project/team-member/score/{TeamMemberId}', [ProjectController::class, 'AddEditScore'])->name('AddEditScore');
+    Route::put('/project/{project}/team-members/scores', [ProjectController::class, 'BulkUpdateScores'])->name('project.bulkUpdateScores');
 
     /** RoleController */
     Route::get('/role', [RoleController::class, 'Index'])->name('role.index');
@@ -102,14 +106,3 @@ Route::middleware(['auth'])->group(function () {
 
 });
 
-Route::get('/test-pusher', function() {
-    return [
-        'key' => config('broadcasting.connections.pusher.key'),
-        'secret' => config('broadcasting.connections.pusher.secret'),
-        'app_id' => config('broadcasting.connections.pusher.app_id'),
-    ];
-});
-
-Route::get('/env', function() {
-    return env('APP_ENV');
-});
