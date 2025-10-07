@@ -682,6 +682,42 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
     };
   }, []);
 
+  // update project channel
+  useEffect(() => {
+    const channel = window.Echo.channel("project-channel");
+    const handler = (data) => {
+      if (data.project) {
+        if (user.email !== data.userEmail) {
+          setRowData?.((prev) =>
+            prev.map((row) => (row.id === data.project.id ? data.project : row))
+          );
+        }
+      }
+    };
+    channel.listen(".event-project-updated", handler);
+    return () => {
+      channel.stopListening(".event-project-updated", handler);
+    };
+  }, []);
+
+  // update project column channel
+  useEffect(() => {
+    const channel = window.Echo.channel("project-channel");
+    const handler = (data) => {
+      if (data.project) {
+        if (user.email !== data.userEmail) {
+          setRowData?.((prev) =>
+            prev.map((row) => (row.id === data.project.id ? data.project : row))
+          );
+        }
+      }
+    };
+    channel.listen(".event-project-update-coloumn", handler);
+    return () => {
+      channel.stopListening(".event-project-update-coloumn", handler);
+    };
+  }, []);
+
   // join project channel
   useEffect(() => {
     const channel = window.Echo.channel("project-channel");

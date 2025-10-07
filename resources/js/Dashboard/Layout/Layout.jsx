@@ -101,6 +101,38 @@ const DashboardLayout = ({ children }) => {
     };
   }, []);
 
+  // Update Project
+  useEffect(() => {
+    const channel = window.Echo.channel("project-channel");
+    const handler = (data) => {
+      if (user.email !== data.userEmail) {
+        api.success({
+          description: data.message,
+        });
+      }
+    };
+    channel.listen(".event-project-updated", handler);
+    return () => {
+      channel.stopListening(".event-project-updated", handler);
+    };
+  }, []);
+
+  // Update Project column
+  useEffect(() => {
+    const channel = window.Echo.channel("project-channel");
+    const handler = (data) => {
+      if (user.email !== data.userEmail) {
+        api.success({
+          description: data.message,
+        });
+      }
+    };
+    channel.listen(".event-project-update-coloumn", handler);
+    return () => {
+      channel.stopListening(".event-project-update-coloumn", handler);
+    };
+  }, []);
+
   // Delete Project
   useEffect(() => {
     const channel = window.Echo.channel("project-channel");

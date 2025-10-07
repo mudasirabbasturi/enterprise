@@ -80,9 +80,26 @@ class ProjectController extends Controller
 
     public function Update(UpdateProjectRequest $request, $id)
     {
+        $userName = Auth::user()->name;
+        $userEmail = Auth::user()->email;
         $project = Project::findOrFail($id);
         $validated = $request->validated();
         $project->update($validated);
+        $options = [ 
+            'cluster' => 'ap2', 
+            'useTLS' => true, 
+        ];
+        $pusher = new Pusher(
+            '5158315c26b8f6732773', // app key
+            '9ba1bfd3baa3f4ec2a4c', // app secret
+            '2057639', // app id
+            $options
+        );
+        $pusher->trigger('project-channel', 'event-project-updated', [
+            'message' => $userName . ' Update project ' . $project->project_title,
+            'userEmail' => $userEmail,
+            'project' => $project,
+        ]);
         return response()->json([
             'message' => 'Project updated successfully.',
             'project' => $project,
@@ -191,6 +208,8 @@ class ProjectController extends Controller
 
     public function projectColumnUpdate(Request $request, $id)
     {
+        $userName = Auth::user()->name;
+        $userEmail = Auth::user()->email;
         $project = Project::findOrFail($id);
         $validated = $request->validate([
             'id' => 'required|exists:projects,id',
@@ -205,13 +224,25 @@ class ProjectController extends Controller
         $project->update([
             $field => $value
         ]);
-
+        $options = [ 
+            'cluster' => 'ap2', 
+            'useTLS' => true, 
+        ];
+        $pusher = new Pusher(
+            '5158315c26b8f6732773', // app key
+            '9ba1bfd3baa3f4ec2a4c', // app secret
+            '2057639', // app id
+            $options
+        );
+        $pusher->trigger('project-channel', 'event-project-update-coloumn', [
+            'message' => ucfirst(str_replace('_', ' ', $field)) . ' updated successfully by ' . $userName . ' for project ' . $project->project_title,
+            'userEmail' => $userEmail,
+            'project' => $project,
+        ]);
         return response()->json([
             'message' => ucfirst(str_replace('_', ' ', $field)) . ' updated successfully.',
             'project' => $project,
         ]);
-        
-        // return redirect()->back()->with('message', ucfirst(str_replace('_', ' ', $field)) . ' updated successfully.');
     }
 
     public function JoinProject(Request $request, $id)

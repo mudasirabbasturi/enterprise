@@ -106,3 +106,91 @@ Route::middleware(['auth'])->group(function () {
 
 });
 
+// Route::get('/actions', function () {
+//     $actions = DB::table('actions')
+//         ->select(
+//             'id',
+//             'project_id',
+//             'user_id',
+//             'project_marking',
+//             'project_excel',
+//             'project_pricing',
+//             'project_quality_assurance',
+//             'points_gain',
+//             'created_at',
+//             'updated_at'
+//         )
+//         ->get();
+//     $transformed = $actions->map(function ($item) {
+//         $steps = [];
+//         if (!empty($item->project_marking)) {
+//             $steps[] = 'project_marking';
+//         }
+//         if (!empty($item->project_excel)) {
+//             $steps[] = 'project_excel';
+//         }
+//         if (!empty($item->project_pricing)) {
+//             $steps[] = 'project_pricing';
+//         }
+//         if (!empty($item->project_quality_assurance)) {
+//             $steps[] = 'project_quality_assurance';
+//         }
+//         return [
+//             'id' => $item->id,
+//             'project_id' => $item->project_id,
+//             'user_id' => $item->user_id,
+//             'steps' => $steps,
+//             'points_gain' => $item->points_gain,
+//             'created_at' => $item->created_at,
+//             'updated_at' => $item->updated_at,
+//         ];
+//     });
+//     return response()->json($transformed);
+// });
+
+Route::get('/actions', function () {
+    $actions = DB::table('actions')
+        ->select(
+            'id',
+            'project_id',
+            'user_id',
+            'project_marking',
+            'project_excel',
+            'project_pricing',
+            'project_quality_assurance',
+            'points_gain',
+            'created_at',
+            'updated_at'
+        )
+        ->get();
+
+    $values = [];
+
+    foreach ($actions as $item) {
+        $steps = [];
+
+        if (!empty($item->project_marking)) $steps[] = 'project_marking';
+        if (!empty($item->project_excel)) $steps[] = 'project_excel';
+        if (!empty($item->project_pricing)) $steps[] = 'project_pricing';
+        if (!empty($item->project_quality_assurance)) $steps[] = 'project_quality_assurance';
+
+        $stepsJson = json_encode($steps, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        $values[] = sprintf(
+            "(%d, %d, %d, '%s', '%s', '%s', '%s')",
+            $item->id,
+            $item->project_id,
+            $item->user_id,
+            $stepsJson,
+            addslashes($item->points_gain),
+            $item->created_at,
+            $item->updated_at
+        );
+    }
+
+    $sql = "INSERT INTO `project_team_members` (`id`, `project_id`, `user_id`, `steps`, `points_gain`, `created_at`, `updated_at`) VALUES\n"
+         . implode(",\n", $values)
+         . ";";
+
+    return response($sql, 200)->header('Content-Type', 'text/plain');
+});
