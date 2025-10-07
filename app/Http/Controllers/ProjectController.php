@@ -183,7 +183,7 @@ class ProjectController extends Controller
         'budget_total' => 'nullable|numeric|min:0',
         'deduction_amount' => 'nullable|numeric|min:0',
         'project_due_date' => 'nullable|date',
-        'project_points' => 'nullable|string|max:255',
+        'project_points' => 'nullable|numeric|max:255',
         'project_source' => 'nullable|in:InSource,OutSource',
         'project_status' => 'nullable|in:Planned,Pending,Takeoff On Progress,Pricing On Progress,Completed,Hold,Revision,Cancelled,Deliver',
         'preview_status' => 'nullable|in:active,draft',
@@ -205,8 +205,13 @@ class ProjectController extends Controller
         $project->update([
             $field => $value
         ]);
-        return back()->with('message', ucfirst(str_replace('_', ' ', $field)) . ' updated successfully.');
- 
+
+        return response()->json([
+            'message' => ucfirst(str_replace('_', ' ', $field)) . ' updated successfully.',
+            'project' => $project,
+        ]);
+        
+        // return redirect()->back()->with('message', ucfirst(str_replace('_', ' ', $field)) . ' updated successfully.');
     }
 
     public function JoinProject(Request $request, $id)

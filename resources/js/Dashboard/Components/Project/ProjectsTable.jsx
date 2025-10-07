@@ -26,11 +26,9 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
   const hasPermission = (userpermission, permName) =>
     userpermission?.some((p) => p.name === permName);
   const { auth } = usePage().props;
-
   const { props } = usePage();
   const userPermissions = props?.auth?.user?.role?.permissions ?? [];
   const can = (perm) => hasPermission(userPermissions, perm);
-
   const user = props?.auth?.user ?? {};
   const permissions = props?.permissions ?? []; // master list
   const hasViewProjectTeamPermission =
@@ -529,7 +527,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
       },
     },
 
-    ...(can("View Total Budget")
+    ...(can("View Budget")
       ? [
           {
             headerName: "Project Total Budget",
@@ -546,7 +544,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         ]
       : []),
 
-    ...(can("View Deduction Amount")
+    ...(can("View Deduction")
       ? [
           {
             headerName: "Deduction Amount",
@@ -562,7 +560,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         ]
       : []),
 
-    ...(can("View Total Budget")
+    ...(can("View Budget")
       ? [
           {
             headerName: "Final Price",
@@ -573,7 +571,8 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
               const deduction = params.data?.deduction_amount ?? 0; // Treat null/undefined as 0
 
               if (budget !== null && budget !== undefined && budget !== "") {
-                return budget - deduction;
+                const total = budget - deduction;
+                return `$${total}`;
               }
               return "⭕❌❌🚫";
             },
@@ -789,25 +788,21 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
   const gridOptions = {
     masterDetail: true,
     detailRowAutoHeight: true,
-    // onCellDoubleClicked: (params) => {
-    //   if (
-    //     params.colDef.field === "actions" ||
-    //     params.colDef.field === "teams" ||
-    //     params.colDef.field === "client.name" ||
-    //     params.colDef.field === "client.email" ||
-    //     params.colDef.field === "client.phone" ||
-    //     params.colDef.field === "client.notes" ||
-    //     params.colDef.field === "final_Price" ||
-    //     params.colDef.field === "project_points"
-    //   )
-    //     return;
-    //   showDrawer("EditColumn", {
-    //     ...params.data,
-    //     field: params.colDef.field,
-    //     value: params.value,
-    //     id: params.data.id,
-    //   });
-    // },
+    onCellDoubleClicked: (params) => {
+      if (
+        params.colDef.field === "actions" ||
+        params.colDef.field === "teams" ||
+        params.colDef.field === "client.notes" ||
+        params.colDef.field === "final_Price"
+      )
+        return;
+      showDrawer("EditColumn", {
+        ...params.data,
+        field: params.colDef.field,
+        value: params.value,
+        id: params.data.id,
+      });
+    },
   };
 
   const DetailCellRenderer = (props) => {

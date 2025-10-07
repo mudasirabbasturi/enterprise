@@ -258,6 +258,8 @@ const Index = ({ projects, clients }) => {
                 id={selectedProject?.id}
                 clients={clients}
                 onClose={onClose}
+                setRowData={setRowData}
+                api={api}
               />
             ) : drawerMode === "AddEditPoint" ? (
               <AddEditPoint

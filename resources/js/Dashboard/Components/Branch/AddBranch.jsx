@@ -74,7 +74,7 @@ const AddBranch = forwardRef(
       <>
         <div className="container-fluid">
           <div className="row">
-            <div className="col-12">
+            <div className="col-12 col-md-6">
               <div className="mb-2">
                 <div className="d-flex align-items-center">
                   <label
@@ -237,7 +237,7 @@ const AddBranch = forwardRef(
                 />
               </div>
             </div>
-            <div className="col-12">
+            <div className="col-12 col-md-6">
               <div className="mb-2">
                 <label
                   className="w-auto"

@@ -27,8 +27,6 @@ const EditRole = lazy(() => import("@component/Role/EditRole"));
 const ViewRole = lazy(() => import("@component/Role/ViewRole"));
 
 const Index = ({ roles, permissions }) => {
-  const { auth } = usePage().props;
-
   const route = useRoute();
   const [rowData, setRowData] = useState([]);
   const [colDefs, setColDefs] = useState([
@@ -49,16 +47,59 @@ const Index = ({ roles, permissions }) => {
         return params.data.notes ? params.data.notes : "None";
       },
     },
+    // {
+    //   headerName: "Action",
+    //   filter: false,
+    //   editable: false,
+    //   sortable: false,
+    //   cellRenderer: (params) => {
+    //     return (
+    //       <div className="btn-group btn-group-sm">
+    //         <Tooltip
+    //           title={`View Role With Full Record`}
+    //           color="green"
+    //           placement="leftTop"
+    //         >
+    //           <button
+    //             className="btn btn-success btn-sm me-1"
+    //             onClick={() => showDrawer("view", params.data)}
+    //           >
+    //             <EyeOutlined />
+    //           </button>
+    //         </Tooltip>
+    //         <Tooltip title={`Edit Role`} color="orange" placement="leftTop">
+    //           <button
+    //             className="btn btn-warning btn-sm me-1"
+    //             onClick={() => showDrawer("edit", params.data)}
+    //           >
+    //             <EditOutlined />
+    //           </button>
+    //         </Tooltip>
+    //         <Tooltip title="Delete Role" color="red" placement="leftTop">
+    //           <Popconfirm
+    //             title={`Are you sure you want to delete "${params.data.name}"?`}
+    //             onConfirm={() => confirmDelRole(params.data.id)}
+    //             okText="Yes"
+    //             cancelText="No"
+    //           >
+    //             <DeleteOutlined className="btn btn-danger btn-sm" />
+    //           </Popconfirm>
+    //         </Tooltip>
+    //       </div>
+    //     );
+    //   },
+    // },
     {
       headerName: "Action",
       filter: false,
       editable: false,
       sortable: false,
       cellRenderer: (params) => {
+        const isSuperAdmin = params.data?.name === "Super Admin";
         return (
           <div className="btn-group btn-group-sm">
             <Tooltip
-              title={`View Role With Full Record`}
+              title="View Role With Full Record"
               color="green"
               placement="leftTop"
             >
@@ -69,24 +110,28 @@ const Index = ({ roles, permissions }) => {
                 <EyeOutlined />
               </button>
             </Tooltip>
-            <Tooltip title={`Edit Role`} color="orange" placement="leftTop">
-              <button
-                className="btn btn-warning btn-sm me-1"
-                onClick={() => showDrawer("edit", params.data)}
-              >
-                <EditOutlined />
-              </button>
-            </Tooltip>
-            <Tooltip title="Delete Role" color="red" placement="leftTop">
-              <Popconfirm
-                title={`Are you sure you want to delete "${params.data.name}"?`}
-                onConfirm={() => confirmDelRole(params.data.id)}
-                okText="Yes"
-                cancelText="No"
-              >
-                <DeleteOutlined className="btn btn-danger btn-sm" />
-              </Popconfirm>
-            </Tooltip>
+            {!isSuperAdmin && (
+              <Tooltip title="Edit Role" color="orange" placement="leftTop">
+                <button
+                  className="btn btn-warning btn-sm me-1"
+                  onClick={() => showDrawer("edit", params.data)}
+                >
+                  <EditOutlined />
+                </button>
+              </Tooltip>
+            )}
+            {!isSuperAdmin && (
+              <Tooltip title="Delete Role" color="red" placement="leftTop">
+                <Popconfirm
+                  title={`Are you sure you want to delete "${params.data.name}"?`}
+                  onConfirm={() => confirmDelRole(params.data.id)}
+                  okText="Yes"
+                  cancelText="No"
+                >
+                  <DeleteOutlined className="btn btn-danger btn-sm" />
+                </Popconfirm>
+              </Tooltip>
+            )}
           </div>
         );
       },
