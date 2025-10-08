@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('projects', function (Blueprint $table) {
             $table->id();
-            $table->string('project_title')->nullable();
+            $table->text('project_title')->nullable();
             $table->text('project_address')->nullable();
             $table->foreignId('client_id')->nullable()->constrained('clients')->cascadeOnUpdate()->nullOnDelete();
             $table->string('project_pricing')->nullable();

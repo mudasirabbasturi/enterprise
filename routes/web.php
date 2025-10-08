@@ -106,91 +106,68 @@ Route::middleware(['auth'])->group(function () {
 
 });
 
-// Route::get('/actions', function () {
-//     $actions = DB::table('actions')
-//         ->select(
-//             'id',
-//             'project_id',
-//             'user_id',
-//             'project_marking',
-//             'project_excel',
-//             'project_pricing',
-//             'project_quality_assurance',
-//             'points_gain',
-//             'created_at',
-//             'updated_at'
+// Route::get('/inject-projects', function () {
+//     DB::statement("
+//         INSERT INTO projects (
+//             project_title,
+//             project_address,
+//             project_pricing,
+//             project_area,
+//             project_construction_type,
+//             project_line_items_pricing,
+//             project_floor_number,
+//             project_main_scope,
+//             project_scope_details,
+//             project_template,
+//             project_init_link,
+//             project_final_link,
+//             project_admin_notes,
+//             project_notes_estimator,
+//             notes_private,
+//             budget_total,
+//             deduction_amount,
+//             project_due_date,
+//             project_points,
+//             project_status,
+//             project_source,
+//             preview_status,
+//             created_at,
+//             updated_at
 //         )
-//         ->get();
-//     $transformed = $actions->map(function ($item) {
-//         $steps = [];
-//         if (!empty($item->project_marking)) {
-//             $steps[] = 'project_marking';
-//         }
-//         if (!empty($item->project_excel)) {
-//             $steps[] = 'project_excel';
-//         }
-//         if (!empty($item->project_pricing)) {
-//             $steps[] = 'project_pricing';
-//         }
-//         if (!empty($item->project_quality_assurance)) {
-//             $steps[] = 'project_quality_assurance';
-//         }
-//         return [
-//             'id' => $item->id,
-//             'project_id' => $item->project_id,
-//             'user_id' => $item->user_id,
-//             'steps' => $steps,
-//             'points_gain' => $item->points_gain,
-//             'created_at' => $item->created_at,
-//             'updated_at' => $item->updated_at,
-//         ];
-//     });
-//     return response()->json($transformed);
+//         SELECT
+//             project_title,
+//             project_address,
+//             pricing,
+//             project_area,
+//             CASE 
+//                 WHEN LOWER(project_commercial_residential) IN ('commercial','residential') 
+//                     THEN LOWER(project_commercial_residential)
+//                 ELSE NULL
+//             END AS project_construction_type, -- 👈 safer
+//             project_line_items_pricing,
+//             project_floor_number,
+//             project_main_scope,
+//             project_scope_details,
+//             project_template,
+//             project_onside_link,
+//             project_ofside_link,
+//             admin_project_notes,
+//             project_notes_onside,
+//             client_name_for_admin,
+//             project_budget,
+//             project_deduction,
+//             project_due_date,
+//             points,
+//             project_status,
+//             CASE 
+//                 WHEN project_source = 'insource' THEN 'InSource'
+//                 WHEN project_source = 'outsource' THEN 'OutSource'
+//                 ELSE 'InSource'
+//             END,
+//             status,
+//             created_at,
+//             updated_at
+//         FROM dataprojects;
+//     ");
+//     return '✅ Projects injected successfully (case fixed)!';
 // });
-
-Route::get('/actions', function () {
-    $actions = DB::table('actions')
-        ->select(
-            'id',
-            'project_id',
-            'user_id',
-            'project_marking',
-            'project_excel',
-            'project_pricing',
-            'project_quality_assurance',
-            'points_gain',
-            'created_at',
-            'updated_at'
-        )
-        ->get();
-
-    $values = [];
-
-    foreach ($actions as $item) {
-        $steps = [];
-
-        if (!empty($item->project_marking)) $steps[] = 'project_marking';
-        if (!empty($item->project_excel)) $steps[] = 'project_excel';
-        if (!empty($item->project_pricing)) $steps[] = 'project_pricing';
-        if (!empty($item->project_quality_assurance)) $steps[] = 'project_quality_assurance';
-
-        $stepsJson = json_encode($steps, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-        $values[] = sprintf(
-            "(%d, %d, %d, '%s', '%s', '%s', '%s')",
-            $item->id,
-            $item->project_id,
-            $item->user_id,
-            $stepsJson,
-            addslashes($item->points_gain),
-            $item->created_at,
-            $item->updated_at
-        );
-    }
-
-    $sql = "INSERT INTO `project_team_members` (`id`, `project_id`, `user_id`, `steps`, `points_gain`, `created_at`, `updated_at`) VALUES\n"
-         . implode(",\n", $values)
-         . ";";
-
-    return response($sql, 200)->header('Content-Type', 'text/plain');
-});
