@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   AgGridReact,
   gridTheme,
@@ -19,6 +19,7 @@ import {
   LockOutlined,
   UnlockOutlined,
   InputNumber,
+  Input,
 } from "@shared/ui";
 import axios from "axios";
 import NProgress from "nprogress";
@@ -303,8 +304,28 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         }
       },
     },
+
     ...(can("View Client")
       ? [
+          {
+            headerName: "Client Name Admin",
+            headerTooltip: "Client Name For Admin",
+            field: "client_name_for_admin",
+
+            cellRenderer: (params) => {
+              if (params.data?.client_name_for_admin) {
+                const div = document.createElement("div");
+                div.innerHTML =
+                  params.value || "<i>No Client Name For Admin</i>";
+                const text = div.textContent || div.innerText || "";
+                return text.length > 100
+                  ? text.substring(0, 100) + "..."
+                  : text;
+              } else {
+                return "⭕❌❌🚫";
+              }
+            },
+          },
           {
             headerName: "Client Notes",
             headerTooltip: "Client Notes",
@@ -520,7 +541,13 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
 
       cellRenderer: (params) => {
         if (params.data.project_final_link) {
-          return params.data.project_final_link;
+          return (
+            <>
+              <a href={params.data.project_final_link} _target="blanck">
+                Estimator Link
+              </a>
+            </>
+          );
         } else {
           return "⭕⭕❌❌🚫🚫";
         }
@@ -970,9 +997,45 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
     );
   };
 
+  const [filterText, setFilterText] = useState("");
+  const gridRef = useRef(null);
+
+  // Store gridApi on ready
+  const onGridReady = useCallback((params) => {
+    gridRef.current = params.api;
+    if (gridOptionsConfig.onGridReady) {
+      gridOptionsConfig.onGridReady(params);
+    }
+  }, []);
+
+  // Quick filter change handler
+  // const onFilterTextBoxChanged = useCallback((e) => {
+  //   const value = e.target.value;
+  //   setFilterText(value);
+  //   gridRef.current?.setGridOption("quickFilterText", value);
+  // }, []);
+
+  const onFilterTextBoxChanged = useCallback(() => {
+    gridRef.current.api.setGridOption(
+      "quickFilterText",
+      document.getElementById("filter-text-box").value
+    );
+  }, []);
+
   return (
     <>
+      <div>
+        <Input
+          style={{ maxWidth: "300px" }}
+          size="medium"
+          className="mb-3 mt-1"
+          id="filter-text-box"
+          placeholder="Quick Filter..."
+          onInput={onFilterTextBoxChanged}
+        />
+      </div>
       <AgGridReact
+        ref={gridRef}
         rowData={projects}
         {...gridOptions}
         columnDefs={colDefs}

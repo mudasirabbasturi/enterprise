@@ -26,7 +26,7 @@ import {
   UserOutlined,
   CaretDownOutlined,
   LogoutOutlined,
-
+  BarChartOutlined,
   /**
    * Ziggy
    */
@@ -226,40 +226,71 @@ const DashboardLayout = ({ children }) => {
                   height: 45,
                 }}
               />
-            </div>
+            </div>{" "}
             <div className="right">
-              <Dropdown
-                menu={{
-                  items: userMenuItems,
-                }}
-                trigger={["click"]}
-                placement="bottomRight"
-              >
-                <div className="user-dropdown" style={{ cursor: "pointer" }}>
-                  <div className="d-flex justify-content-center align-items-center">
-                    {user?.media.length > 0 ? (
-                      <img
-                        className="me-1"
-                        src={`/${user.media[0].file_path}`}
-                        alt="Profile"
-                        style={{
-                          width: "35px",
-                          height: "35px",
-                          borderRadius: "50%",
-                        }}
-                      />
-                    ) : (
-                      <Avatar
-                        size="small"
-                        icon={<UserOutlined />}
-                        className="user-avatar me-1"
-                      />
-                    )}
-                    <span className="user-name">{user.name}:</span>
-                    <CaretDownOutlined className="dropdown-icon" />
-                  </div>
+              <div className="d-flex">
+                <div>
+                  <button
+                    className="btn btn-sm btn-outline-primary me-3"
+                    onClick={() => router.visit(route("project.count.chart"))}
+                  >
+                    <BarChartOutlined />
+                  </button>
                 </div>
-              </Dropdown>
+                <div>
+                  <button
+                    className="btn btn-sm btn-primary me-3"
+                    onClick={() => router.visit(route("project.report"))}
+                  >
+                    Project Report
+                  </button>
+                </div>
+                <div>
+                  {/* <button
+                    className="btn btn-sm btn-outline-primary me-3"
+                    onClick={() => router.visit(route("project.report.chart"))}
+                  >
+                    Report <BarChartOutlined />
+                  </button> */}
+                </div>
+                <div>
+                  <Dropdown
+                    menu={{
+                      items: userMenuItems,
+                    }}
+                    trigger={["click"]}
+                    placement="bottomRight"
+                  >
+                    <div
+                      className="user-dropdown"
+                      style={{ cursor: "pointer" }}
+                    >
+                      <div className="d-flex justify-content-center align-items-center">
+                        {user?.media.length > 0 ? (
+                          <img
+                            className="me-1"
+                            src={`/${user.media[0].file_path}`}
+                            alt="Profile"
+                            style={{
+                              width: "35px",
+                              height: "35px",
+                              borderRadius: "50%",
+                            }}
+                          />
+                        ) : (
+                          <Avatar
+                            size="small"
+                            icon={<UserOutlined />}
+                            className="user-avatar me-1"
+                          />
+                        )}
+                        <span className="user-name">{user.name}:</span>
+                        <CaretDownOutlined className="dropdown-icon" />
+                      </div>
+                    </div>
+                  </Dropdown>
+                </div>
+              </div>
             </div>
           </div>
         </Header>

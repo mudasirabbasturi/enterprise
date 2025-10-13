@@ -58,6 +58,7 @@ class HandleInertiaRequests extends Middleware
 
             'projectCounts' => fn () => [
                 'Total'   => Project::count(),
+                'All' => Project::where('project_status', '!=', 'Deliver')->count(),
                 'Planned' => Project::where('project_status', 'Planned')->count(),
                 'Pending' => Project::where('project_status', 'Pending')->count(),
                 'TakeoffOnProgress' => Project::where('project_status', 'Takeoff On Progress')->count(),

@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('email')->nullable()->unique();
             $table->string('phone')->nullable()->unique();
             $table->text('notes')->nullable();
+            $table->enum('client_type', ['admin', 'normal'])->default('normal');
             $table->timestamps();
             $table->softDeletesTz('deleted_at', precision: 0);
         });

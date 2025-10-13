@@ -13,36 +13,28 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            // Identity
-            $table->string('employee_id')->unique();
             $table->string('name');
             $table->string('email')->unique();
             $table->string('password');
             $table->string('phone')->nullable();
-            
-            // Verification & Tokens
             $table->timestamp('email_verified_at')->nullable();
             $table->rememberToken();
-            // Address Information
             $table->string('country')->nullable();
             $table->string('state')->nullable();
             $table->string('city')->nullable();
             $table->string('postal_or_zip_code')->nullable();
             $table->string('permanent_address')->nullable();
             $table->string('current_address')->nullable();
-            // Profile
             $table->string('picture_path')->nullable();
             $table->date('dob')->nullable();
-            // dates of joining, hiring, and leaving
             $table->date('joining_date')->nullable();
             $table->date('hiring_date')->nullable();
             $table->date('leaving_date')->nullable();
-            // Notes 
             $table->text('notes')->nullable();
             $table->text('notes_private')->nullable();
-            // Status
-            $table->string('status')->default('active'); // 'active', 'inactive', 'suspended'
-            // Timestamps
+            $table->string('status')->default('active');
+            $table->string('reference_name')->nullable();
+            $table->string('reference__phone')->nullable();
             $table->timestamps();
             $table->softDeletesTz('deleted_at', precision: 0);
         });

@@ -166,7 +166,7 @@ a {
     border-bottom: 1px solid #ddd;
 }
 
-.ag-grid-wrapper {
+.ag-grid-wrapper, .chart {
     height: calc(100vh - 122px);
     margin: 8px;
 }

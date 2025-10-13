@@ -14,7 +14,6 @@ use App\Models\ProjectTeamMember;
 use Illuminate\Support\Facades\DB;
 use Pusher\Pusher;
 
-
 class ProjectController extends Controller
 {
 
@@ -25,7 +24,9 @@ class ProjectController extends Controller
                 $query->where('category', 'profile')->latest()->limit(1);
             },
             'client'
-        ])->latest()->get();
+        ])
+        ->where('project_status', '!=', 'Deliver')
+        ->latest()->get();
         $clients = Client::get();
         return Inertia('Pages/Project/Index', [
             'projects' => $projects,
@@ -142,7 +143,7 @@ class ProjectController extends Controller
             },
             'client'
         ])
-        ->where('project_status', $status) 
+        ->where('project_status', $status)
         ->latest()
         ->get();
         $clients = Client::get();
@@ -156,6 +157,7 @@ class ProjectController extends Controller
     protected $allowedFields = [
         'project_title',
         'project_address',
+        'client_name_for_admin',
         'client_id',
         'project_pricing',
         'project_area',
@@ -183,6 +185,7 @@ class ProjectController extends Controller
         'client_id' => 'required|exists:clients,id',
         'project_title' => 'required|string|max:255',
         'project_address' => 'nullable|string',
+        'client_name_for_admin' => 'nullable|string',
         'client_id' => 'nullable|exists:clients,id',
         'project_pricing' => 'nullable|string|max:255',
         'project_area' => 'nullable|string|max:255',
@@ -478,5 +481,166 @@ class ProjectController extends Controller
         ]);
     }
 
+
+    public function ProjectReport(Request $request)
+    {
+        $projectsReport = DB::table('projects')
+            ->leftJoin('project_team_members', 'projects.id', '=', 'project_team_members.project_id')
+            ->leftJoin('users', 'project_team_members.user_id', '=', 'users.id')
+            ->whereYear('project_team_members.created_at', '>=', 2023)
+            ->select(
+                'users.name as username',
+                DB::raw('YEAR(project_team_members.created_at) as year'),
+                DB::raw('MONTHNAME(project_team_members.created_at) as month'),
+                DB::raw('SUM(projects.project_points) as total_points'),
+                DB::raw('SUM(project_team_members.points_gain) as points_gain'),
+                DB::raw('COUNT(DISTINCT projects.id) as projects_count'),
+                DB::raw('SUM(JSON_LENGTH(project_team_members.steps)) as tasks_count')
+            )
+            ->groupBy('users.name', 'year', 'month')
+            ->orderBy('year', 'desc')
+            ->orderBy(DB::raw('MONTH(project_team_members.created_at)'), 'asc')
+            ->get();
+
+        return Inertia('Pages/Project/Report', [
+            'reports' => $projectsReport,
+        ]);
+    }
+
+    // public function ProjectReportChart()
+    // {
+    //     $ProjectReportChart = DB::table('project_team_members as ptm')
+    //         ->leftJoin('projects', 'ptm.project_id', '=', 'projects.id')
+    //         ->leftJoin('users', 'ptm.user_id', '=', 'users.id')
+    //         ->whereYear('ptm.created_at', '>=', 2023)
+    //         ->select(
+    //             'users.name as username',
+    //             DB::raw('YEAR(ptm.created_at) as year'),
+    //             DB::raw('MONTHNAME(ptm.created_at) as month'),
+    //             DB::raw('SUM(ptm.points_gain) as points_gain'),
+    //             DB::raw('COUNT(DISTINCT ptm.project_id) as projects_count'),
+    //             DB::raw('SUM(JSON_LENGTH(ptm.steps)) as tasks_count'),
+    //             DB::raw('SUM(DISTINCT projects.project_points) as total_points')
+    //         )
+    //         ->groupBy('users.name', 'year', 'month')
+    //         ->orderBy('year', 'desc')
+    //         ->orderBy(DB::raw('MONTH(ptm.created_at)'), 'asc')
+    //         ->get();
+
+    //     return Inertia('Pages/Project/ProjectReportChart', [
+    //         'ProjectReportChart' => $ProjectReportChart,
+    //     ]);
+    // }
+
+public function ProjectReportChart(Request $request)
+    {
+        // Get filter parameters with defaults
+        $year = $request->input('year', date('Y'));
+        $month = $request->input('month');
+        $userIds = $request->input('users', []);
+        
+        $query = DB::table('project_team_members as ptm')
+            ->join('projects', 'ptm.project_id', '=', 'projects.id')
+            ->join('users', 'ptm.user_id', '=', 'users.id')
+            ->select(
+                'users.id as user_id',
+                'users.name as username',
+                DB::raw('YEAR(ptm.created_at) as year'),
+                DB::raw('MONTH(ptm.created_at) as month_number'),
+                DB::raw('MONTHNAME(ptm.created_at) as month_name'),
+                DB::raw('COALESCE(SUM(ptm.points_gain), 0) as total_points'),
+                DB::raw('COUNT(DISTINCT ptm.project_id) as projects_count'),
+                DB::raw('COALESCE(SUM(JSON_LENGTH(ptm.steps)), 0) as tasks_completed')
+            );
+
+        // Apply filters
+        if ($year) {
+            $query->whereYear('ptm.created_at', $year);
+        }
+
+        if ($month) {
+            $query->whereMonth('ptm.created_at', $month);
+        }
+
+        if (!empty($userIds)) {
+            $query->whereIn('ptm.user_id', $userIds);
+        }
+
+        $projectReports = $query
+            ->groupBy('users.id', 'users.name', 'year', 'month_number', 'month_name')
+            ->orderBy('year', 'desc')
+            ->orderBy('month_number', 'asc')
+            ->get();
+
+        // Get available years and users for filters
+        $availableYears = DB::table('project_team_members')
+            ->select(DB::raw('DISTINCT YEAR(created_at) as year'))
+            ->orderBy('year', 'desc')
+            ->pluck('year')
+            ->map(fn($year) => (int)$year); // Ensure integers
+
+        $availableUsers = DB::table('users')
+            ->join('project_team_members', 'users.id', '=', 'project_team_members.user_id')
+            ->select('users.id', 'users.name')
+            ->distinct()
+            ->orderBy('users.name')
+            ->get()
+            ->map(fn($user) => [
+                'id' => (int)$user->id,
+                'name' => (string)$user->name
+            ]);
+
+        return inertia('Pages/Project/ProjectReportChart', [
+            'reports' => $projectReports->map(fn($report) => [
+                'user_id' => (int)$report->user_id,
+                'username' => (string)$report->username,
+                'year' => (int)$report->year,
+                'month_number' => (int)$report->month_number,
+                'month_name' => (string)$report->month_name,
+                'total_points' => (float)$report->total_points,
+                'projects_count' => (int)$report->projects_count,
+                'tasks_completed' => (int)$report->tasks_completed,
+            ]),
+            'filters' => [
+                'year' => $year ? (int)$year : null,
+                'month' => $month ? (int)$month : null,
+                'users' => array_map('intval', $userIds)
+            ],
+            'availableYears' => $availableYears,
+            'availableUsers' => $availableUsers,
+            'months' => [
+                ['value' => 1, 'label' => 'January'],
+                ['value' => 2, 'label' => 'February'],
+                ['value' => 3, 'label' => 'March'],
+                ['value' => 4, 'label' => 'April'],
+                ['value' => 5, 'label' => 'May'],
+                ['value' => 6, 'label' => 'June'],
+                ['value' => 7, 'label' => 'July'],
+                ['value' => 8, 'label' => 'August'],
+                ['value' => 9, 'label' => 'September'],
+                ['value' => 10, 'label' => 'October'],
+                ['value' => 11, 'label' => 'November'],
+                ['value' => 12, 'label' => 'December'],
+            ]
+        ]);
+    }
+
+    public function ProjectCountChart()
+    {
+        $ProjectCountChart = DB::table('projects')
+            ->select(
+                DB::raw('YEAR(created_at) as year'),
+                DB::raw('MONTH(created_at) as month'),
+                DB::raw('COUNT(*) as count')
+            )
+            ->groupBy('year', 'month')
+            ->orderBy('year', 'asc')
+            ->orderBy('month', 'asc')
+            ->get();
+
+        return Inertia('Pages/Project/ProjectCountChart', [
+            'ProjectCountChart' => $ProjectCountChart,
+        ]);
+    }
 
 }

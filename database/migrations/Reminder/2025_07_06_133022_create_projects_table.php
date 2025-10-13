@@ -61,3 +61,8 @@ return new class extends Migration
         Schema::dropIfExists('projects');
     }
 };
+
+/**
+ * ussturi578@gmail.com
+ * 123456789
+ */

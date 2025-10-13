@@ -24,6 +24,7 @@ class StoreProjectRequest extends FormRequest
         return [
             'project_title' => 'required|string|max:255',
             'project_address' => 'nullable|string',
+            'client_name_for_admin' => 'nullable|string',
             'client_id' => 'nullable|exists:clients,id',
             'project_pricing' => 'nullable|string|max:255',
             'project_area' => 'nullable|string|max:255',

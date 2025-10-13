@@ -1,4 +1,4 @@
-import { useRoute, Link, Breadcrumb, usePage } from "@shared/ui";
+import { useRoute, Link, Breadcrumb, usePage, Input } from "@shared/ui";
 const ProjectHeader = ({ showDrawer }) => {
   const route = useRoute();
   const currentRouteName = route().current();
@@ -17,6 +17,7 @@ const ProjectHeader = ({ showDrawer }) => {
   };
 
   const Total = props.projectCounts.Total;
+  const All = props.projectCounts.All;
   const Planned = props.projectCounts.Planned;
   const Pending = props.projectCounts.Pending;
   const TakeoffOnProgress = props.projectCounts.TakeoffOnProgress;
@@ -252,6 +253,7 @@ const ProjectHeader = ({ showDrawer }) => {
       </div> */}
       <div>
         {/* All Projects */}
+
         {can("View All Projects") && (
           <Link
             className={`btn btn-sm position-relative me-1 ${
@@ -270,7 +272,7 @@ const ProjectHeader = ({ showDrawer }) => {
               }}
               className="badge border"
             >
-              {Total}
+              {All}
             </span>
           </Link>
         )}
@@ -483,6 +485,7 @@ const ProjectHeader = ({ showDrawer }) => {
             </span>
           </Link>
         )}
+        {/* <Input size="large" className="mt-1" /> */}
       </div>
 
       <div></div>

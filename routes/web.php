@@ -77,6 +77,9 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/project/destroy/{id}', [ProjectController::class, 'Destroy'])->name('project.destroy');
     Route::get('/project/{status}', [ProjectController::class, 'Status'])->name('project.status');
     Route::put('/project/column/update/{id}', [ProjectController::class, 'ProjectColumnUpdate'])->name('project.column.update');
+    Route::get('/project-report', [ProjectController::class, 'ProjectReport'])->name('project.report');
+    Route::get('/project-report/chart', [ProjectController::class, 'ProjectReportChart'])->name('project.report.chart');
+    Route::get('/project-count/chart', [ProjectController::class, 'ProjectCountChart'])->name('project.count.chart');
 
     // Team Member 
     Route::post('/project/team-member/join/{ProjectId}', [ProjectController::class, 'JoinProject'])->name('JoinProject');
