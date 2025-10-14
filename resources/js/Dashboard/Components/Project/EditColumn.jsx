@@ -105,6 +105,10 @@ const EditColumn = forwardRef(
       Array.isArray(userPermissions) &&
       userPermissions.some((perm) => perm.name === "Update Project Address");
 
+    const hasUpdateProjectClientAdminName =
+      Array.isArray(userPermissions) &&
+      userPermissions.some((perm) => perm.name === "Update Client Admin");
+
     const hasUpdateProjectClientPermission =
       Array.isArray(userPermissions) &&
       userPermissions.some((perm) => perm.name === "Update Project Client");
@@ -191,6 +195,7 @@ const EditColumn = forwardRef(
     const fieldPermissionMap = {
       project_title: hasUpdateProjectTitlePermission,
       project_address: hasUpdateProjectAddressPermission,
+      client_name_for_admin: hasUpdateProjectClientAdminName,
       client_id: hasUpdateProjectClientPermission,
       project_pricing: hasUpdateProjectPricingPermission,
       project_area: hasUpdateProjectAreaPermission,

@@ -42,6 +42,10 @@ const AddProject = forwardRef(
       Array.isArray(userPermissions) &&
       userPermissions.some((perm) => perm.name === "Add Project Address");
 
+    const hasAddProjectClientAdminName =
+      Array.isArray(userPermissions) &&
+      userPermissions.some((perm) => perm.name === "Add Client Admin");
+
     const hasAddProjectClientPermission =
       Array.isArray(userPermissions) &&
       userPermissions.some((perm) => perm.name === "Add Project Client");
@@ -250,7 +254,24 @@ const AddProject = forwardRef(
                   />
                 </div>
               </div>
-
+              <div className="d-flex align-items-center mb-3">
+                <label
+                  className="me-1"
+                  style={{ whiteSpace: "nowrap" }}
+                  htmlFor="client_name_for_admin"
+                >
+                  Client Admin Name:
+                  <hr className="mb-1 m-0" />
+                </label>
+                <Input
+                  placeholder="Add Project Client Admin Name"
+                  value={values.client_name_for_admin}
+                  onChange={(e) =>
+                    onChangeValue("client_name_for_admin", e.target.value)
+                  }
+                  disabled={loading || !hasAddProjectClientAdminName}
+                />
+              </div>
               <div className="d-flex flex-column mb-3">
                 <label
                   className="mb-1"

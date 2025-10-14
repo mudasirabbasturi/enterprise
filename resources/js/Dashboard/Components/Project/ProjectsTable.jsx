@@ -255,6 +255,10 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
                         <Avatar
                           src={`/${profileMedia.file_path}`}
                           alt={user.name}
+                          size={42}
+                          style={{
+                            objectFit: "contain",
+                          }}
                           {...avatarProps}
                         />
                       ) : (
@@ -304,8 +308,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         }
       },
     },
-
-    ...(can("View Client")
+    ...(can("View Client Admin")
       ? [
           {
             headerName: "Client Name Admin",
@@ -326,6 +329,10 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
               }
             },
           },
+        ]
+      : []),
+    ...(can("View Client")
+      ? [
           {
             headerName: "Client Notes",
             headerTooltip: "Client Notes",

@@ -120,6 +120,15 @@ const Index = ({ roles, permissions }) => {
                 </button>
               </Tooltip>
             )}
+            {/* <Tooltip title="Edit Role" color="orange" placement="leftTop">
+              <button
+                className="btn btn-warning btn-sm me-1"
+                onClick={() => showDrawer("edit", params.data)}
+              >
+                <EditOutlined />
+              </button>
+            </Tooltip> */}
+
             {!isSuperAdmin && (
               <Tooltip title="Delete Role" color="red" placement="leftTop">
                 <Popconfirm
