@@ -414,7 +414,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
           },
         ]
       : []),
-    ...(can("View Init Link")
+    ...(can("View Initial Link(onside)")
       ? [
           {
             headerName: "OnSide Link / Admin",
@@ -423,7 +423,14 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
 
             cellRenderer: (params) => {
               if (params.data.project_init_link) {
-                return params.data.project_init_link;
+                // return params.data.project_init_link;
+                return (
+                  <>
+                    <a href={params.data.project_init_link} target="_blank">
+                      OnSide Link.
+                    </a>
+                  </>
+                );
               } else {
                 return "⭕⭕❌❌🚫🚫";
               }
@@ -431,7 +438,25 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
           },
         ]
       : []),
-
+    {
+      headerName: "Offside Link / Estimator",
+      headerTooltip: "Link during project submition by estimator",
+      field: "project_final_link",
+      cellRenderer: (params) => {
+        if (params.data.project_final_link) {
+          // return params.data.project_final_link;
+          return (
+            <>
+              <a href={params.data.project_final_link} target="_blank">
+                OffSide Link.
+              </a>
+            </>
+          );
+        } else {
+          return "⭕⭕❌❌🚫🚫";
+        }
+      },
+    },
     {
       headerName: "Project Pricing",
       headerTooltip: "Project Pricing",
@@ -500,6 +525,63 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
       editable: false,
     },
     {
+      headerName: "| Days | Hrs | Min | Sec |",
+      field: "project_due_date",
+      filter: false,
+      editable: false,
+      cellRenderer: (props) => {
+        const dueDate = new Date(props.value);
+
+        const Countdown = () => {
+          const [timeLeft, setTimeLeft] = useState(calcTimeLeft());
+
+          function calcTimeLeft() {
+            const now = new Date();
+            const diffMs = dueDate - now;
+            if (diffMs <= 0) return [0, 0, 0, 0];
+
+            const days = Math.floor(diffMs / 86400000);
+            const hrs = Math.floor((diffMs % 86400000) / 3600000);
+            const mins = Math.floor(((diffMs % 86400000) % 3600000) / 60000);
+            const secs = Math.floor(
+              (((diffMs % 86400000) % 3600000) % 60000) / 1000
+            );
+            return [days, hrs, mins, secs];
+          }
+
+          useEffect(() => {
+            const timer = setInterval(() => setTimeLeft(calcTimeLeft()), 1000);
+            return () => clearInterval(timer);
+          }, []);
+
+          const [days, hrs, mins, secs] = timeLeft;
+          const expired = dueDate < new Date();
+
+          return (
+            <div
+              className={expired ? "text-danger" : ""}
+              style={{ display: "flex", gap: "4px" }}
+            >
+              <button className="btn btn-sm btn-outline-primary">
+                {String(days).padStart(2, "0")}
+              </button>
+              <button className="btn btn-sm btn-outline-warning">
+                {String(hrs).padStart(2, "0")}
+              </button>
+              <button className="btn btn-sm btn-outline-info">
+                {String(mins).padStart(2, "0")}
+              </button>
+              <button className="btn btn-sm btn-outline-danger">
+                {String(secs).padStart(2, "0")}
+              </button>
+            </div>
+          );
+        };
+
+        return <Countdown />;
+      },
+    },
+    {
       headerName: "Main Scope",
       headerTooltip: "Project Main Scope",
       field: "project_main_scope",
@@ -541,26 +623,6 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         }
       },
     },
-    {
-      headerName: "OffSide Link / Estimator",
-      headerTooltip: "Findal link when the project is completed",
-      field: "project_final_link",
-
-      cellRenderer: (params) => {
-        if (params.data.project_final_link) {
-          return (
-            <>
-              <a href={params.data.project_final_link} _target="blanck">
-                Estimator Link
-              </a>
-            </>
-          );
-        } else {
-          return "⭕⭕❌❌🚫🚫";
-        }
-      },
-    },
-
     ...(can("View Budget")
       ? [
           {
@@ -1035,7 +1097,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         <Input
           style={{ maxWidth: "300px" }}
           size="medium"
-          className="mb-3 mt-1"
+          className="mb-1 mt-1"
           id="filter-text-box"
           placeholder="Quick Filter..."
           onInput={onFilterTextBoxChanged}

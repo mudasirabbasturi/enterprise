@@ -134,6 +134,7 @@ const AddProject = forwardRef(
     const defaultValues = {
       project_title: "",
       project_address: "",
+      client_name_for_admin: "",
       client_id: "",
       project_pricing: "",
       project_area: "",
@@ -476,7 +477,8 @@ const AddProject = forwardRef(
                     disabled={loading || !hasAddDueDatePermission}
                   />
                   <label className="me-1">Project Points:</label>
-                  <Input
+                  <InputNumber
+                    style={{ width: "100%" }}
                     placeholder="Project Points"
                     value={values.project_points}
                     onChange={(e) =>

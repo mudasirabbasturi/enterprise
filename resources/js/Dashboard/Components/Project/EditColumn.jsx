@@ -200,6 +200,8 @@ const EditColumn = forwardRef(
       project_pricing: hasUpdateProjectPricingPermission,
       project_area: hasUpdateProjectAreaPermission,
       project_construction_type: hasUpdateConstructionTypePermission,
+      project_line_items_pricing: hasUpdateLineItemsPricingPermission,
+      project_floor_number: hasUpdateFloorNumberPermission,
       project_main_scope: hasUpdateMainScopePermission,
       project_scope_details: hasUpdateScopeDetailsPermission,
       project_template: hasUpdateProjectTemplatePermission,

@@ -167,7 +167,7 @@ a {
 }
 
 .ag-grid-wrapper, .chart {
-    height: calc(100vh - 122px);
+    height: calc(100vh - 156px);
     margin: 8px;
 }
 

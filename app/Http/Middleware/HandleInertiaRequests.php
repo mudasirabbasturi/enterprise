@@ -37,6 +37,41 @@ class HandleInertiaRequests extends Middleware
      * @return array<string, mixed>
      */
 
+    // public function share(Request $request): array
+    // {
+    //     return array_merge(parent::share($request), [
+    //         'auth' => [
+    //             'user' => fn () => $request->user()
+    //                 ? $request->user()->load([
+    //                     'media',
+    //                     'role:id,name',
+    //                     'role.permissions:id,name'
+    //                 ])
+    //                 : null,
+    //         ],
+    //         'permissions' => fn () => Permission::all(['id', 'model', 'type', 'name', 'notes']),
+    //         'flash' => [
+    //             'success' => fn () => $request->session()->get('success'),
+    //             'error' => fn () => $request->session()->get('error'),
+    //             'message' => fn () => $request->session()->get('message'),
+    //         ],
+
+    //         'projectCounts' => fn () => [
+    //             'Total'   => Project::count(),
+    //             'All' => Project::where('project_status', '!=', 'Deliver')->count(),
+    //             'Planned' => Project::where('project_status', 'Planned')->count(),
+    //             'Pending' => Project::where('project_status', 'Pending')->count(),
+    //             'TakeoffOnProgress' => Project::where('project_status', 'Takeoff On Progress')->count(),
+    //             'PricingOnProgress' => Project::where('project_status', 'Pricing On Progress')->count(),
+    //             'Completed' => Project::where('project_status', 'Completed')->count(),
+    //             'Hold' => Project::where('project_status', 'Hold')->count(),
+    //             'Revision' => Project::where('project_status', 'Revision')->count(),
+    //             'Cancelled' => Project::where('project_status', 'Cancelled')->count(),
+    //             'Deliver' => Project::where('project_status', 'Deliver')->count(),
+    //         ],
+    //     ]);
+    // }
+
     public function share(Request $request): array
     {
         return array_merge(parent::share($request), [
@@ -49,13 +84,16 @@ class HandleInertiaRequests extends Middleware
                     ])
                     : null,
             ],
+
             'permissions' => fn () => Permission::all(['id', 'model', 'type', 'name', 'notes']),
+
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
                 'message' => fn () => $request->session()->get('message'),
             ],
 
+            // ✅ Global project counts (all projects)
             'projectCounts' => fn () => [
                 'Total'   => Project::count(),
                 'All' => Project::where('project_status', '!=', 'Deliver')->count(),
@@ -69,7 +107,52 @@ class HandleInertiaRequests extends Middleware
                 'Cancelled' => Project::where('project_status', 'Cancelled')->count(),
                 'Deliver' => Project::where('project_status', 'Deliver')->count(),
             ],
+
+            // ✅ Self project counts (for logged-in user)
+            'selfProjectCounts' => function () use ($request) {
+                $user = $request->user();
+                if (!$user) {
+                    return [];
+                }
+
+                $userId = $user->id;
+
+                return [
+                    'Total' => Project::whereHas('projectTeamMembers', fn($q) => $q->where('user_id', $userId))->count(),
+                    'All' => Project::where('project_status', '!=', 'Deliver')
+                        ->whereHas('projectTeamMembers', fn($q) => $q->where('user_id', $userId))
+                        ->count(),
+                    'Planned' => Project::where('project_status', 'Planned')
+                        ->whereHas('projectTeamMembers', fn($q) => $q->where('user_id', $userId))
+                        ->count(),
+                    'Pending' => Project::where('project_status', 'Pending')
+                        ->whereHas('projectTeamMembers', fn($q) => $q->where('user_id', $userId))
+                        ->count(),
+                    'TakeoffOnProgress' => Project::where('project_status', 'Takeoff On Progress')
+                        ->whereHas('projectTeamMembers', fn($q) => $q->where('user_id', $userId))
+                        ->count(),
+                    'PricingOnProgress' => Project::where('project_status', 'Pricing On Progress')
+                        ->whereHas('projectTeamMembers', fn($q) => $q->where('user_id', $userId))
+                        ->count(),
+                    'Completed' => Project::where('project_status', 'Completed')
+                        ->whereHas('projectTeamMembers', fn($q) => $q->where('user_id', $userId))
+                        ->count(),
+                    'Hold' => Project::where('project_status', 'Hold')
+                        ->whereHas('projectTeamMembers', fn($q) => $q->where('user_id', $userId))
+                        ->count(),
+                    'Revision' => Project::where('project_status', 'Revision')
+                        ->whereHas('projectTeamMembers', fn($q) => $q->where('user_id', $userId))
+                        ->count(),
+                    'Cancelled' => Project::where('project_status', 'Cancelled')
+                        ->whereHas('projectTeamMembers', fn($q) => $q->where('user_id', $userId))
+                        ->count(),
+                    'Deliver' => Project::where('project_status', 'Deliver')
+                        ->whereHas('projectTeamMembers', fn($q) => $q->where('user_id', $userId))
+                        ->count(),
+                ];
+            },
         ]);
     }
+
 
 }

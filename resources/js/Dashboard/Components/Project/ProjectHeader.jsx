@@ -34,226 +34,7 @@ const ProjectHeader = ({ showDrawer }) => {
         className="breadCrumb"
         items={[{ title: <Link href="/">Home</Link> }, { title: "Projects" }]}
       />
-      {/* <div>
-        {can("View All Projects") && (
-          <Link
-            className={`btn btn-sm  position-relative me-1 ${
-              isActive("project.index") ? "active-status" : "inactive-status"
-            }`}
-            href={route("project.index")}
-          >
-            All
-            <span
-              style={{
-                position: "absolute",
-                top: -12,
-                right: -4,
-                color: "inherit",
-                backgroundColor: "inherit",
-              }}
-              class="badge border"
-            >
-              {Total}
-            </span>
-          </Link>
-        )}
-        {can("View Pending") && (
-          <Link
-            className={`btn btn-sm  position-relative me-1 ${
-              isActive("project.status", "Pending") ||
-              currentRouteName === "home.index"
-                ? "active-status-pending"
-                : "inactive-status"
-            }`}
-            href={route("project.status", { status: "Pending" })}
-          >
-            Pending
-            <span
-              style={{
-                position: "absolute",
-                top: -12,
-                right: -4,
-                color: "inherit",
-                backgroundColor: "inherit",
-              }}
-              class="badge border"
-            >
-              {Pending}
-            </span>
-          </Link>
-        )}
-        {can("View Takeoff On Progress") && (
-          <Link
-            className={`btn btn-sm  position-relative me-1 ${
-              isActive("project.status", "Takeoff On Progress")
-                ? "active-status-progress"
-                : "inactive-status"
-            }`}
-            href={route("project.status", { status: "Takeoff On Progress" })}
-          >
-            Takeoff In Progress
-            <span
-              style={{
-                position: "absolute",
-                top: -12,
-                right: -4,
-                color: "inherit",
-                backgroundColor: "inherit",
-              }}
-              class="badge border"
-            >
-              {TakeoffOnProgress}
-            </span>
-          </Link>
-        )}
-        {can("View Pricing On Progress") && (
-          <Link
-            className={`btn btn-sm  position-relative me-1 ${
-              isActive("project.status", "Pricing On Progress")
-                ? "active-status-pricing"
-                : "inactive-status"
-            }`}
-            href={route("project.status", { status: "Pricing On Progress" })}
-          >
-            Pricing In Progress
-            <span
-              style={{
-                position: "absolute",
-                top: -12,
-                right: -4,
-                color: "inherit",
-                backgroundColor: "inherit",
-              }}
-              class="badge border"
-            >
-              {PricingOnProgress}
-            </span>
-          </Link>
-        )}
-        {can("View Completed") && (
-          <Link
-            className={`btn btn-sm  position-relative me-1 ${
-              isActive("project.status", "Completed")
-                ? "active-status-completed"
-                : "inactive-status"
-            }`}
-            href={route("project.status", { status: "Completed" })}
-          >
-            Completed
-            <span
-              style={{
-                position: "absolute",
-                top: -12,
-                right: -4,
-                color: "inherit",
-                backgroundColor: "inherit",
-              }}
-              class="badge border"
-            >
-              {Completed}
-            </span>
-          </Link>
-        )}
-        {can("View Revision") && (
-          <Link
-            className={`btn btn-sm  position-relative me-1 ${
-              isActive("project.status", "Revision")
-                ? "active-status-revision"
-                : "inactive-status"
-            }`}
-            href={route("project.status", { status: "Revision" })}
-          >
-            Revision
-            <span
-              style={{
-                position: "absolute",
-                top: -12,
-                right: -4,
-                color: "inherit",
-                backgroundColor: "inherit",
-              }}
-              class="badge border"
-            >
-              {Revision}
-            </span>
-          </Link>
-        )}
-        {can("View Hold") && (
-          <Link
-            className={`btn btn-sm  position-relative me-1 ${
-              isActive("project.status", "Hold")
-                ? "active-status-hold"
-                : "inactive-status"
-            }`}
-            href={route("project.status", { status: "Hold" })}
-          >
-            Hold
-            <span
-              style={{
-                position: "absolute",
-                top: -12,
-                right: -4,
-                color: "inherit",
-                backgroundColor: "inherit",
-              }}
-              class="badge border"
-            >
-              {Hold}
-            </span>
-          </Link>
-        )}
-        {can("View Deliver") && (
-          <Link
-            className={`btn btn-sm  position-relative me-1 ${
-              isActive("project.status", "Deliver")
-                ? "active-status-deliver"
-                : "inactive-status"
-            }`}
-            href={route("project.status", { status: "Deliver" })}
-          >
-            Deliver
-            <span
-              style={{
-                position: "absolute",
-                top: -12,
-                right: -4,
-                color: "inherit",
-                backgroundColor: "inherit",
-              }}
-              class="badge border"
-            >
-              {Deliver}
-            </span>
-          </Link>
-        )}
-        {can("View Cancelled") && (
-          <Link
-            className={`btn btn-sm  position-relative me-1 ${
-              isActive("project.status", "Cancelled")
-                ? "active-status-hold"
-                : "inactive-status"
-            }`}
-            href={route("project.status", { status: "Cancelled" })}
-          >
-            Cancelled
-            <span
-              style={{
-                position: "absolute",
-                top: -12,
-                right: -4,
-                color: "inherit",
-                backgroundColor: "inherit",
-              }}
-              class="badge border"
-            >
-              {Cancelled}
-            </span>
-          </Link>
-        )}
-      </div> */}
       <div>
-        {/* All Projects */}
-
         {can("View All Projects") && (
           <Link
             className={`btn btn-sm position-relative me-1 ${
@@ -276,8 +57,6 @@ const ProjectHeader = ({ showDrawer }) => {
             </span>
           </Link>
         )}
-
-        {/* Pending */}
         {can("View Pending Projects") && (
           <Link
             className={`btn btn-sm position-relative me-1 ${
@@ -303,8 +82,6 @@ const ProjectHeader = ({ showDrawer }) => {
             </span>
           </Link>
         )}
-
-        {/* Takeoff On Progress */}
         {can("View Takeoff On Progress Projects") && (
           <Link
             className={`btn btn-sm position-relative me-1 ${
@@ -329,8 +106,6 @@ const ProjectHeader = ({ showDrawer }) => {
             </span>
           </Link>
         )}
-
-        {/* Pricing On Progress */}
         {can("View Pricing On Progress Projects") && (
           <Link
             className={`btn btn-sm position-relative me-1 ${

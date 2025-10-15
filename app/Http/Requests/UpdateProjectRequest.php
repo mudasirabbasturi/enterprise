@@ -42,7 +42,7 @@ class UpdateProjectRequest extends FormRequest
             'budget_total' => 'nullable|numeric|min:0',
             'deduction_amount' => 'nullable|numeric|min:0',
             'project_due_date' => 'nullable|date',
-            'project_points' => 'nullable|string|max:255',
+            'project_points' => 'nullable|numeric',
             'project_source' => 'nullable|in:InSource,OutSource',
             'project_status' => 'nullable|in:Planned,Pending,Takeoff On Progress,Pricing On Progress,Completed,Hold,Revision,Cancelled,Deliver',
             'preview_status' => 'nullable|in:active,draft',

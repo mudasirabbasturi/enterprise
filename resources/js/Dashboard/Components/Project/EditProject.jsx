@@ -144,6 +144,7 @@ const EditProject = forwardRef(
       id: selectedProject.id,
       project_title: selectedProject.project_title,
       project_address: selectedProject.project_address,
+      client_name_for_admin: selectedProject.client_name_for_admin,
       client_id: selectedProject.client_id,
       project_pricing: selectedProject.project_pricing,
       project_area: selectedProject.project_area,
@@ -155,8 +156,7 @@ const EditProject = forwardRef(
       project_template: selectedProject.project_template,
       project_init_link: selectedProject.project_init_link,
       project_final_link: selectedProject.project_final_link,
-      project_notes_owner_or_supervisor:
-        selectedProject.project_notes_owner_or_supervisor,
+      project_admin_notes: selectedProject.project_admin_notes,
       project_notes_estimator: selectedProject.project_notes_estimator,
       notes_private: selectedProject.notes_private,
       notes: selectedProject.notes || "",
@@ -351,6 +351,7 @@ const EditProject = forwardRef(
                     Pricing:
                   </label>
                   <Input
+                    className="me-1"
                     placeholder="Add Project Pricing"
                     value={values.project_pricing}
                     onChange={(e) =>
@@ -479,7 +480,7 @@ const EditProject = forwardRef(
                     disabled={loading || !hasUpdateDueDatePermission}
                   />
                   <label className="me-1">Project Points:</label>
-                  <Input
+                  <InputNumber
                     placeholder="Number Of Points Of The Project"
                     value={values.project_points}
                     onChange={(e) =>
@@ -639,7 +640,7 @@ const EditProject = forwardRef(
                 </h6>
                 <hr className="mt-2 mb-2" />
                 <div className="mb-3">
-                  <label>Admin Or Supervisor Notes:</label>
+                  <label>Admin Notes:</label>
                   <Editor
                     disabled={loading || !hasUpdateAdminNotesPermission}
                     init={{
@@ -651,9 +652,9 @@ const EditProject = forwardRef(
                       skin: false,
                       content_css: false,
                     }}
-                    value={values.project_notes_owner_or_supervisor}
+                    value={values.project_admin_notes}
                     onEditorChange={(c) =>
-                      onChangeValue("project_notes_owner_or_supervisor", c)
+                      onChangeValue("project_admin_notes", c)
                     }
                   />
                 </div>

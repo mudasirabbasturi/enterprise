@@ -151,6 +151,34 @@ class ProjectController extends Controller
             'projects' => $projects,
             'status' => $status,
             'clients' => $clients,
+            'globalHeader' => true,
+        ]);
+    }
+
+    public function SelfStatus(Request $request, $status)
+    {
+        $userId = Auth::id();
+        $projects = Project::with([
+            'projectTeamMembers' => function($query) use ($userId) {
+                $query->where('user_id', $userId);
+            },
+            'projectTeamMembers.user.media' => function($query) {
+                $query->where('category', 'profile')->latest()->limit(1);
+            },
+            'client'
+        ])
+        ->where('project_status', $status)
+        ->whereHas('projectTeamMembers', function($query) use ($userId) {
+            $query->where('user_id', $userId);
+        })
+        ->latest()
+        ->get();
+        $clients = Client::get();
+        return Inertia('Pages/Project/Index', [
+            'projects' => $projects,
+            'status' => $status,
+            'clients' => $clients,
+            'globalHeader' => false,
         ]);
     }
 
@@ -203,7 +231,7 @@ class ProjectController extends Controller
         'budget_total' => 'nullable|numeric|min:0',
         'deduction_amount' => 'nullable|numeric|min:0',
         'project_due_date' => 'nullable|date',
-        'project_points' => 'nullable|numeric|max:255',
+        'project_points' => 'nullable|numeric',
         'project_source' => 'nullable|in:InSource,OutSource',
         'project_status' => 'nullable|in:Planned,Pending,Takeoff On Progress,Pricing On Progress,Completed,Hold,Revision,Cancelled,Deliver',
         'preview_status' => 'nullable|in:active,draft',
@@ -532,7 +560,7 @@ class ProjectController extends Controller
     //     ]);
     // }
 
-public function ProjectReportChart(Request $request)
+    public function ProjectReportChart(Request $request)
     {
         // Get filter parameters with defaults
         $year = $request->input('year', date('Y'));

@@ -3,11 +3,15 @@ import { Drawer, notification, usePage } from "@shared/ui";
 
 // Lazy-load Project Component
 const ProjectHeader = lazy(() => import("@component/Project/ProjectHeader"));
+const ProjectHeaderSelf = lazy(() =>
+  import("@component/Project/self/ProjectHeader")
+);
 const ProjectsTable = lazy(() => import("@component/Project/ProjectsTable"));
 const AddProject = lazy(() => import("@component/Project/AddProject"));
 const ViewProject = lazy(() => import("@component/Project/ViewProject"));
 const EditProject = lazy(() => import("@component/Project/EditProject"));
 const EditColumn = lazy(() => import("@component/Project/EditColumn"));
+
 const JoinProject = lazy(() =>
   import("@component/Project/TeamMembers/JoinProject")
 );
@@ -23,6 +27,7 @@ const AddEditPoint = lazy(() =>
 
 const Index = ({ projects, clients }) => {
   const { props } = usePage();
+  const globalHeader = props.globalHeader ?? true;
   const user = props?.auth?.user ?? {};
 
   const permissions = props?.permissions ?? []; // master list
@@ -100,7 +105,11 @@ const Index = ({ projects, clients }) => {
                   </div>
                 }
               >
-                <ProjectHeader showDrawer={showDrawer} />
+                {globalHeader ? (
+                  <ProjectHeader showDrawer={showDrawer} />
+                ) : (
+                  <ProjectHeaderSelf showDrawer={showDrawer} />
+                )}
               </Suspense>
             </div>
             <div className="ag-grid-wrapper">

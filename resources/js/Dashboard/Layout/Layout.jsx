@@ -246,6 +246,20 @@ const DashboardLayout = ({ children }) => {
                   </button>
                 </div>
                 <div>
+                  <button
+                    className="btn btn-sm btn-primary me-3"
+                    onClick={() =>
+                      router.visit(
+                        route("project.self.status", {
+                          status: "Takeoff On Progress",
+                        })
+                      )
+                    }
+                  >
+                    Self Project
+                  </button>
+                </div>
+                <div>
                   {/* <button
                     className="btn btn-sm btn-outline-primary me-3"
                     onClick={() => router.visit(route("project.report.chart"))}

@@ -66,12 +66,10 @@ const gridOptionsConfig = {
     }
   },
   onColumnMoved: (params) => {
-    // localStorage.setItem(
-    //   STORAGE_KEY,
-    //   JSON.stringify(params.api.getColumnState())
-    // );
-    var columnState = JSON.stringify(params.columnApi.getColumnState());
-    localStorage.setItem("myColumnState", columnState);
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(params.api.getColumnState())
+    );
   },
   onColumnPinned: (params) => {
     localStorage.setItem(
