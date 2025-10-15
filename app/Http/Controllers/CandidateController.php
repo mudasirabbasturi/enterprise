@@ -14,9 +14,23 @@ use Illuminate\Support\Facades\Storage;
 class CandidateController extends Controller
 {
 
+    // public function Index()
+    // {
+    //     $candidates = Candidate::with('media')->latest()->get();
+    //     return Inertia('Pages/Candidate/Index', [
+    //         'candidates' => $candidates
+    //     ]);
+    // }
+
     public function Index()
     {
-        $candidates = Candidate::with('media')->latest()->get();
+        $candidates = Candidate::with(['media' => function ($query) {
+            $query->whereIn('category', ['cv', 'job_letter'])
+                ->orderByDesc('created_at');
+        }])
+        ->latest()
+        ->get();
+
         return Inertia('Pages/Candidate/Index', [
             'candidates' => $candidates
         ]);
@@ -39,6 +53,36 @@ class CandidateController extends Controller
         return back()->with('message', 'Candidate deleted successfully!');
     }
 
+    // public function GenerateJobLetter(Request $request, $id)
+    // {
+    //     try {
+    //         $imageData = $request->input('image');
+    //         if (!$imageData) {
+    //             return response()->json(['error' => 'Image data missing'], 400);
+    //         }
+    //         $image = str_replace('data:image/png;base64,', '', $imageData);
+    //         $image = str_replace(' ', '+', $image);
+    //         $imageName = 'job_letter_' . time() . '.png';
+    //         $path = 'uploads/media/' . $imageName;
+    //         Storage::disk('public')->put($path, base64_decode($image));
+
+    //         $file = $request->file('file');
+    //         $filename = time() . '_' . $file->getClientOriginalName();
+    //         $file->move(public_path('uploads/media'), $filename);
+
+    //         Media::create([
+    //             'file_path'  => $path,
+    //             'category'   => 'job_letter',
+    //             'model_type' => 'App\Models\Candidate',
+    //             'model_id'   => $id,
+    //         ]);
+    //         return back()->with('message', 'Job Letter Generated Successfully');
+
+    //     } catch (\Exception $e) {
+    //         return response()->json(['error' => $e->getMessage()], 500);
+    //     }
+    // }
+
     public function GenerateJobLetter(Request $request, $id)
     {
         try {
@@ -49,16 +93,18 @@ class CandidateController extends Controller
             $image = str_replace('data:image/png;base64,', '', $imageData);
             $image = str_replace(' ', '+', $image);
             $imageName = 'job_letter_' . time() . '.png';
-            $path = 'uploads/media/' . $imageName;
-            Storage::disk('public')->put($path, base64_decode($image));
+            $uploadPath = public_path('uploads/media');
+            if (!file_exists($uploadPath)) {
+                mkdir($uploadPath, 0777, true);
+            }
+            file_put_contents($uploadPath . '/' . $imageName, base64_decode($image));
             Media::create([
-                'file_path'  => $path,
+                'file_path'  => 'uploads/media/' . $imageName,
                 'category'   => 'job_letter',
                 'model_type' => 'App\Models\Candidate',
                 'model_id'   => $id,
             ]);
             return back()->with('message', 'Job Letter Generated Successfully');
-
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }

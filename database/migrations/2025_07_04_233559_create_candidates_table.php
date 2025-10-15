@@ -17,7 +17,8 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->string('phone')->nullable();
             $table->string('position_applied')->nullable();
-            $table->text('cover_letters')->nullable();
+            $table->text('cover_letter')->nullable();
+            $table->text('resume_path')->nullable();
             $table->enum('status', [
                 'pending',        // Just applied
                 'under_review',   // Being reviewed

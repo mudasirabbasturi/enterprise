@@ -17,6 +17,7 @@ import {
 } from "@shared/ui";
 
 const CandidatesTable = ({ candidates, showDrawer }) => {
+  // console.log("CandidatesTable candidates:", candidates);
   const route = useRoute();
   const [rowData, setRowData] = useState([]);
   const [colDefs, setColDefs] = useState([
@@ -26,7 +27,6 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
       field: "name",
       cellEditor: "agLargeTextCellEditor",
       cellEditorPopup: true,
-      pinned: "left",
       cellRenderer: (params) => {
         if (params.data?.name) {
           return params.data?.name;
@@ -34,6 +34,78 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
         return "⭕❌❌🚫";
       },
     },
+    // {
+    //   headerName: "CV/Resume",
+    //   field: "media",
+    //   width: 200,
+    //   filter: false,
+    //   sortable: false,
+    //   editable: false,
+    //   cellRenderer: (params) => {
+    //     const cvFiles =
+    //       params.data.media
+    //         ?.filter((m) => m.category === "cv")
+    //         ?.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) ||
+    //       [];
+    //     const latestCV = cvFiles[0];
+    //     if (!latestCV) return <>No CV</>;
+    //     return (
+    //       <a
+    //         href={`/${latestCV.file_path}`}
+    //         target="_blank"
+    //         rel="noopener noreferrer"
+    //         className="d-inline-block"
+    //       >
+    //         Download CV
+    //       </a>
+    //     );
+    //   },
+    // },
+    // {
+    //   headerName: "Job Letter",
+    //   field: "media",
+    //   filter: false,
+    //   sortable: false,
+    //   editable: false,
+    //   cellRenderer: (params) => {
+    //     const jobLetterFiles =
+    //       params.data.media
+    //         ?.filter((m) => m.category === "job_letter")
+    //         ?.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) ||
+    //       [];
+    //     const jobLetter = jobLetterFiles[0];
+    //     if (!jobLetter)
+    //       return (
+    //         <>
+    //           ❌❌{" "}
+    //           <button
+    //             className="btn btn-sm btn-primary"
+    //             onClick={() => showDrawer("GenerateJobLetter", params.data)}
+    //           >
+    //             Generate
+    //           </button>
+    //         </>
+    //       );
+    //     return (
+    //       <div className="d-flex">
+    //         <a
+    //           href={`/${jobLetter.file_path}`}
+    //           target="_blank"
+    //           rel="noopener noreferrer"
+    //           className="btn btn-sm btn-info me-1 text-white"
+    //         >
+    //           View Letter
+    //         </a>
+    //         <button
+    //           className="btn btn-sm btn-primary"
+    //           onClick={() => showDrawer("GenerateJobLetter", params.data)}
+    //         >
+    //           Re Generate
+    //         </button>
+    //       </div>
+    //     );
+    //   },
+    // },
     {
       headerName: "CV/Resume",
       field: "media",
@@ -42,13 +114,9 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
       sortable: false,
       editable: false,
       cellRenderer: (params) => {
-        const cvFiles =
-          params.data.media
-            ?.filter((m) => m.category === "cv")
-            ?.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) ||
-          [];
-        const latestCV = cvFiles[0];
+        const latestCV = params.data.media?.find((m) => m.category === "cv");
         if (!latestCV) return <>No CV</>;
+
         return (
           <a
             href={`/${latestCV.file_path}`}
@@ -68,13 +136,11 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
       sortable: false,
       editable: false,
       cellRenderer: (params) => {
-        const jobLetterFiles =
-          params.data.media
-            ?.filter((m) => m.category === "job_letter")
-            ?.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) ||
-          [];
-        const jobLetter = jobLetterFiles[0];
-        if (!jobLetter)
+        const jobLetter = params.data.media?.find(
+          (m) => m.category === "job_letter"
+        );
+
+        if (!jobLetter) {
           return (
             <>
               ❌❌{" "}
@@ -86,6 +152,8 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
               </button>
             </>
           );
+        }
+
         return (
           <div className="d-flex">
             <a
@@ -100,12 +168,13 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
               className="btn btn-sm btn-primary"
               onClick={() => showDrawer("GenerateJobLetter", params.data)}
             >
-              Re Generate
+              Re-Generate
             </button>
           </div>
         );
       },
     },
+
     {
       headerName: "Email",
       headerTooltip: "Candiate Email",
@@ -162,7 +231,7 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
       headerName: "Application Status",
       field: "status",
       headerTooltip: "Candidate Application Status",
-      pinned: "right",
+
       editable: false,
       width: "150",
       cellRenderer: (params) => {
@@ -191,7 +260,7 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
       headerName: "Job Letter Status",
       field: "job_letter",
       headerTooltip: "Job Offer Letter Status",
-      pinned: "right",
+
       editable: false,
       width: "150",
       cellRenderer: (params) => {
@@ -218,7 +287,7 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
       headerName: "Issue Date",
       headerTooltip: "Job Letter Status",
       field: "job_letter_issue_date",
-      pinned: "right",
+
       floatingFilter: false,
       filter: "agDateColumnFilter",
       width: "100",
@@ -234,7 +303,7 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
       filter: false,
       editable: false,
       sortable: false,
-      pinned: "right",
+
       width: 150,
       cellRenderer: (params) => (
         <>
