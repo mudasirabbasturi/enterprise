@@ -15,10 +15,6 @@ ModuleRegistry.registerModules([
   AllEnterpriseModule,
   IntegratedChartsModule.with(AgChartsEnterpriseModule),
 ]);
-// override noisy methods with no-ops
-// LicenseManager.prototype.outputExpiredTrialKey = function () {};
-// LicenseManager.prototype.outputMissingLicenseKey = function () {};
-// LicenseManager.prototype.outputExpiredKey = function () {};
 LicenseManager.setLicenseKey("test");
 const gridTheme = themeAlpine.withParams({
   spacing: 6,
@@ -66,12 +62,10 @@ const gridOptionsConfig = {
     }
   },
   onColumnMoved: (params) => {
-    // localStorage.setItem(
-    //   STORAGE_KEY,
-    //   JSON.stringify(params.api.getColumnState())
-    // );
-    var columnState = JSON.stringify(params.columnApi.getColumnState());
-    localStorage.setItem("myColumnState", columnState);
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(params.api.getColumnState())
+    );
   },
   onColumnPinned: (params) => {
     localStorage.setItem(

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
+
 import {
   AgGridReact,
   gridTheme,
@@ -38,7 +39,6 @@ const Index = ({ branches }) => {
       field: "name",
       cellEditor: "agLargeTextCellEditor",
       cellEditorPopup: true,
-      pinned: "left",
     },
     {
       headerName: "Main/Sub",
@@ -97,7 +97,6 @@ const Index = ({ branches }) => {
       filter: false,
       editable: false,
       sortable: false,
-      pinned: "right",
       cellRenderer: (params) => (
         <>
           <div className="btn-group btn-group-sm">
@@ -221,13 +220,13 @@ const Index = ({ branches }) => {
             pagination={true}
             paginationAutoPageSize={true}
             sideBar={sideBarConfig}
-            // State persistence
             onGridReady={gridOptionsConfig.onGridReady}
             onColumnMoved={gridOptionsConfig.onColumnMoved}
             onColumnPinned={gridOptionsConfig.onColumnPinned}
             onColumnVisible={gridOptionsConfig.onColumnVisible}
             onColumnResized={gridOptionsConfig.onColumnResized}
             onSortChanged={gridOptionsConfig.onSortChanged}
+            maintainColumnOrder={true}
           />
         </div>
       </div>

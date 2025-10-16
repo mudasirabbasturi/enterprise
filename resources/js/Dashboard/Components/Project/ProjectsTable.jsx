@@ -1066,24 +1066,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
     );
   };
 
-  const [filterText, setFilterText] = useState("");
   const gridRef = useRef(null);
-
-  // Store gridApi on ready
-  const onGridReady = useCallback((params) => {
-    gridRef.current = params.api;
-    if (gridOptionsConfig.onGridReady) {
-      gridOptionsConfig.onGridReady(params);
-    }
-  }, []);
-
-  // Quick filter change handler
-  // const onFilterTextBoxChanged = useCallback((e) => {
-  //   const value = e.target.value;
-  //   setFilterText(value);
-  //   gridRef.current?.setGridOption("quickFilterText", value);
-  // }, []);
-
   const onFilterTextBoxChanged = useCallback(() => {
     gridRef.current.api.setGridOption(
       "quickFilterText",
@@ -1116,13 +1099,13 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         pagination={true}
         paginationAutoPageSize={true}
         sideBar={sideBarConfig}
-        // State persistence
         onGridReady={gridOptionsConfig.onGridReady}
         onColumnMoved={gridOptionsConfig.onColumnMoved}
         onColumnPinned={gridOptionsConfig.onColumnPinned}
         onColumnVisible={gridOptionsConfig.onColumnVisible}
         onColumnResized={gridOptionsConfig.onColumnResized}
         onSortChanged={gridOptionsConfig.onSortChanged}
+        maintainColumnOrder={true}
         detailCellRenderer={DetailCellRenderer}
       />
     </>
