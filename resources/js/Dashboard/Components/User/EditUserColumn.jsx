@@ -169,6 +169,8 @@ const EditUserColumn = forwardRef(
                             { value: "active", label: "Active" },
                             { value: "inactive", label: "In Active" },
                             { value: "suspended", label: "Suspended" },
+                            { value: "hold", label: "Hold" },
+                            { value: "pending", label: "Pending" },
                           ]
                         : []
                     }

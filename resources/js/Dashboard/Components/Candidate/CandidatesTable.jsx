@@ -348,14 +348,14 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
 
   const confirmDelJobApplicant = (id) =>
     new Promise((resolve) => {
-      const url = route("user.destroy", id);
+      const url = route("candidate.destroy", id);
       router.delete(url, {
         preserveScroll: true,
         onSuccess: () => {
           resolve();
         },
         onError: () => {
-          message.error("Failed to delete user");
+          message.error("Failed to delete candidate");
         },
       });
     });
@@ -380,6 +380,7 @@ const CandidatesTable = ({ candidates, showDrawer }) => {
         onColumnVisible={gridOptionsConfig.onColumnVisible}
         onColumnResized={gridOptionsConfig.onColumnResized}
         onSortChanged={gridOptionsConfig.onSortChanged}
+        maintainColumnOrder={true}
       />
     </>
   );

@@ -107,71 +107,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/application/candidates', [CandidateController::class, 'Index'])->name('application.index');
     Route::put('/application/candidates/{id}', [CandidateController::class, 'GenerateJobLetter'])->name('generate.jobletter');
     Route::put('/application/stats/{id}', [CandidateController::class, 'Stats'])->name('job_letter.stats');
-
+    Route::delete('/application/destroy/{id}', [CandidateController::class, 'Destroy'])->name('candidate.destroy');
 });
 
-// Route::get('/inject-projects', function () {
-//     DB::statement("
-//         INSERT INTO projects (
-//             project_title,
-//             project_address,
-//             project_pricing,
-//             project_area,
-//             project_construction_type,
-//             project_line_items_pricing,
-//             project_floor_number,
-//             project_main_scope,
-//             project_scope_details,
-//             project_template,
-//             project_init_link,
-//             project_final_link,
-//             project_admin_notes,
-//             project_notes_estimator,
-//             notes_private,
-//             budget_total,
-//             deduction_amount,
-//             project_due_date,
-//             project_points,
-//             project_status,
-//             project_source,
-//             preview_status,
-//             created_at,
-//             updated_at
-//         )
-//         SELECT
-//             project_title,
-//             project_address,
-//             pricing,
-//             project_area,
-//             CASE 
-//                 WHEN LOWER(project_commercial_residential) IN ('commercial','residential') 
-//                     THEN LOWER(project_commercial_residential)
-//                 ELSE NULL
-//             END AS project_construction_type, -- 👈 safer
-//             project_line_items_pricing,
-//             project_floor_number,
-//             project_main_scope,
-//             project_scope_details,
-//             project_template,
-//             project_onside_link,
-//             project_ofside_link,
-//             admin_project_notes,
-//             project_notes_onside,
-//             client_name_for_admin,
-//             project_budget,
-//             project_deduction,
-//             project_due_date,
-//             points,
-//             project_status,
-//             CASE 
-//                 WHEN project_source = 'insource' THEN 'InSource'
-//                 WHEN project_source = 'outsource' THEN 'OutSource'
-//                 ELSE 'InSource'
-//             END,
-//             status,
-//             created_at,
-//             updated_at
-//         FROM dataprojects;
-//     ");
-//     return '✅ Projects injected successfully (case fixed)!';
-// });
+Route::get('/job/apply',[CandidateController::class, 'applicationForm'])->name('application.form');
+Route::post('/job/apply',[CandidateController::class, 'submitApplicationForm'])->name('submit.application.form');

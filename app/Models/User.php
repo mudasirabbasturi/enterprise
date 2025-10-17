@@ -34,6 +34,8 @@ class User extends Authenticatable
         'notes',
         'notes_private',
         'status',
+        'reference_name',
+        'reference__phone',
         'branch_id',
         'department_id',
         'designation_id',

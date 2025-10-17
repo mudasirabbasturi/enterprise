@@ -121,6 +121,8 @@ class PermissionSeeder extends Seeder
             ['model' => 'ProjectTeamMember', 'type' => 'route', 'name' => 'View Score Details'],
             ['model' => 'ProjectTeamMember', 'type' => 'route', 'name' => 'View Personal Score Details'],
             ['model' => 'ProjectTeamMember', 'type' => 'route', 'name' => 'Add/Update Score'],
+            ['model' => 'General', 'type' => 'column', 'name' => 'View Report'],
+            ['model' => 'General', 'type' => 'column', 'name' => 'View Project Chart'],
         ];
 
         foreach ($permissions as $perm) {

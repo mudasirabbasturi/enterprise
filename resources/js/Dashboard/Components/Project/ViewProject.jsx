@@ -59,10 +59,19 @@ const ViewProject = (props) => {
                   children: (
                     <>
                       <ul style={{ listStyleType: "circle" }}>
-                        <li>
+                        {/* <li>
                           Project Address:&nbsp;&nbsp;&nbsp;
                           {selectedProject.project_address
                             ? selectedProject.project_address
+                            : "Not Added, Add New.."}
+                        </li> */}
+                        <li>
+                          Project Address:&nbsp;&nbsp;&nbsp;
+                          {selectedProject.project_address
+                            ? selectedProject.project_address.replace(
+                                /<[^>]+>/g,
+                                ""
+                              )
                             : "Not Added, Add New.."}
                         </li>
                         <li>
@@ -129,13 +138,19 @@ const ViewProject = (props) => {
                         <li>
                           Project Main Scope:&nbsp;&nbsp;&nbsp;
                           {selectedProject.project_main_scope
-                            ? selectedProject.project_main_scope
+                            ? selectedProject.project_main_scope.replace(
+                                /<[^>]+>/g,
+                                ""
+                              )
                             : "Not Added, Add New.."}
                         </li>
                         <li>
                           Project Scope Details:&nbsp;&nbsp;&nbsp;
                           {selectedProject.project_scope_details
-                            ? selectedProject.project_scope_details
+                            ? selectedProject.project_scope_details.replace(
+                                /<[^>]+>/g,
+                                ""
+                              )
                             : "Not Added, Add New.."}
                         </li>
                         <li>
@@ -173,20 +188,37 @@ const ViewProject = (props) => {
                       <ul style={{ listStyleType: "circle" }}>
                         <li>
                           Initial Link:&nbsp;&nbsp;&nbsp;
-                          {selectedProject.project_init_link
-                            ? selectedProject.project_init_link
-                            : "Not Added, Add New.."}
+                          {selectedProject.project_init_link ? (
+                            <a
+                              href={selectedProject.project_init_link}
+                              target="_blank"
+                            >
+                              Admin Link
+                            </a>
+                          ) : (
+                            "Not Added, Add New.."
+                          )}
                         </li>
                         <li>
                           Final Link:&nbsp;&nbsp;&nbsp;
-                          {selectedProject.project_final_link
-                            ? selectedProject.project_final_link
-                            : "Not Added, Add New.."}
+                          {selectedProject.project_final_link ? (
+                            <a
+                              href={selectedProject.project_final_link}
+                              target="_blank"
+                            >
+                              Estimator Link
+                            </a>
+                          ) : (
+                            "Not Added, Add New.."
+                          )}
                         </li>
                         <li>
                           Admin, Supervisor Notes:&nbsp;&nbsp;&nbsp;
                           {selectedProject.project_admin_notes
-                            ? selectedProject.project_admin_notes
+                            ? selectedProject.project_admin_notes.replace(
+                                /<[^>]+>/g,
+                                ""
+                              )
                             : "Not Added, Add New.."}
                         </li>
                         <li>
@@ -198,7 +230,10 @@ const ViewProject = (props) => {
                         <li>
                           Priviate Note:&nbsp;&nbsp;&nbsp;
                           {selectedProject.notes_private
-                            ? selectedProject.notes_private
+                            ? selectedProject.notes_private.replace(
+                                /<[^>]+>/g,
+                                ""
+                              )
                             : "Not Added, Add New.."}
                         </li>
                         <hr />

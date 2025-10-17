@@ -224,6 +224,29 @@ const UsersTable = ({ users, showDrawer }) => {
       },
     },
     {
+      headerName: "Reference Name",
+      headerTooltip: "reference Name",
+      field: "reference_name",
+      editable: false,
+      cellRenderer: (params) => {
+        return params.data?.reference_name
+          ? params.data.reference_name
+          : "❌❌❌";
+      },
+    },
+    {
+      headerName: "Reference Phone",
+      headerTooltip: "Reference Phone",
+      field: "reference__phone",
+      editable: false,
+      cellRenderer: (params) => {
+        return params.data?.reference__phone
+          ? params.data.reference__phone
+          : "❌❌❌";
+      },
+    },
+
+    {
       field: "notes",
       editable: true,
       cellEditorPopup: true,

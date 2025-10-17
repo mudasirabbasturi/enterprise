@@ -53,6 +53,8 @@ const AddUser = forwardRef(
       notes: "",
       notes_private: "",
       status: "active",
+      reference_name: "",
+      reference__phone: "",
       branch_id: "",
       department_id: "",
       designation_id: "",
@@ -567,6 +569,8 @@ const AddUser = forwardRef(
                         { value: "active", label: "Active" },
                         { value: "inactive", label: "In Active" },
                         { value: "suspended", label: "Suspended" },
+                        { value: "hold", label: "Hold" },
+                        { value: "pending", label: "Pending" },
                       ]}
                       optionFilterProp="label"
                       value={values.status || "active"}
@@ -576,6 +580,52 @@ const AddUser = forwardRef(
                       disabled={loading}
                     />
                   </div>
+                </div>
+              </div>
+              <div>
+                <hr className="mt-2 mb-2"></hr>
+                <h6 className="m-0" style={{ color: "blue" }}>
+                  Reference Name \ Phone:
+                </h6>
+                <hr className="mt-2 mb-2"></hr>
+                <div className="d-flex align-items-center mb-3">
+                  <label
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
+                    htmlFor="name"
+                  >
+                    Reference Name:
+                    <hr className="mb-1 mt-0"></hr>
+                  </label>
+                  <Input
+                    placeholder="Reference Name"
+                    allowClear
+                    value={values.reference_name}
+                    onChange={(e) =>
+                      onChangeValue("reference_name", e.target.value)
+                    }
+                    disabled={loading}
+                  />
+                </div>
+                <div className="d-flex align-items-center mb-3">
+                  <label
+                    className="me-1"
+                    style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
+                    htmlFor="phone"
+                  >
+                    Reference Phone:
+                    <hr className="mb-1 mt-0"></hr>
+                  </label>
+                  <Input
+                    className="me-1"
+                    placeholder="Reference Phone"
+                    allowClear
+                    value={values.reference__phone}
+                    onChange={(e) =>
+                      onChangeValue("reference__phone", e.target.value)
+                    }
+                    disabled={loading}
+                  />
                 </div>
               </div>
               {/* Joining, Hiring, Leavging Date */}

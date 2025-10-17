@@ -200,7 +200,8 @@ const EditCandidate = forwardRef(({ data, onClose, setParentLoading }, ref) => {
                   </span>
                   {latestCV ? (
                     <a
-                      href={latestCV.file_path}
+                      // href={latestCV.file_path}
+                      href={`/${latestCV.file_path}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{

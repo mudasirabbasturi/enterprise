@@ -42,6 +42,12 @@ const DashboardLayout = ({ children }) => {
   const route = useRoute();
   const { props } = usePage();
   const user = props.auth.user;
+
+  const hasPermission = (userpermission, permName) =>
+    userpermission?.some((p) => p.name === permName);
+  const userPermissions = props.auth.user?.role?.permissions || [];
+  const can = (perm) => hasPermission(userPermissions, perm);
+
   const [collapsed, setCollapsed] = useState(false);
   const [openKeys, setOpenKeys] = useState([]);
   const [savedOpenKeys, setSavedOpenKeys] = useState([]);
@@ -200,10 +206,10 @@ const DashboardLayout = ({ children }) => {
                 >
                   <img
                     style={{
-                      width: "60%",
+                      width: "100%",
                       height: "auto",
                     }}
-                    src="/uploads/images/logo-collapse.png"
+                    src="/uploads/images/bidwinner-logo.jpg"
                     alt="Logo Collapse"
                   />
                 </div>
@@ -229,22 +235,26 @@ const DashboardLayout = ({ children }) => {
             </div>{" "}
             <div className="right">
               <div className="d-flex">
-                <div>
-                  <button
-                    className="btn btn-sm btn-outline-primary me-3"
-                    onClick={() => router.visit(route("project.count.chart"))}
-                  >
-                    <BarChartOutlined />
-                  </button>
-                </div>
-                <div>
-                  <button
-                    className="btn btn-sm btn-primary me-3"
-                    onClick={() => router.visit(route("project.report"))}
-                  >
-                    Project Report
-                  </button>
-                </div>
+                {can("View Project Chart") && (
+                  <div>
+                    <button
+                      className="btn btn-sm btn-outline-primary me-3"
+                      onClick={() => router.visit(route("project.count.chart"))}
+                    >
+                      <BarChartOutlined />
+                    </button>
+                  </div>
+                )}
+                {can("View Report") && (
+                  <div>
+                    <button
+                      className="btn btn-sm btn-primary me-3"
+                      onClick={() => router.visit(route("project.report"))}
+                    >
+                      Project Report
+                    </button>
+                  </div>
+                )}
                 <div>
                   <button
                     className="btn btn-sm btn-primary me-3"
