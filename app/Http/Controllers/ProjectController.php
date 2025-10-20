@@ -326,15 +326,15 @@ class ProjectController extends Controller
                 },
                 'client'
             ])->find($id);
-            // Trigger Pusher AFTER full project is loaded
+
             $options = [ 
                 'cluster' => 'ap2', 
                 'useTLS' => true, 
             ];
             $pusher = new Pusher(
-                '5158315c26b8f6732773', // app key
-                '9ba1bfd3baa3f4ec2a4c', // app secret
-                '2057639', // app id
+                '5158315c26b8f6732773',
+                '9ba1bfd3baa3f4ec2a4c',
+                '2057639',
                 $options
             );
             $pusher->trigger('project-channel', 'event-project-joined', [

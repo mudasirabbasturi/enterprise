@@ -1,12 +1,10 @@
-import {
-  Tooltip,
-  Collapse,
-  Avatar,
-  UserOutlined, // ant icon
-} from "@shared/ui";
+import { Tooltip, Collapse, Avatar, usePage } from "@shared/ui";
 const ViewProject = (props) => {
   const { project: selectedProject, onClose } = props;
+  const { auth } = usePage().props;
+  const user = auth?.user ?? {};
   const members = selectedProject.project_team_members || [];
+
   return (
     <>
       <div className="container-fluid p-0">
@@ -59,12 +57,6 @@ const ViewProject = (props) => {
                   children: (
                     <>
                       <ul style={{ listStyleType: "circle" }}>
-                        {/* <li>
-                          Project Address:&nbsp;&nbsp;&nbsp;
-                          {selectedProject.project_address
-                            ? selectedProject.project_address
-                            : "Not Added, Add New.."}
-                        </li> */}
                         <li>
                           Project Address:&nbsp;&nbsp;&nbsp;
                           {selectedProject.project_address
@@ -295,7 +287,7 @@ const ViewProject = (props) => {
               </div>
             </div>
             <hr className="mb-0 mt-0"></hr>
-            <Collapse
+            {/* <Collapse
               className="mb-3 mt-3"
               items={[
                 {
@@ -310,6 +302,11 @@ const ViewProject = (props) => {
                     <>
                       <ul style={{ listStyleType: "circle" }}>
                         {members.map((per, index) => {
+                          const user = props?.auth?.user ?? {};
+                          const isSuperAdmin = user.role_id === 1;
+                          const isJoined = members.some(
+                            (m) => m.user_id === user.id
+                          );
                           const name = per.user?.name || "Unknown";
                           const steps = per.steps || [];
                           return (
@@ -392,10 +389,138 @@ const ViewProject = (props) => {
                         })}
                       </ul>
                       <hr />
-                      <li>
-                        Details: ? <br></br>
-                        Place holder .....
-                      </li>
+                    </>
+                  ),
+                },
+              ]}
+              size="small"
+            /> */}
+            <Collapse
+              className="mb-3 mt-3"
+              items={[
+                {
+                  label: (
+                    <>
+                      <h6 className="mb-0" style={{ color: "#1890ff" }}>
+                        Joined Member, Steps & Details:
+                      </h6>
+                    </>
+                  ),
+                  children: (
+                    <>
+                      {(() => {
+                        const isSuperAdmin = user.role_id === 1;
+                        const isJoined = members.some(
+                          (m) => m.user_id === user.id
+                        );
+
+                        // 🔒 Permission check
+                        if (!isSuperAdmin && !isJoined) {
+                          return (
+                            <p
+                              style={{
+                                color: "#999",
+                                fontStyle: "italic",
+                                marginLeft: "10px",
+                              }}
+                            >
+                              N/A (You’re not part of this project’s estimator
+                              team)
+                            </p>
+                          );
+                        }
+                        return (
+                          <>
+                            <ul style={{ listStyleType: "circle" }}>
+                              {members.map((per, index) => {
+                                const name = per.user?.name || "Unknown";
+                                const steps = per.steps || [];
+
+                                return (
+                                  <li key={index}>
+                                    <li>
+                                      <strong>{name}</strong>
+                                      <li
+                                        style={{
+                                          fontWeight: "600",
+                                          textDecoration: "underline",
+                                          listStyleType: "none",
+                                        }}
+                                      >
+                                        Project Steps:
+                                      </li>
+                                      <ul
+                                        style={{
+                                          listStyleType: "square",
+                                          paddingLeft: 20,
+                                        }}
+                                      >
+                                        {Array.isArray(steps) &&
+                                        steps.length > 0 ? (
+                                          steps.map((step, stepIndex) => (
+                                            <li key={stepIndex}>{step}</li>
+                                          ))
+                                        ) : (
+                                          <li>No steps</li>
+                                        )}
+                                      </ul>
+                                      <li
+                                        style={{
+                                          fontWeight: "600",
+                                          textDecoration: "underline",
+                                          listStyleType: "none",
+                                        }}
+                                      >
+                                        More Details:
+                                      </li>
+                                      <ul
+                                        style={{
+                                          listStyleType: "square",
+                                          paddingLeft: 20,
+                                        }}
+                                      >
+                                        <li>
+                                          Started At:{" "}
+                                          {per.started_at
+                                            ? new Date(
+                                                per.started_at
+                                              ).toLocaleDateString()
+                                            : "—"}
+                                        </li>
+                                        <li>
+                                          Completed At:{" "}
+                                          {per.completed_at
+                                            ? new Date(
+                                                per.completed_at
+                                              ).toLocaleDateString()
+                                            : "—"}
+                                        </li>
+                                        <li>
+                                          Duration:{" "}
+                                          {per.completed_at && per.started_at
+                                            ? `${Math.round(
+                                                (new Date(per.completed_at) -
+                                                  new Date(per.started_at)) /
+                                                  (1000 * 60 * 60 * 24)
+                                              )} days`
+                                            : "Not completed yet"}
+                                        </li>
+                                        <li>
+                                          Points Gained:{" "}
+                                          {per.points_gain ?? "—"}
+                                        </li>
+                                        <li>Notes: {per.notes ?? "—"}</li>
+                                      </ul>
+                                    </li>
+                                    <hr />
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                            <hr />
+                          </>
+                        );
+                      })()}
                     </>
                   ),
                 },

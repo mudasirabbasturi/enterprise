@@ -58,7 +58,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
     const timerRef = useRef(null);
     const cellRef = useRef(null);
     const updateCountdown = () => {
-      if (!params.value) return "⭕⭕❌❌🚫🚫";
+      if (!params.value) return "N/A";
       const dueDate = new Date(params.value);
       if (isNaN(dueDate)) return "Invalid Date";
       const now = new Date();
@@ -88,6 +88,42 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
   const [localRowData, setLocalRowData] = useState(projects);
 
   const [colDefs, setColDefs] = useState([
+    // {
+    //   headerName: "Project Points",
+    //   headerTooltip: "Estimator Points",
+    //   field: "project_points",
+    //   editable: false,
+    //   filter: false,
+    //   sortable: false,
+    //   cellRenderer: "agGroupCellRenderer",
+    //   cellRendererParams: {
+    //     innerRenderer: (params) => {
+    //       const data = params.data;
+    //       if (!data) return null;
+
+    //       const total = Number(data.project_points || 0);
+    //       const members = data.project_team_members || [];
+    //       const used = members.reduce(
+    //         (sum, m) => sum + Number(m.points_gain || 0),
+    //         0
+    //       );
+    //       const left = Math.max(total - used, 0);
+
+    //       let color = "green";
+    //       if (left === 0) color = "red";
+    //       else if (left < total / 2) color = "orange";
+
+    //       return (
+    //         <span style={{ fontWeight: 600 }}>
+    //           {total}
+    //           <span style={{ color: "#555" }}> | </span>
+    //           <span style={{ color: "#007bff" }}>Used: {used}</span>
+    //           <span style={{ color }}>{` / Left: ${left}`}</span>
+    //         </span>
+    //       );
+    //     },
+    //   },
+    // },
     {
       headerName: "Project Points",
       headerTooltip: "Estimator Points",
@@ -97,10 +133,12 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
       sortable: false,
       cellRenderer: "agGroupCellRenderer",
       cellRendererParams: {
+        suppressCount: true,
         innerRenderer: (params) => {
           const data = params.data;
           if (!data) return null;
 
+          const user = props?.auth?.user ?? {};
           const total = Number(data.project_points || 0);
           const members = data.project_team_members || [];
           const used = members.reduce(
@@ -108,11 +146,21 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
             0
           );
           const left = Math.max(total - used, 0);
-
+          const isJoined = members.some((m) => m.user_id === user.id);
+          const isSuperAdmin = user.role_id === 1;
+          if (!isSuperAdmin && !isJoined) {
+            if (params.node) {
+              params.node.setExpanded(false);
+              params.node.expanded = false;
+              params.node.master = false; // hides expand arrow
+            }
+            return (
+              <span style={{ color: "#999", fontStyle: "italic" }}>N/A</span>
+            );
+          }
           let color = "green";
           if (left === 0) color = "red";
           else if (left < total / 2) color = "orange";
-
           return (
             <span style={{ fontWeight: 600 }}>
               {total}
@@ -122,6 +170,14 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
             </span>
           );
         },
+      },
+      masterDetail: true,
+      isRowMaster: (params) => {
+        const user = props?.auth?.user ?? {};
+        const members = params.data?.project_team_members || [];
+        const isJoined = members.some((m) => m.user_id === user.id);
+        const isSuperAdmin = user.role_id === 1;
+        return isSuperAdmin || isJoined;
       },
     },
     {
@@ -289,7 +345,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         if (params.data?.project_title) {
           return params.data?.project_title;
         }
-        return "⭕❌❌🚫";
+        return "N/A";
       },
     },
     {
@@ -304,7 +360,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
           const text = div.textContent || div.innerText || "";
           return text.length > 100 ? text.substring(0, 100) + "..." : text;
         } else {
-          return "⭕❌❌🚫";
+          return "N/A";
         }
       },
     },
@@ -325,7 +381,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
                   ? text.substring(0, 100) + "..."
                   : text;
               } else {
-                return "⭕❌❌🚫";
+                return "N/A";
               }
             },
           },
@@ -347,7 +403,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
                   ? text.substring(0, 100) + "..."
                   : text;
               } else {
-                return "⭕❌❌🚫";
+                return "N/A";
               }
             },
           },
@@ -370,7 +426,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
                   ? text.substring(0, 100) + "..."
                   : text;
               } else {
-                return "⭕❌❌🚫";
+                return "N/A";
               }
             },
           },
@@ -389,7 +445,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
           const text = div.textContent || div.innerText || "";
           return text.length > 100 ? text.substring(0, 100) + "..." : text;
         } else {
-          return "⭕❌❌🚫";
+          return "N/A";
         }
       },
     },
@@ -408,7 +464,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
                   ? text.substring(0, 100) + "..."
                   : text;
               } else {
-                return "⭕❌❌🚫";
+                return "N/A";
               }
             },
           },
@@ -432,7 +488,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
                   </>
                 );
               } else {
-                return "⭕⭕❌❌🚫🚫";
+                return "N/A";
               }
             },
           },
@@ -453,7 +509,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
             </>
           );
         } else {
-          return "⭕⭕❌❌🚫🚫";
+          return "N/A";
         }
       },
     },
@@ -465,7 +521,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         if (params.data.project_pricing) {
           return params.data.project_pricing;
         } else {
-          return "⭕⭕❌❌🚫🚫";
+          return "N/A";
         }
       },
     },
@@ -477,7 +533,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         if (params.data.project_area) {
           return params.data.project_area;
         } else {
-          return "⭕⭕❌❌🚫🚫";
+          return "N/A";
         }
       },
     },
@@ -489,7 +545,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         if (params.data.project_construction_type) {
           return params.data.project_construction_type;
         } else {
-          return "⭕⭕❌❌🚫🚫";
+          return "N/A";
         }
       },
     },
@@ -501,7 +557,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         if (params.data.project_line_items_pricing) {
           return params.data.project_line_items_pricing;
         } else {
-          return "⭕⭕❌❌🚫🚫";
+          return "N/A";
         }
       },
     },
@@ -513,16 +569,40 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         if (params.data.project_floor_number) {
           return params.data.project_floor_number;
         } else {
-          return "⭕⭕❌❌🚫🚫";
+          return "N/A";
         }
       },
     },
+    // {
+    //   headerName: "Due Date | Time Left",
+    //   field: "project_due_date",
+    //   cellRenderer: LiveCountdownCell,
+    //   filter: false,
+    //   editable: false,
+    // },
     {
-      headerName: "Due Date | Time Left",
+      headerName: "Due Date",
       field: "project_due_date",
-      cellRenderer: LiveCountdownCell,
-      filter: false,
       editable: false,
+      cellEditor: "agDateCellEditor",
+      cellRenderer: function (params) {
+        if (params.value) {
+          const date = new Date(params.value);
+          if (!isNaN(date)) {
+            const options = {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+              weekday: "long",
+            };
+            return new Intl.DateTimeFormat("en-US", options).format(date);
+          } else {
+            return "Invalid Date";
+          }
+        } else {
+          return "Not Set Yet Now.";
+        }
+      },
     },
     {
       headerName: "| Days | Hrs | Min | Sec |",
@@ -592,7 +672,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
           const text = div.textContent || div.innerText || "";
           return text.length > 100 ? text.substring(0, 100) + "..." : text;
         } else {
-          return "⭕❌❌🚫";
+          return "N/A";
         }
       },
     },
@@ -607,7 +687,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
           const text = div.textContent || div.innerText || "";
           return text.length > 100 ? text.substring(0, 100) + "..." : text;
         } else {
-          return "⭕❌❌🚫";
+          return "N/A";
         }
       },
     },
@@ -619,7 +699,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         if (params.data.project_template) {
           return params.data.project_template;
         } else {
-          return "⭕⭕❌❌🚫🚫";
+          return "N/A";
         }
       },
     },
@@ -634,7 +714,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
               if (params.data?.budget_total) {
                 return params.data?.budget_total;
               }
-              return "⭕❌❌🚫";
+              return "N/A";
             },
           },
         ]
@@ -650,7 +730,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
               if (params.data?.deduction_amount) {
                 return params.data?.deduction_amount;
               }
-              return "⭕❌❌🚫";
+              return "N/A";
             },
           },
         ]
@@ -670,7 +750,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
                 const total = budget - deduction;
                 return `$${total}`;
               }
-              return "⭕❌❌🚫";
+              return "N/A";
             },
           },
         ]
@@ -925,7 +1005,8 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         params.colDef.field === "actions" ||
         params.colDef.field === "teams" ||
         params.colDef.field === "client.notes" ||
-        params.colDef.field === "final_Price"
+        params.colDef.field === "final_Price" ||
+        (params.colDef.field === "project_points" && user.role_id !== 1)
       )
         return;
       showDrawer("EditColumn", {

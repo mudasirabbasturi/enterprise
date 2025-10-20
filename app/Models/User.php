@@ -57,14 +57,14 @@ class User extends Authenticatable
         ];
     }
 
-    protected static function booted(): void
-    {
-        static::creating(function (User $user) {
-            $nextNumber = (static::max('id') ?? 0) + 1;
-            $padTo = $nextNumber > 9_999 ? 5 : 4;
-            $user->employee_id = 'report#' . str_pad($nextNumber, $padTo, '0', STR_PAD_LEFT);
-        });
-    }
+    // protected static function booted(): void
+    // {
+    //     static::creating(function (User $user) {
+    //         $nextNumber = (static::max('id') ?? 0) + 1;
+    //         $padTo = $nextNumber > 9_999 ? 5 : 4;
+    //         $user->employee_id = 'report#' . str_pad($nextNumber, $padTo, '0', STR_PAD_LEFT);
+    //     });
+    // }
 
     public function media(): HasMany
     {

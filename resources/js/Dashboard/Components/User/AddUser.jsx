@@ -88,52 +88,52 @@ const AddUser = forwardRef(
       });
     };
 
-    // const handleSubmit = () => {
-    //   setLoading(true);
-    //   setParentLoading?.(true);
-    //   router.post(route("user.store"), values, {
-    //     preserveScroll: true,
-    //     onSuccess: () => {
-    //       setValues(defaultValues);
-    //       onClose();
-    //     },
-    //     onError: () => {
-    //       setParentLoading?.(false);
-    //       setLoading(false);
-    //     },
-    //     onFinish: () => {
-    //       setParentLoading?.(false);
-    //       setLoading(false);
-    //     },
-    //   });
-    // };
-
-    const handleSubmit = async () => {
-      try {
-        setLoading(true);
-        setParentLoading?.(true);
-        const { data } = await axios.post(route("user.store"), values);
-        setValues(defaultValues);
-        onClose();
-        if (data.user) {
-          api.success({
-            message: "success",
-            description: data.message,
-            placement: "topRight",
-          });
-          setRowData((prev) => [data.user, ...prev]);
-        }
-      } catch (error) {
-        api.error({
-          message: "error",
-          description: "Failed to create branch",
-          placement: "topRight",
-        });
-      } finally {
-        setLoading(false);
-        setParentLoading?.(false);
-      }
+    const handleSubmit = () => {
+      setLoading(true);
+      setParentLoading?.(true);
+      router.post(route("user.store"), values, {
+        preserveScroll: true,
+        onSuccess: () => {
+          setValues(defaultValues);
+          onClose();
+        },
+        onError: () => {
+          setParentLoading?.(false);
+          setLoading(false);
+        },
+        onFinish: () => {
+          setParentLoading?.(false);
+          setLoading(false);
+        },
+      });
     };
+
+    // const handleSubmit = async () => {
+    //   try {
+    //     setLoading(true);
+    //     setParentLoading?.(true);
+    //     const { data } = await axios.post(route("user.store"), values);
+    //     setValues(defaultValues);
+    //     onClose();
+    //     if (data.user) {
+    //       api.success({
+    //         message: "success",
+    //         description: data.message,
+    //         placement: "topRight",
+    //       });
+    //       setRowData((prev) => [data.user, ...prev]);
+    //     }
+    //   } catch (error) {
+    //     api.error({
+    //       message: "error",
+    //       description: "Failed to create branch",
+    //       placement: "topRight",
+    //     });
+    //   } finally {
+    //     setLoading(false);
+    //     setParentLoading?.(false);
+    //   }
+    // };
 
     useImperativeHandle(ref, () => ({
       submitForm: handleSubmit,
