@@ -199,7 +199,7 @@ const DashboardLayout = ({ children }) => {
             <div className="header-left d-flex align-items-center">
               <Link href="/" className="logo-link">
                 <div
-                  className="d-flex align-items-center logo-collapsed"
+                  className="d-flex align-items-center logo-collapsed p-1"
                   style={{
                     width: "64px",
                   }}
@@ -209,7 +209,7 @@ const DashboardLayout = ({ children }) => {
                       width: "100%",
                       height: "auto",
                     }}
-                    src="/uploads/images/bidwinner-logo.jpg"
+                    src="/uploads/images/bid-winner.jpg"
                     alt="Logo Collapse"
                   />
                 </div>
