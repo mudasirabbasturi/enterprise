@@ -27,8 +27,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
   const hasPermission = (userpermission, permName) =>
     userpermission?.some((p) => p.name === permName);
   const { auth } = usePage().props;
-  const { url, component, props } = usePage();
-  console.log("Current URL:", url);
+  const { url, props } = usePage();
 
   const userPermissions = props?.auth?.user?.role?.permissions ?? [];
   const can = (perm) => hasPermission(userPermissions, perm);
@@ -55,77 +54,9 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
     userPermissions.some((perm) => perm.name === "Delete Project");
 
   const route = useRoute();
-
-  const LiveCountdownCell = (params) => {
-    const timerRef = useRef(null);
-    const cellRef = useRef(null);
-    const updateCountdown = () => {
-      if (!params.value) return "N/A";
-      const dueDate = new Date(params.value);
-      if (isNaN(dueDate)) return "Invalid Date";
-      const now = new Date();
-      const diffMs = dueDate - now;
-      if (diffMs <= 0) return `${params.value} | Expired`;
-      const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      const hours = Math.floor(
-        (diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
-      );
-      const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-      const secs = Math.floor((diffMs % (1000 * 60)) / 1000);
-      return `${params.value} | ${days}d ${hours}h ${mins}m ${secs}s`;
-    };
-
-    useEffect(() => {
-      if (!cellRef.current) return;
-      cellRef.current.innerHTML = updateCountdown();
-      timerRef.current = setInterval(() => {
-        if (cellRef.current) {
-          cellRef.current.innerHTML = updateCountdown();
-        }
-      }, 1000);
-      return () => clearInterval(timerRef.current);
-    }, [params.value]);
-    return <div ref={cellRef} />;
-  };
   const [localRowData, setLocalRowData] = useState(projects);
 
   const [colDefs, setColDefs] = useState([
-    // {
-    //   headerName: "Project Points",
-    //   headerTooltip: "Estimator Points",
-    //   field: "project_points",
-    //   editable: false,
-    //   filter: false,
-    //   sortable: false,
-    //   cellRenderer: "agGroupCellRenderer",
-    //   cellRendererParams: {
-    //     innerRenderer: (params) => {
-    //       const data = params.data;
-    //       if (!data) return null;
-
-    //       const total = Number(data.project_points || 0);
-    //       const members = data.project_team_members || [];
-    //       const used = members.reduce(
-    //         (sum, m) => sum + Number(m.points_gain || 0),
-    //         0
-    //       );
-    //       const left = Math.max(total - used, 0);
-
-    //       let color = "green";
-    //       if (left === 0) color = "red";
-    //       else if (left < total / 2) color = "orange";
-
-    //       return (
-    //         <span style={{ fontWeight: 600 }}>
-    //           {total}
-    //           <span style={{ color: "#555" }}> | </span>
-    //           <span style={{ color: "#007bff" }}>Used: {used}</span>
-    //           <span style={{ color }}>{` / Left: ${left}`}</span>
-    //         </span>
-    //       );
-    //     },
-    //   },
-    // },
     {
       headerName: "Project Points",
       headerTooltip: "Estimator Points",
@@ -575,13 +506,6 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         }
       },
     },
-    // {
-    //   headerName: "Due Date | Time Left",
-    //   field: "project_due_date",
-    //   cellRenderer: LiveCountdownCell,
-    //   filter: false,
-    //   editable: false,
-    // },
     {
       headerName: "Due Date",
       field: "project_due_date",
