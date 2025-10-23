@@ -49,8 +49,7 @@ const ViewProject = (props) => {
                   label: (
                     <>
                       <h6 className="mb-0" style={{ color: "#1890ff" }}>
-                        Address \ Pricing \ Area \ Construction Type \ Line
-                        Items Pricing \ Floor Number \ Notes \ Private Notes:
+                        Quick Details
                       </h6>
                     </>
                   ),
@@ -59,120 +58,90 @@ const ViewProject = (props) => {
                       <ul style={{ listStyleType: "circle" }}>
                         {selectedProject.project_address && (
                           <li>
-                            Project Address:
-                            <b>
-                              {" "}
-                              {selectedProject.project_address.replace(
-                                /<[^>]+>/g,
-                                ""
-                              )}
-                            </b>
-                          </li>
-                        )}
-                        {selectedProject.project_main_scope && (
-                          <li>
-                            Main Scope:
-                            <b>
-                              {" "}
-                              {selectedProject.project_main_scope.replace(
-                                /<[^>]+>/g,
-                                ""
-                              )}
-                            </b>
-                          </li>
-                        )}
-                        {selectedProject.project_scope_details && (
-                          <li>
-                            Scope Details:
-                            <b>
-                              {" "}
-                              {selectedProject.project_scope_details.replace(
-                                /<[^>]+>/g,
-                                ""
-                              )}
-                            </b>
-                          </li>
-                        )}
-                        {selectedProject.project_admin_notes && (
-                          <li>
-                            Admin Notes:
-                            <b>
-                              {" "}
-                              {selectedProject.project_admin_notes.replace(
-                                /<[^>]+>/g,
-                                ""
-                              )}
-                            </b>
-                          </li>
-                        )}
-                        {selectedProject.project_admin_notes && (
-                          <li>
-                            Admin Notes:
-                            <b>
-                              {" "}
-                              {selectedProject.project_admin_notes.replace(
-                                /<[^>]+>/g,
-                                ""
-                              )}
-                            </b>
+                            <b>Project Address: </b>
+                            {selectedProject.project_address.replace(
+                              /<[^>]+>/g,
+                              ""
+                            )}
                           </li>
                         )}
                         {selectedProject.project_template && (
                           <li>
-                            Template:
-                            <b>
-                              {" "}
-                              {selectedProject.project_template.replace(
-                                /<[^>]+>/g,
-                                ""
-                              )}
-                            </b>
+                            <b>Template: </b>
+                            {selectedProject.project_template.replace(
+                              /<[^>]+>/g,
+                              ""
+                            )}
+                          </li>
+                        )}
+                        {selectedProject.client_name_for_admin && (
+                          <li>
+                            <b>Client Name Admin: </b>
+                            {selectedProject.client_name_for_admin.replace(
+                              /<[^>]+>/g,
+                              ""
+                            )}
+                          </li>
+                        )}
+                        {selectedProject.project_main_scope && (
+                          <li>
+                            <b>Main Scope: </b>
+                            {selectedProject.project_main_scope.replace(
+                              /<[^>]+>/g,
+                              ""
+                            )}
+                          </li>
+                        )}
+                        {selectedProject.project_scope_details && (
+                          <li>
+                            <b>Scope Details: </b>
+                            {selectedProject.project_scope_details.replace(
+                              /<[^>]+>/g,
+                              ""
+                            )}
+                          </li>
+                        )}
+                        {selectedProject.project_admin_notes && (
+                          <li>
+                            <b> Admin Notes: </b>
+
+                            {selectedProject.project_admin_notes.replace(
+                              /<[^>]+>/g,
+                              ""
+                            )}
                           </li>
                         )}
                         {selectedProject.project_pricing && (
                           <li>
-                            Project Pricing:
-                            <b>
-                              {" "}
-                              {selectedProject.project_pricing.replace(
-                                /<[^>]+>/g,
-                                ""
-                              )}
-                            </b>
+                            <b>Project Pricing: </b>
+
+                            {selectedProject.project_pricing.replace(
+                              /<[^>]+>/g,
+                              ""
+                            )}
                           </li>
                         )}
                         {selectedProject.project_init_link && (
                           <li>
-                            OnSIDE link:
-                            <b>
-                              {" "}
-                              <a href={selectedProject.project_init_link}>
-                                Link
-                              </a>
-                            </b>
+                            <b>Admin link: </b>
+                            <a href={selectedProject.project_init_link}>Link</a>
                           </li>
                         )}
                         {selectedProject.project_final_link && (
                           <li>
-                            OffSide link:
-                            <b>
-                              {" "}
-                              <a href={selectedProject.project_final_link}>
-                                Link
-                              </a>
-                            </b>
+                            <b>Estimator link: </b>
+                            <a href={selectedProject.project_final_link}>
+                              Link
+                            </a>
                           </li>
                         )}
                         {selectedProject.project_notes_estimator && (
                           <li>
-                            Estimator Notes:
-                            <b>
-                              {" "}
-                              {selectedProject.project_notes_estimator.replace(
-                                /<[^>]+>/g,
-                                ""
-                              )}
-                            </b>
+                            <b>Estimator Notes: </b>
+                            {selectedProject.project_notes_estimator.replace(
+                              /<[^>]+>/g,
+                              ""
+                            )}
                           </li>
                         )}
                       </ul>
@@ -213,33 +182,30 @@ const ViewProject = (props) => {
                         {selectedProject.client ? (
                           <>
                             <li>
-                              Client Title:&nbsp;&nbsp;&nbsp;
+                              <b>Client Title: </b>
                               {selectedProject.client.title || "N/A"}
                             </li>
                             <li>
-                              Client:&nbsp;&nbsp;&nbsp;
+                              <b>Client Name: </b>
                               {selectedProject.client.name || "N/A"}
                             </li>
                             <li>
-                              Client Email:&nbsp;&nbsp;&nbsp;
+                              <b>Client Email: </b>
                               {selectedProject.client.email || "N/A"}
                             </li>
                             <li>
-                              Estimator Notes:&nbsp;&nbsp;&nbsp;
+                              <b>Estimator Notes: </b>
                               {selectedProject.client.phone || "N/A"}
                             </li>
                             <li>
-                              Client Notes:&nbsp;&nbsp;&nbsp;
-                              {selectedProject.client.notes || "N/A"}
+                              <b>Client Notes: </b>{" "}
+                              <hr className="mb-1 mt-1"></hr>
+                              {selectedProject.client.notes.replace(
+                                /<[^>]+>/g,
+                                ""
+                              )}
                             </li>
                             <hr />
-                            <li>
-                              Details ?:
-                              <br />
-                              <span className="text-muted">
-                                Place Holder: ....
-                              </span>
-                            </li>
                           </>
                         ) : (
                           <li>
@@ -255,7 +221,7 @@ const ViewProject = (props) => {
               defaultActiveKey={["1"]}
             />
           </div>
-          {/* <div className="col-12 col-md-6">
+          <div className="col-12 col-md-6">
             <hr className="mb-0 mt-0"></hr>
             <div className="mt-1 mb-1">
               <div className="d-flex bg-light p-2 rounded">
@@ -263,177 +229,60 @@ const ViewProject = (props) => {
                   style={{ textDecoration: "underline" }}
                   className="me-2 mb-0"
                 >
-                  Project Team Member:&nbsp;
-                  <Avatar.Group>
-                    {members.map((per, index) => (
-                      <Tooltip
-                        title={per.user?.name || "N/A"}
-                        placement="top"
-                        key={index}
-                      >
-                        {per.user?.media?.[0]?.file_path ? (
-                          <Avatar
-                            style={{
-                              marginLeft: index > 0 ? 1 : 0,
-                            }}
-                            src={`/${per.user.media[0].file_path}`}
-                            alt={per.user.name}
-                          />
-                        ) : (
-                          <Avatar
-                            style={{
-                              backgroundColor: "#1890ff",
-                              marginLeft: index > 0 ? 1 : 0,
-                            }}
-                          >
-                            {per.user?.name
-                              ? per.user.name
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .join("")
-                              : "U"}
-                          </Avatar>
-                        )}
-                      </Tooltip>
-                    ))}
-                  </Avatar.Group>
+                  Project More Details:&nbsp;
                 </h6>
               </div>
             </div>
             <hr className="mb-0 mt-0"></hr>
             <Collapse
-              className="mb-3 mt-3"
+              className="mt-3 mb-3"
               items={[
                 {
+                  key: "1",
                   label: (
                     <>
                       <h6 className="mb-0" style={{ color: "#1890ff" }}>
-                        Joined Member, Steps & Details:
+                        More Details
                       </h6>
                     </>
                   ),
                   children: (
                     <>
-                      {(() => {
-                        const isSuperAdmin = user.role_id === 1;
-                        const isJoined = members.some(
-                          (m) => m.user_id === user.id
-                        );
+                      <ul style={{ listStyleType: "circle" }}>
+                        <li>
+                          <b>Construction Type: </b>
+                          {selectedProject.project_construction_type
+                            ? selectedProject.project_construction_type
+                            : "N/A"}
+                        </li>
 
-                        // 🔒 Permission check
-                        if (!isSuperAdmin && !isJoined) {
-                          return (
-                            <p
-                              style={{
-                                color: "#999",
-                                fontStyle: "italic",
-                                marginLeft: "10px",
-                              }}
-                            >
-                              N/A (You’re not part of this project’s estimator
-                              team)
-                            </p>
-                          );
-                        }
-                        return (
-                          <>
-                            <ul style={{ listStyleType: "circle" }}>
-                              {members.map((per, index) => {
-                                const name = per.user?.name || "Unknown";
-                                const steps = per.steps || [];
-
-                                return (
-                                  <li key={index}>
-                                    <li>
-                                      <strong>{name}</strong>
-                                      <li
-                                        style={{
-                                          fontWeight: "600",
-                                          textDecoration: "underline",
-                                          listStyleType: "none",
-                                        }}
-                                      >
-                                        Project Steps:
-                                      </li>
-                                      <ul
-                                        style={{
-                                          listStyleType: "square",
-                                          paddingLeft: 20,
-                                        }}
-                                      >
-                                        {Array.isArray(steps) &&
-                                        steps.length > 0 ? (
-                                          steps.map((step, stepIndex) => (
-                                            <li key={stepIndex}>{step}</li>
-                                          ))
-                                        ) : (
-                                          <li>No steps</li>
-                                        )}
-                                      </ul>
-                                      <li
-                                        style={{
-                                          fontWeight: "600",
-                                          textDecoration: "underline",
-                                          listStyleType: "none",
-                                        }}
-                                      >
-                                        More Details:
-                                      </li>
-                                      <ul
-                                        style={{
-                                          listStyleType: "square",
-                                          paddingLeft: 20,
-                                        }}
-                                      >
-                                        <li>
-                                          Started At:{" "}
-                                          {per.started_at
-                                            ? new Date(
-                                                per.started_at
-                                              ).toLocaleDateString()
-                                            : "—"}
-                                        </li>
-                                        <li>
-                                          Completed At:{" "}
-                                          {per.completed_at
-                                            ? new Date(
-                                                per.completed_at
-                                              ).toLocaleDateString()
-                                            : "—"}
-                                        </li>
-                                        <li>
-                                          Duration:{" "}
-                                          {per.completed_at && per.started_at
-                                            ? `${Math.round(
-                                                (new Date(per.completed_at) -
-                                                  new Date(per.started_at)) /
-                                                  (1000 * 60 * 60 * 24)
-                                              )} days`
-                                            : "Not completed yet"}
-                                        </li>
-                                        <li>
-                                          Points Gained:{" "}
-                                          {per.points_gain ?? "—"}
-                                        </li>
-                                        <li>Notes: {per.notes ?? "—"}</li>
-                                      </ul>
-                                    </li>
-                                    <hr />
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                            <hr />
-                          </>
-                        );
-                      })()}
+                        <li>
+                          <b>Line Items Pricing: </b>
+                          {selectedProject.project_line_items_pricing
+                            ? selectedProject.project_line_items_pricing
+                            : "N/A"}
+                        </li>
+                        <li>
+                          <b>Floor Number:&nbsp;</b>
+                          {selectedProject.project_floor_number
+                            ? selectedProject.project_floor_number
+                            : "N/A"}
+                        </li>
+                        <li>
+                          <b>Project Area:&nbsp;</b>
+                          {selectedProject.project_area
+                            ? selectedProject.project_area
+                            : "N/A"}
+                        </li>
+                      </ul>
                     </>
                   ),
                 },
               ]}
               size="small"
+              defaultActiveKey={["1"]}
             />
-          </div> */}
+          </div>
         </div>
       </div>
     </>

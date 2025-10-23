@@ -3,14 +3,7 @@ import { Layout, Menu, theme, usePage } from "@shared/ui";
 import { useRoute } from "@ziggy";
 import { getSidebarItems } from "@component/Sidebar/sidebarItems";
 const { Sider } = Layout;
-const Sidebar = ({
-  collapsed,
-  setCollapsed,
-  openKeys,
-  setOpenKeys,
-  savedOpenKeys,
-  setSavedOpenKeys,
-}) => {
+const Sidebar = ({ collapsed, setCollapsed, openKeys, setOpenKeys }) => {
   const route = useRoute();
   const { props } = usePage();
   const user = props?.auth?.user ?? {};

@@ -27,7 +27,9 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
   const hasPermission = (userpermission, permName) =>
     userpermission?.some((p) => p.name === permName);
   const { auth } = usePage().props;
-  const { props } = usePage();
+  const { url, component, props } = usePage();
+  console.log("Current URL:", url);
+
   const userPermissions = props?.auth?.user?.role?.permissions ?? [];
   const can = (perm) => hasPermission(userPermissions, perm);
   const user = props?.auth?.user ?? {};
@@ -1177,7 +1179,9 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
           flex: undefined,
         }}
         theme={gridTheme}
-        pagination={true}
+        pagination={
+          url === "/project" || url === "/project/Deliver" ? true : false
+        }
         paginationAutoPageSize={true}
         sideBar={sideBarConfig}
         onGridReady={gridOptionsConfig.onGridReady}
