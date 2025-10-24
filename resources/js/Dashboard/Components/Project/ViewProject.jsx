@@ -3,6 +3,7 @@ const ViewProject = (props) => {
   const { project: selectedProject, onClose } = props;
   const { auth } = usePage().props;
   const user = auth?.user ?? {};
+  console.log(user);
   const members = selectedProject.project_team_members || [];
 
   return (
@@ -74,7 +75,7 @@ const ViewProject = (props) => {
                             )}
                           </li>
                         )}
-                        {selectedProject.client_name_for_admin && (
+                        {/* {selectedProject.client_name_for_admin && (
                           <li>
                             <b>Client Name Admin: </b>
                             {selectedProject.client_name_for_admin.replace(
@@ -82,7 +83,20 @@ const ViewProject = (props) => {
                               ""
                             )}
                           </li>
-                        )}
+                        )} */}
+                        {user?.role?.name === "Super Admin" ||
+                        user?.role_id === 1
+                          ? selectedProject.client_name_for_admin && (
+                              <li>
+                                <b>Client Name Admin: </b>
+                                {selectedProject.client_name_for_admin.replace(
+                                  /<[^>]+>/g,
+                                  ""
+                                )}
+                              </li>
+                            )
+                          : null}
+
                         {selectedProject.project_main_scope && (
                           <li>
                             <b>Main Scope: </b>
@@ -168,7 +182,7 @@ const ViewProject = (props) => {
               className="mt-3 mb-3"
               items={[
                 {
-                  key: "1",
+                  key: "2",
                   label: (
                     <>
                       <h6 className="mb-0" style={{ color: "#1890ff" }}>
@@ -218,7 +232,7 @@ const ViewProject = (props) => {
                 },
               ]}
               size="small"
-              defaultActiveKey={["1"]}
+              defaultActiveKey={["2"]}
             />
           </div>
           <div className="col-12 col-md-6">
@@ -238,7 +252,7 @@ const ViewProject = (props) => {
               className="mt-3 mb-3"
               items={[
                 {
-                  key: "1",
+                  key: "3",
                   label: (
                     <>
                       <h6 className="mb-0" style={{ color: "#1890ff" }}>
@@ -280,7 +294,7 @@ const ViewProject = (props) => {
                 },
               ]}
               size="small"
-              defaultActiveKey={["1"]}
+              defaultActiveKey={["3"]}
             />
           </div>
         </div>

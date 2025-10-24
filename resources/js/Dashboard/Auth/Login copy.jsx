@@ -17,24 +17,21 @@ import {
 } from "@shared/ui";
 
 const { Title, Text } = Typography;
-
 const Login = () => {
   const [loading, setLoading] = useState(null);
   const { data, setData, post } = useForm({
     email: "",
     password: "",
-    remember: false, // 👈 added field
   });
-
   const handleSubmit = (e) => {
-    e.preventDefault();
     setLoading(true);
+    e.preventDefault();
     post("/login");
   };
 
+  // Flash Messages
   const { flash, errors } = usePage().props;
   const [api, contextHolder] = notification.useNotification();
-
   useEffect(() => {
     if (flash.message) {
       api.success(
@@ -47,7 +44,6 @@ const Login = () => {
       );
     }
   }, [flash]);
-
   useEffect(() => {
     if (errors && Object.keys(errors).length > 0) {
       Object.entries(errors).forEach(([field, messages]) => {
@@ -63,7 +59,6 @@ const Login = () => {
       setLoading(false);
     }
   }, [errors]);
-
   return (
     <>
       {contextHolder}
@@ -93,11 +88,9 @@ const Login = () => {
             </Title>
             <Text type="secondary">Sign in to your account</Text>
           </div>
-
           <form onSubmit={handleSubmit}>
             <fieldset className="border rounded ps-4 pe-4 pb-4">
               <legend className="float-none w-auto p-2">Login</legend>
-
               <label htmlFor="email">
                 Your Email:
                 <hr className="m-0" />
@@ -113,7 +106,6 @@ const Login = () => {
                 allowClear
                 disabled={loading}
               />
-
               <label htmlFor="password">
                 Your Password:
                 <hr className="m-0" />
@@ -130,28 +122,6 @@ const Login = () => {
                 allowClear
                 disabled={loading}
               />
-
-              {/* ✅ Remember Me Checkbox */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: "16px",
-                }}
-              >
-                <label style={{ display: "flex", alignItems: "center" }}>
-                  <input
-                    type="checkbox"
-                    checked={data.remember}
-                    onChange={(e) => setData("remember", e.target.checked)}
-                    disabled={loading}
-                    style={{ marginRight: "6px" }}
-                  />
-                  <span>Remember Me</span>
-                </label>
-              </div>
-
               <Button
                 disabled={loading}
                 className="mb-3"
@@ -164,6 +134,9 @@ const Login = () => {
               >
                 Sign In
               </Button>
+              {/* <div style={{ textAlign: "center", marginBottom: "16px" }}>
+                <a style={{ color: "#1890ff" }}>Forgot password?</a>
+              </div> */}
 
               <Divider plain style={{ color: "#8c8c8c" }}>
                 Or continue with
@@ -187,6 +160,5 @@ const Login = () => {
     </>
   );
 };
-
 Login.layout = null;
 export default Login;

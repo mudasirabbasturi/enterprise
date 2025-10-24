@@ -1116,6 +1116,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         onSortChanged={gridOptionsConfig.onSortChanged}
         maintainColumnOrder={true}
         detailCellRenderer={DetailCellRenderer}
+        rowSelection="single"
       />
     </>
   );
