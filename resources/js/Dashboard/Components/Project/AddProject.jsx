@@ -153,7 +153,7 @@ const AddProject = forwardRef(
       budget_total: null, // nullable decimal
       deduction_amount: null,
       project_due_date: null,
-      project_points: "",
+      project_points: null,
       project_source: "InSource",
       project_status: "Pending", // default in DB
       preview_status: "active", // default in DB
@@ -481,9 +481,10 @@ const AddProject = forwardRef(
                     style={{ width: "100%" }}
                     placeholder="Project Points"
                     value={values.project_points}
-                    onChange={(e) =>
-                      onChangeValue("project_points", e.target.value)
-                    }
+                    // onChange={(e) =>
+                    //   onChangeValue("project_points", e.target.value)
+                    // }
+                    onChange={(value) => onChangeValue("project_points", value)}
                     disabled={loading || !hasAddProjectPointsPermission}
                   />
                 </div>

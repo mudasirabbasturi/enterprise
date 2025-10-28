@@ -163,7 +163,7 @@ const EditProject = forwardRef(
       budget_total: selectedProject.budget_total || null,
       deduction_amount: selectedProject.deduction_amount || null,
       project_due_date: selectedProject.project_due_date || null,
-      project_points: selectedProject.project_points || "",
+      project_points: selectedProject.project_points || null,
       project_source: selectedProject.project_source || "InSource",
       project_status: selectedProject.project_status || "Pending",
       preview_status: selectedProject.preview_status || "active",
@@ -504,9 +504,10 @@ const EditProject = forwardRef(
                   <InputNumber
                     placeholder="Number Of Points Of The Project"
                     value={values.project_points}
-                    onChange={(e) =>
-                      onChangeValue("project_points", e.target.value)
-                    }
+                    // onChange={(e) =>
+                    //   onChangeValue("project_points", e.target.value)
+                    // }
+                    onChange={(value) => onChangeValue("project_points", value)}
                     disabled={loading || !hasUpdateProjectPointsPermission}
                   />
                 </div>

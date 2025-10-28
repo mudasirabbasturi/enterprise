@@ -60,10 +60,11 @@ const ViewProject = (props) => {
                         {selectedProject.project_address && (
                           <li>
                             <b>Project Address: </b>
-                            {selectedProject.project_address.replace(
-                              /<[^>]+>/g,
-                              ""
-                            )}
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: selectedProject.project_address,
+                              }}
+                            />
                           </li>
                         )}
                         {selectedProject.project_template && (
@@ -100,29 +101,31 @@ const ViewProject = (props) => {
                         {selectedProject.project_main_scope && (
                           <li>
                             <b>Main Scope: </b>
-                            {selectedProject.project_main_scope.replace(
-                              /<[^>]+>/g,
-                              ""
-                            )}
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: selectedProject.project_main_scope,
+                              }}
+                            />
                           </li>
                         )}
                         {selectedProject.project_scope_details && (
                           <li>
                             <b>Scope Details: </b>
-                            {selectedProject.project_scope_details.replace(
-                              /<[^>]+>/g,
-                              ""
-                            )}
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: selectedProject.project_scope_details,
+                              }}
+                            />
                           </li>
                         )}
                         {selectedProject.project_admin_notes && (
                           <li>
-                            <b> Admin Notes: </b>
-
-                            {selectedProject.project_admin_notes.replace(
-                              /<[^>]+>/g,
-                              ""
-                            )}
+                            <b>Admin Notes: </b>
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: selectedProject.project_admin_notes,
+                              }}
+                            />
                           </li>
                         )}
                         {selectedProject.project_pricing && (
@@ -138,24 +141,34 @@ const ViewProject = (props) => {
                         {selectedProject.project_init_link && (
                           <li>
                             <b>Admin link: </b>
-                            <a href={selectedProject.project_init_link}>Link</a>
+                            <a
+                              href={selectedProject.project_init_link}
+                              target="_blanck"
+                            >
+                              Link
+                            </a>
                           </li>
                         )}
                         {selectedProject.project_final_link && (
                           <li>
                             <b>Estimator link: </b>
-                            <a href={selectedProject.project_final_link}>
+                            <a
+                              href={selectedProject.project_final_link}
+                              target="_blanck"
+                            >
                               Link
                             </a>
                           </li>
                         )}
+
                         {selectedProject.project_notes_estimator && (
                           <li>
                             <b>Estimator Notes: </b>
-                            {selectedProject.project_notes_estimator.replace(
-                              /<[^>]+>/g,
-                              ""
-                            )}
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: selectedProject.project_notes_estimator,
+                              }}
+                            />
                           </li>
                         )}
                       </ul>
@@ -214,10 +227,11 @@ const ViewProject = (props) => {
                             <li>
                               <b>Client Notes: </b>{" "}
                               <hr className="mb-1 mt-1"></hr>
-                              {selectedProject.client.notes.replace(
-                                /<[^>]+>/g,
-                                ""
-                              )}
+                              <div
+                                dangerouslySetInnerHTML={{
+                                  __html: selectedProject.client.notes,
+                                }}
+                              />
                             </li>
                             <hr />
                           </>

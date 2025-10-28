@@ -47,7 +47,8 @@ const sideBarConfig = {
       toolPanel: "agFiltersToolPanel",
     },
   ],
-  defaultToolPanel: "columns",
+  // defaultToolPanel: "columns",
+  defaultToolPanel: null,
   position: "right",
 };
 const STORAGE_KEY = "agGridColumnState";
