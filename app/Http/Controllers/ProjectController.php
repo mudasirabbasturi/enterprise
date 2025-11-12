@@ -13,6 +13,7 @@ use App\Models\Client;
 use App\Models\ProjectTeamMember;
 use Illuminate\Support\Facades\DB;
 use Pusher\Pusher;
+use Inertia\Inertia;
 
 class ProjectController extends Controller
 {
@@ -510,13 +511,44 @@ class ProjectController extends Controller
     }
 
 
+    // public function ProjectReport(Request $request)
+    // {
+    //     $projectsReport = DB::table('projects')
+    //         ->leftJoin('project_team_members', 'projects.id', '=', 'project_team_members.project_id')
+    //         ->leftJoin('users', 'project_team_members.user_id', '=', 'users.id')
+    //         ->whereYear('project_team_members.created_at', '>=', 2023)
+    //         ->select(
+    //             'users.name as username',
+    //             DB::raw('YEAR(project_team_members.created_at) as year'),
+    //             DB::raw('MONTHNAME(project_team_members.created_at) as month'),
+    //             DB::raw('SUM(projects.project_points) as total_points'),
+    //             DB::raw('SUM(project_team_members.points_gain) as points_gain'),
+    //             DB::raw('COUNT(DISTINCT projects.id) as projects_count'),
+    //             DB::raw('SUM(JSON_LENGTH(project_team_members.steps)) as tasks_count')
+    //         )
+    //         ->groupBy('users.name', 'year', 'month')
+    //         ->orderBy('year', 'desc')
+    //         ->orderBy(DB::raw('MONTH(project_team_members.created_at)'), 'asc')
+    //         ->get();
+
+    //     return Inertia('Pages/Project/Report', [
+    //         'reports' => $projectsReport,
+    //     ]);
+    // }
+
     public function ProjectReport(Request $request)
     {
-        $projectsReport = DB::table('projects')
+        $query = DB::table('projects')
             ->leftJoin('project_team_members', 'projects.id', '=', 'project_team_members.project_id')
             ->leftJoin('users', 'project_team_members.user_id', '=', 'users.id')
-            ->whereYear('project_team_members.created_at', '>=', 2023)
-            ->select(
+            ->whereYear('project_team_members.created_at', '>=', 2023);
+
+        // If email is passed, filter only that user
+        if ($request->has('email')) {
+            $query->where('users.email', $request->email);
+        }
+
+        $projectsReport = $query->select(
                 'users.name as username',
                 DB::raw('YEAR(project_team_members.created_at) as year'),
                 DB::raw('MONTHNAME(project_team_members.created_at) as month'),
@@ -532,33 +564,10 @@ class ProjectController extends Controller
 
         return Inertia('Pages/Project/Report', [
             'reports' => $projectsReport,
+            'self' => $request->email ?? null, // optional prop for React
         ]);
     }
 
-    // public function ProjectReportChart()
-    // {
-    //     $ProjectReportChart = DB::table('project_team_members as ptm')
-    //         ->leftJoin('projects', 'ptm.project_id', '=', 'projects.id')
-    //         ->leftJoin('users', 'ptm.user_id', '=', 'users.id')
-    //         ->whereYear('ptm.created_at', '>=', 2023)
-    //         ->select(
-    //             'users.name as username',
-    //             DB::raw('YEAR(ptm.created_at) as year'),
-    //             DB::raw('MONTHNAME(ptm.created_at) as month'),
-    //             DB::raw('SUM(ptm.points_gain) as points_gain'),
-    //             DB::raw('COUNT(DISTINCT ptm.project_id) as projects_count'),
-    //             DB::raw('SUM(JSON_LENGTH(ptm.steps)) as tasks_count'),
-    //             DB::raw('SUM(DISTINCT projects.project_points) as total_points')
-    //         )
-    //         ->groupBy('users.name', 'year', 'month')
-    //         ->orderBy('year', 'desc')
-    //         ->orderBy(DB::raw('MONTH(ptm.created_at)'), 'asc')
-    //         ->get();
-
-    //     return Inertia('Pages/Project/ProjectReportChart', [
-    //         'ProjectReportChart' => $ProjectReportChart,
-    //     ]);
-    // }
 
     public function ProjectReportChart(Request $request)
     {
@@ -669,6 +678,18 @@ class ProjectController extends Controller
         return Inertia('Pages/Project/ProjectCountChart', [
             'ProjectCountChart' => $ProjectCountChart,
         ]);
+    }
+
+
+    public function BulkUpdate(Request $request)
+    {
+        $updatedCount = Project::where('project_status', 'Completed')
+            ->update(['project_status' => 'Deliver']);
+        if ($updatedCount > 0) {
+           return Inertia::location(route('project.status', ['status' => 'Pending']));
+        } else {
+            return redirect()->back()->with('message', 'No projects found with status Completed.');
+        }
     }
 
 }

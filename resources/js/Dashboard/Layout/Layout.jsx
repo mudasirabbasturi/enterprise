@@ -187,6 +187,25 @@ const DashboardLayout = ({ children }) => {
     };
   }, []);
 
+  const handleBulkUpdate = () => {
+    if (
+      window.confirm(
+        "Do you really want to mark all Completed projects as Delivered?"
+      )
+    ) {
+      router.put(
+        route("project.bulk.update"),
+        {},
+        {
+          preserveScroll: true,
+          onSuccess: () => {
+            console.log("Bulk update done");
+          },
+        }
+      );
+    }
+  };
+
   return (
     <>
       {contextHolder}
@@ -236,14 +255,25 @@ const DashboardLayout = ({ children }) => {
             <div className="right">
               <div className="d-flex">
                 {can("View Project Chart") && (
-                  <div>
-                    <button
-                      className="btn btn-sm btn-outline-primary me-3"
-                      onClick={() => router.visit(route("project.count.chart"))}
-                    >
-                      <BarChartOutlined />
-                    </button>
-                  </div>
+                  <>
+                    <div>
+                      <button
+                        className="btn btn-sm btn-outline-primary me-3"
+                        onClick={handleBulkUpdate}
+                      >
+                        Bulk Completed To Deliver
+                      </button>
+
+                      <button
+                        className="btn btn-sm btn-outline-primary me-3"
+                        onClick={() =>
+                          router.visit(route("project.count.chart"))
+                        }
+                      >
+                        <BarChartOutlined />
+                      </button>
+                    </div>
+                  </>
                 )}
                 {can("View Report") && (
                   <div>
@@ -255,7 +285,19 @@ const DashboardLayout = ({ children }) => {
                     </button>
                   </div>
                 )}
+
                 <div>
+                  <button
+                    className="btn btn-sm btn-primary me-2"
+                    onClick={() =>
+                      router.visit(route("project.report"), {
+                        method: "get",
+                        data: { email: user.email },
+                      })
+                    }
+                  >
+                    Self Report
+                  </button>
                   <button
                     className="btn btn-sm btn-primary me-3"
                     onClick={() =>

@@ -82,6 +82,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/project-report/chart', [ProjectController::class, 'ProjectReportChart'])->name('project.report.chart');
     Route::get('/project-count/chart', [ProjectController::class, 'ProjectCountChart'])->name('project.count.chart');
 
+    Route::put('/project/bulk/update', [ProjectController::class, 'BulkUpdate'])
+        ->name('project.bulk.update');
+
+
     // Team Member 
     Route::post('/project/team-member/join/{ProjectId}', [ProjectController::class, 'JoinProject'])->name('JoinProject');
     Route::put('/project/team-member/update/{TeamMemberId}', [ProjectController::class, 'EditJoinProject'])->name('EditJoinProject');
