@@ -320,6 +320,23 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
           },
         ]
       : []),
+    
+    {
+      headerName: "Mask Client Name",
+      headerTooltip: "Masked Client Name",
+      field: "mask_client_name",
+      valueGetter: (params) => {
+        const name = params.data?.client_name_for_admin || "";
+        if (!name) return "N/A";
+        const parts = name.split(/[\s-]+/);
+        const firstWord = parts[0] || "";
+        const lastWord = parts[parts.length - 1] || "";
+        return `mask_${firstWord.slice(0, 2).toLowerCase()}_#enterprise_${lastWord.slice(-2).toLowerCase()}`;
+      },
+      cellRenderer: (params) => {
+        return params.value; // just render the value from valueGetter
+      },
+    },
     ...(can("View Client")
       ? [
           {
@@ -932,7 +949,8 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         params.colDef.field === "teams" ||
         params.colDef.field === "client.notes" ||
         params.colDef.field === "final_Price" ||
-        (params.colDef.field === "project_points" && user.role_id !== 1)
+        params.colDef.headerName === "Mask Client Name" ||
+        (params.colDef.field === "project_points" && user.role_id !== 1) 
       )
         return;
       showDrawer("EditColumn", {
