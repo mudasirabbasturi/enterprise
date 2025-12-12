@@ -3,6 +3,7 @@ import {
   router,
   useRoute, // ziggy routing
   Input,
+  usePage,
 } from "@shared/ui";
 const { TextArea } = Input;
 
@@ -18,6 +19,10 @@ import "tinymce/plugins/link";
 import "tinymce/skins/ui/oxide/skin.css";
 
 const AddClient = forwardRef(({ onClose, setParentLoading }, ref) => {
+  const hasPermission = (userpermission, permName) => userpermission?.some((p) => p.name === permName);
+  const { props } = usePage();
+  const userPermissions = props?.auth?.user?.role?.permissions ?? [];
+  const can = (perm) => hasPermission(userPermissions, perm);
   const route = useRoute();
   const defaultValues = {
     name: "",
@@ -72,120 +77,131 @@ const AddClient = forwardRef(({ onClose, setParentLoading }, ref) => {
                 Title \ Name \ Email \ Phone
               </h6>
               <hr className="mt-2 mb-2"></hr>
-              <div className="d-flex align-items-center mb-3">
-                <label
-                  className="me-1"
-                  style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
-                  htmlFor="name"
-                >
-                  Title:
-                  <hr className="mb-1 mt-0"></hr>
-                  <hr className="mb-1 mt-0"></hr>
-                  <hr className="mb-1 mt-0"></hr>
-                </label>
-                <Input
-                  placeholder="Client Title"
-                  value={values.title}
-                  onChange={(e) => onChangeValue("title", e.target.value)}
-                  disabled={loading}
-                  allowClear
-                />
-              </div>
-              <div className="d-flex align-items-center mb-3">
-                <label
-                  className="me-1"
-                  style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
-                  htmlFor="name"
-                >
-                  Full Name:
-                  <hr className="mb-1 mt-0"></hr>
-                  <hr className="mb-1 mt-0"></hr>
-                  <hr className="mb-1 mt-0"></hr>
-                </label>
-                <Input
-                  placeholder="Client Full Name"
-                  value={values.name}
-                  onChange={(e) => onChangeValue("name", e.target.value)}
-                  disabled={loading}
-                  allowClear
-                />
-              </div>
-              <div className="d-flex align-items-center mb-3">
-                <label
-                  className="me-1"
-                  style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
-                  htmlFor="email"
-                >
-                  Client Email:
-                  <hr className="mb-1 mt-0"></hr>
-                  <hr className="mb-1 mt-0"></hr>
-                  <hr className="mb-1 mt-0"></hr>
-                </label>
-                <Input
-                  className="me-1"
-                  placeholder="Client Email"
-                  value={values.email}
-                  onChange={(e) => onChangeValue("email", e.target.value)}
-                  disabled={loading}
-                  allowClear
-                />
-              </div>
-              <div className="d-flex align-items-center mb-3">
-                <label
-                  className="me-1"
-                  style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
-                  htmlFor="phone"
-                >
-                  Client Phone:
-                  <hr className="mb-1 mt-0"></hr>
-                  <hr className="mb-1 mt-0"></hr>
-                  <hr className="mb-1 mt-0"></hr>
-                </label>
-                <Input
-                  className="me-1"
-                  placeholder="Client Phone"
-                  value={values.phone}
-                  onChange={(e) => onChangeValue("phone", e.target.value)}
-                  disabled={loading}
-                  allowClear
-                />
-              </div>
+                {can("Add Title") && (
+                    <div className="d-flex align-items-center mb-3">
+                      <label
+                        className="me-1"
+                        style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
+                        htmlFor="name"
+                      >
+                        Title:
+                        <hr className="mb-1 mt-0"></hr>
+                        <hr className="mb-1 mt-0"></hr>
+                        <hr className="mb-1 mt-0"></hr>
+                      </label>
+                      <Input
+                        placeholder="Client Title"
+                        value={values.title}
+                        onChange={(e) => onChangeValue("title", e.target.value)}
+                        disabled={loading}
+                        allowClear
+                      />
+                    </div>
+                )}
+                {can("Add Name") && (
+                    <div className="d-flex align-items-center mb-3">
+                      <label
+                        className="me-1"
+                        style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
+                        htmlFor="name"
+                      >
+                        Full Name:
+                        <hr className="mb-1 mt-0"></hr>
+                        <hr className="mb-1 mt-0"></hr>
+                        <hr className="mb-1 mt-0"></hr>
+                      </label>
+                      <Input
+                        placeholder="Client Full Name"
+                        value={values.name}
+                        onChange={(e) => onChangeValue("name", e.target.value)}
+                        disabled={loading}
+                        allowClear
+                      />
+                    </div>
+                )}
+                {can("Add Email") && (
+                    <div className="d-flex align-items-center mb-3">
+                      <label
+                        className="me-1"
+                        style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
+                        htmlFor="email"
+                      >
+                        Client Email:
+                        <hr className="mb-1 mt-0"></hr>
+                        <hr className="mb-1 mt-0"></hr>
+                        <hr className="mb-1 mt-0"></hr>
+                      </label>
+                      <Input
+                        className="me-1"
+                        placeholder="Client Email"
+                        value={values.email}
+                        onChange={(e) => onChangeValue("email", e.target.value)}
+                        disabled={loading}
+                        allowClear
+                      />
+                    </div>
+                )}
+                {can("Add Phone") && (
+                    <div className="d-flex align-items-center mb-3">
+                      <label
+                        className="me-1"
+                        style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
+                        htmlFor="phone"
+                      >
+                        Client Phone:
+                        <hr className="mb-1 mt-0"></hr>
+                        <hr className="mb-1 mt-0"></hr>
+                        <hr className="mb-1 mt-0"></hr>
+                      </label>
+                      <Input
+                        className="me-1"
+                        placeholder="Client Phone"
+                        value={values.phone}
+                        onChange={(e) => onChangeValue("phone", e.target.value)}
+                        disabled={loading}
+                        allowClear
+                      />
+                    </div>
+                )}
+              
             </div>
           </div>
           <div className="col-6">
             {/* Notes, Private Notes DOB & Status */}
-            <div>
-              <hr className="mt-2 mb-2"></hr>
-              <h6 className="m-0" style={{ color: "blue" }}>
-                Notes \ Private Notes:
-              </h6>
-              <hr className="mt-2 mb-2"></hr>
-              <div className="mb-3">
-                <label
-                  htmlFor="notes"
-                  className="me-1"
-                  style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
-                >
-                  Client Notes:<hr className="m-0"></hr>
-                </label>
-                <Editor
-                  disabled={loading}
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                  value={values.notes}
-                  onEditorChange={(content, editor) => {
-                    onChangeValue("notes", content);
-                  }}
-                />
-              </div>
-            </div>
+            {can("Add Notes") && (
+                <div>
+                  <hr className="mt-2 mb-2"></hr>
+                  <h6 className="m-0" style={{ color: "blue" }}>
+                    Notes \ Private Notes:
+                  </h6>
+                  <hr className="mt-2 mb-2"></hr>
+                  <div className="mb-3">
+                    <label
+                      htmlFor="notes"
+                      className="me-1"
+                      style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
+                    >
+                      Client Notes:<hr className="m-0"></hr>
+                    </label>
+                    <Editor
+                      disabled={loading}
+                      init={{
+                        height: 150,
+                        menubar: false,
+                        plugins: "table code lists link",
+                        toolbar:
+                          "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
+                        skin: false,
+                        content_css: false,
+                      }}
+                      value={values.notes}
+                      onEditorChange={(content, editor) => {
+                        onChangeValue("notes", content);
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
           </div>
         </div>
       </div>

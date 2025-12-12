@@ -1,10 +1,6 @@
 import {
-  Link,
   useRoute, // ziggy routing
-  Tooltip,
   Collapse,
-  Avatar,
-  UserOutlined, // ant icon
 } from "@shared/ui";
 const ViewClient = (props) => {
   const { data: selectedClient, onClose } = props;

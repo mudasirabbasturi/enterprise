@@ -36,6 +36,11 @@ const Index = ({ projects, clients }) => {
   const hasProjectsPermission =
     Array.isArray(userPermissions) &&
     userPermissions.some((perm) => perm.name === "View Projects");
+
+  const hasProjectsAddPermission =
+    Array.isArray(userPermissions) &&
+    userPermissions.some((perm) => perm.name === "Create Project");
+
   const [rowData, setRowData] = useState(projects || []);
   const [open, setOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState("add");
@@ -139,13 +144,31 @@ const Index = ({ projects, clients }) => {
           </>
         ) : (
           <>
-            <div className="">
-              <h4 className="mb-1 mt-3 text-center">
-                You do not have permission to view projects. Please contact
-                admin
-              </h4>
-              <h4 className="text-center">or go to other route from menu.</h4>
-            </div>
+          <div className="">
+            {hasProjectsAddPermission ? (
+              <div className="container">
+                <div className="row mt-2">
+                  <div className="col-6">
+                  </div>
+                  <div className="col-6 text-end">
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => showDrawer("add")}
+                      >
+                        Add Project
+                      </button>
+                  </div>
+                </div>
+              </div>
+          ) : <>
+                <h4 className="mb-1 mt-3 text-center">
+                   You do not have permission to view or add projects. Please contact
+                   admin
+                </h4>
+                <h4 className="text-center">or go to other route from menu.</h4>
+              </>
+              }
+          </div>
           </>
         )}
       </div>

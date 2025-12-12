@@ -110,7 +110,7 @@ const Index = ({ roles, permissions }) => {
                 <EyeOutlined />
               </button>
             </Tooltip>
-            {!isSuperAdmin && (
+            {/* {!isSuperAdmin && (
               <Tooltip title="Edit Role" color="orange" placement="leftTop">
                 <button
                   className="btn btn-warning btn-sm me-1"
@@ -119,15 +119,15 @@ const Index = ({ roles, permissions }) => {
                   <EditOutlined />
                 </button>
               </Tooltip>
-            )}
-            {/* <Tooltip title="Edit Role" color="orange" placement="leftTop">
+            )} */}
+            <Tooltip title="Edit Role" color="orange" placement="leftTop">
               <button
                 className="btn btn-warning btn-sm me-1"
                 onClick={() => showDrawer("edit", params.data)}
               >
                 <EditOutlined />
               </button>
-            </Tooltip> */}
+            </Tooltip>
 
             {!isSuperAdmin && (
               <Tooltip title="Delete Role" color="red" placement="leftTop">
