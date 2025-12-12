@@ -326,14 +326,14 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
       headerName: "Mask Client Name",
       headerTooltip: "Masked Client Name",
       field: "mask_client_name",
-      valueGetter: (params) => {
-        const name = params.data?.client_name_for_admin || "";
-        if (!name) return "N/A";
-        const parts = name.split(/[\s-]+/);
-        const firstWord = parts[0] || "";
-        const lastWord = parts[parts.length - 1] || "";
-        return `bid#${firstWord.slice(0, 2).toLowerCase()}${lastWord.slice(-2).toLowerCase()}`;
-      },
+valueGetter: (params) => {
+  const name = params.data?.client_name_for_admin || "";
+  if (!name) return "N/A";
+
+  const clean = name.replace(/\s+/g, " ").trim(); // normalize spaces
+
+  return `bid#${clean.slice(0, 3).toLowerCase()}${clean.slice(-3).toLowerCase()}`;
+},
       cellRenderer: (params) => {
         return params.value;
       },

@@ -262,7 +262,7 @@ const Index = ({ projects, clients }) => {
                 api={api}
               />
             ) : drawerMode === "view" ? (
-              <ViewProject onClose={onClose} project={selectedProject} />
+              <ViewProject onClose={onClose} selectedProject={selectedProject} />
             ) : drawerMode === "JoinProject" ? (
               <JoinProject
                 setParentLoading={setLoading}

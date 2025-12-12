@@ -208,7 +208,7 @@ const ProjectHeader = ({ showDrawer }) => {
             {Cancelled}
           </span>
         </Link>
-                <Link
+        <Link
           className={`btn btn-sm position-relative me-1 ${
             isActive("project.index") ? "active-status" : "inactive-status"
           }`}

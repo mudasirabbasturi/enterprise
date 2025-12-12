@@ -28,6 +28,10 @@ const ProjectHeader = ({ showDrawer }) => {
   const Cancelled = props.projectCounts.Cancelled;
   const Deliver = props.projectCounts.Deliver;
 
+
+  const SelfAll = props.selfProjectCounts.All;
+  const SelfTotal = props.selfProjectCounts.Total;
+
   return (
     <>
       <Breadcrumb
@@ -261,6 +265,47 @@ const ProjectHeader = ({ showDrawer }) => {
           </Link>
         )}
         {/* <Input size="large" className="mt-1" /> */}
+        <span>Self: </span>
+        <Link
+          className={`btn btn-sm position-relative me-1 ${
+            isActive("project.index") ? "active-status" : "inactive-status"
+          }`}
+          href={route("project.self.status", { status: "Recent" })}
+        >
+          Recent All
+          <span
+            style={{
+              position: "absolute",
+              top: -12,
+              right: -4,
+              color: "inherit",
+              backgroundColor: "inherit",
+            }}
+            className="badge border"
+          >
+           {SelfAll} 
+          </span>
+        </Link>
+        <Link
+          className={`btn btn-sm position-relative me-1 ${
+            isActive("project.index") ? "active-status" : "inactive-status"
+          }`}
+          href={route("project.self.status", { status: "All" })}
+        >
+          All
+          <span
+            style={{
+              position: "absolute",
+              top: -12,
+              right: -4,
+              color: "inherit",
+              backgroundColor: "inherit",
+            }}
+            className="badge border"
+          >
+            {SelfTotal}
+          </span>
+        </Link>
       </div>
 
       <div></div>

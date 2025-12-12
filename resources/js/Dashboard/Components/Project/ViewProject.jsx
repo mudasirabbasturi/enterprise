@@ -1,10 +1,14 @@
-import { Tooltip, Collapse, Avatar, usePage } from "@shared/ui";
-const ViewProject = (props) => {
-  const { project: selectedProject, onClose } = props;
+import {  Collapse, usePage } from "@shared/ui";
+const ViewProject = ({selectedProject}) => {
+
+  const { props } = usePage();
+  const hasPermission = (userpermission, permName) => userpermission?.some((p) => p.name === permName);
+  const userPermissions = props?.auth?.user?.role?.permissions ?? [];
+  const can = (perm) => hasPermission(userPermissions, perm);
+
   const { auth } = usePage().props;
   const user = auth?.user ?? {};
-  console.log(user);
-  const members = selectedProject.project_team_members || [];
+
 
   return (
     <>
@@ -208,31 +212,41 @@ const ViewProject = (props) => {
                       <ul style={{ listStyleType: "circle" }}>
                         {selectedProject.client ? (
                           <>
-                            <li>
-                              <b>Client Title: </b>
-                              {selectedProject.client.title || "N/A"}
-                            </li>
-                            <li>
-                              <b>Client Name: </b>
-                              {selectedProject.client.name || "N/A"}
-                            </li>
-                            <li>
-                              <b>Client Email: </b>
-                              {selectedProject.client.email || "N/A"}
-                            </li>
-                            <li>
-                              <b>Estimator Notes: </b>
-                              {selectedProject.client.phone || "N/A"}
-                            </li>
-                            <li>
-                              <b>Client Notes: </b>{" "}
-                              <hr className="mb-1 mt-1"></hr>
-                              <div
-                                dangerouslySetInnerHTML={{
-                                  __html: selectedProject.client.notes,
-                                }}
-                              />
-                            </li>
+                            {can("View Title") && (
+                              <li>
+                                <b>Client Title: </b>
+                                {selectedProject.client.title || "N/A"}
+                              </li>
+                            )}
+                            {can("View Name") && (
+                              <li>
+                                <b>Client Name: </b>
+                                {selectedProject.client.name || "N/A"}
+                              </li>
+                            )}
+                            {can("View Email") && (
+                              <li>
+                                <b>Client Email: </b>
+                                {selectedProject.client.email || "N/A"}
+                              </li>
+                            )}
+                            {can("View Phone") && (
+                              <li>
+                                <b>Estimator Phone: </b>
+                                {selectedProject.client.phone || "N/A"}
+                              </li>
+                            )}
+                            {can("View Notes") && (
+                              <li>
+                                <b>Client Notes: </b>{" "}
+                                <hr className="mb-1 mt-1"></hr>
+                                <div
+                                  dangerouslySetInnerHTML={{
+                                    __html: selectedProject.client.notes,
+                                  }}
+                                />
+                              </li>
+                            )}
                             <hr />
                           </>
                         ) : (
