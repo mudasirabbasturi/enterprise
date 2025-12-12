@@ -145,7 +145,6 @@ class ProjectController extends Controller
             'client'
         ])
         ->where('project_status', $status)
-        ->limit(50)
         ->latest()
         ->get();
         $clients = Client::get();
