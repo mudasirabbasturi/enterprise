@@ -53,6 +53,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
     Array.isArray(userPermissions) &&
     userPermissions.some((perm) => perm.name === "Delete Project");
 
+
   const route = useRoute();
   const [localRowData, setLocalRowData] = useState(projects);
 
@@ -331,12 +332,13 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         const parts = name.split(/[\s-]+/);
         const firstWord = parts[0] || "";
         const lastWord = parts[parts.length - 1] || "";
-        return `mask_${firstWord.slice(0, 2).toLowerCase()}_#enterprise_${lastWord.slice(-2).toLowerCase()}`;
+        return `bid#${firstWord.slice(0, 2).toLowerCase()}${lastWord.slice(-2).toLowerCase()}`;
       },
       cellRenderer: (params) => {
-        return params.value; // just render the value from valueGetter
+        return params.value;
       },
     },
+
     ...(can("View Client")
       ? [
           {
@@ -1122,7 +1124,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         }}
         theme={gridTheme}
         pagination={
-          url === "/project" || url === "/project/Deliver" ? true : false
+          url === "/project" || url === "/project/Deliver" || url === "/project/self/Deliver" || url === "/project/self/All"  ? true : false
         }
         paginationAutoPageSize={true}
         sideBar={sideBarConfig}

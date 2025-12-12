@@ -166,7 +166,7 @@ const Index = ({ clients }) => {
                 ref={childRef}
               />
             ) : (
-              <ViewClient onClose={onClose} data={selectedClient} />
+              <ViewClient onClose={onClose} selectedClient={selectedClient} />
             ))}
         </Suspense>
       </Drawer>

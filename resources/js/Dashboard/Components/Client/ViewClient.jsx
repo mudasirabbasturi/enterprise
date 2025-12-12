@@ -1,14 +1,19 @@
 import {
-  useRoute, // ziggy routing
   Collapse,
+  usePage,
 } from "@shared/ui";
-const ViewClient = (props) => {
-  const { data: selectedClient, onClose } = props;
-  const route = useRoute();
+// const ViewClient = (props) => {
+const ViewClient = ({selectedClient}) => {
+  const { props } = usePage();
+  const hasPermission = (userpermission, permName) => userpermission?.some((p) => p.name === permName);
+  const userPermissions = props?.auth?.user?.role?.permissions ?? [];
+  const can = (perm) => hasPermission(userPermissions, perm);
+ 
   return (
     <>
       <div className="container-fluid p-0">
         <div className="row m-0">
+        {can("View Title") && (
           <div className="col-12">
             <div className="">
               <div className="d-flex align-items-center">
@@ -21,6 +26,8 @@ const ViewClient = (props) => {
               </div>
             </div>
           </div>
+        )}
+
           <hr></hr>
           <div className="col-12 col-md-6">
             <hr className="mb-0 mt-0"></hr>
@@ -54,37 +61,49 @@ const ViewClient = (props) => {
                   children: (
                     <>
                       <ul style={{ listStyleType: "circle" }}>
-                        <li>
-                          <b>Full Name</b>:&nbsp;&nbsp;&nbsp;
-                          {selectedClient.name
-                            ? selectedClient.name
-                            : "Not Added, Add New.."}
-                        </li>
-                        <li>
-                          <b>Client Email</b>:&nbsp;&nbsp;&nbsp;
-                          {selectedClient.email
-                            ? selectedClient.email
-                            : "Not Added, Add New.."}
-                        </li>
-                        <li>
-                          <b>Client Phone</b>:&nbsp;&nbsp;&nbsp;
-                          {selectedClient.phone
-                            ? selectedClient.phone
-                            : "Not Added, Add New.."}
-                        </li>
-                        <hr />
-                        <li>
-                          <b>Notes:</b>: <br></br>
-                          <span className="text-muted">
-                            <div
-                              dangerouslySetInnerHTML={{
-                                __html: selectedClient.notes
-                                  ? selectedClient.notes
-                                  : "Not Added, Add New..",
-                              }}
-                            />
-                          </span>
-                        </li>
+                        {can("View Name") && (
+                          <li>
+                            <b>Full Name</b>:&nbsp;&nbsp;&nbsp;
+                            {selectedClient.name
+                              ? selectedClient.name
+                              : "Not Added, Add New.."}
+        
+                          </li>
+                         )}
+                        {can("View Email") && (
+                          <li>
+                            <b>Client Email</b>:&nbsp;&nbsp;&nbsp;
+                            {selectedClient.email
+                              ? selectedClient.email
+                              : "Not Added, Add New.."}
+                          </li>
+                         )}
+                        {can("View Phone") && (
+                          <li>
+                            <b>Client Phone</b>:&nbsp;&nbsp;&nbsp;
+                            {selectedClient.phone
+                              ? selectedClient.phone
+                              : "Not Added, Add New.."}
+                          </li>
+                         )}
+                        {can("View Notes") && (
+                            <>
+                              <hr />
+                              <li>
+                                <b>Notes:</b>: <br></br>
+                                <span className="text-muted">
+                                  <div
+                                    dangerouslySetInnerHTML={{
+                                      __html: selectedClient.notes
+                                        ? selectedClient.notes
+                                        : "Not Added, Add New..",
+                                    }}
+                                  />
+                                </span>
+                              </li>
+                            </>
+                         )}
+
                       </ul>
                     </>
                   ),

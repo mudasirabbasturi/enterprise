@@ -16,6 +16,7 @@ const ProjectHeader = ({ showDrawer }) => {
     );
   };
 
+  const Total = props.selfProjectCounts.Total;
   const All = props.selfProjectCounts.All;
   const TakeoffOnProgress = props.selfProjectCounts.TakeoffOnProgress;
   const PricingOnProgress = props.selfProjectCounts.PricingOnProgress;
@@ -32,13 +33,14 @@ const ProjectHeader = ({ showDrawer }) => {
         items={[{ title: <Link href="/">Home</Link> }, { title: "Projects" }]}
       />
       <div>
-        {/* <Link
+        <span>Self: </span>
+        <Link
           className={`btn btn-sm position-relative me-1 ${
             isActive("project.index") ? "active-status" : "inactive-status"
           }`}
-          href={route("project.index")}
+          href={route("project.self.status", { status: "Recent" })}
         >
-          All
+          Recent All
           <span
             style={{
               position: "absolute",
@@ -51,8 +53,7 @@ const ProjectHeader = ({ showDrawer }) => {
           >
             {All}
           </span>
-        </Link> */}
-        <span>Self: </span>
+        </Link>
         <Link
           className={`btn btn-sm position-relative me-1 ${
             isActive("project.self.status", "Takeoff On Progress")
@@ -205,6 +206,26 @@ const ProjectHeader = ({ showDrawer }) => {
             className="badge border"
           >
             {Cancelled}
+          </span>
+        </Link>
+                <Link
+          className={`btn btn-sm position-relative me-1 ${
+            isActive("project.index") ? "active-status" : "inactive-status"
+          }`}
+          href={route("project.self.status", { status: "All" })}
+        >
+          All
+          <span
+            style={{
+              position: "absolute",
+              top: -12,
+              right: -4,
+              color: "inherit",
+              backgroundColor: "inherit",
+            }}
+            className="badge border"
+          >
+            {Total}
           </span>
         </Link>
       </div>

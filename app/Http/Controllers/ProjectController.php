@@ -145,6 +145,7 @@ class ProjectController extends Controller
             'client'
         ])
         ->where('project_status', $status)
+        ->limit(50)
         ->latest()
         ->get();
         $clients = Client::get();
@@ -156,10 +157,36 @@ class ProjectController extends Controller
         ]);
     }
 
+    // public function SelfStatus(Request $request, $status)
+    // {
+    //     $userId = Auth::id();
+    //     $projects = Project::with([
+    //         'projectTeamMembers' => function($query) use ($userId) {
+    //             $query->where('user_id', $userId);
+    //         },
+    //         'projectTeamMembers.user.media' => function($query) {
+    //             $query->where('category', 'profile')->latest()->limit(1);
+    //         },
+    //         'client'
+    //     ])
+    //     ->where('project_status', $status)
+    //     ->whereHas('projectTeamMembers', function($query) use ($userId) {
+    //         $query->where('user_id', $userId);
+    //     })
+    //     ->latest()
+    //     ->get();
+    //     $clients = Client::get();
+    //     return Inertia('Pages/Project/Index', [
+    //         'projects' => $projects,
+    //         'status' => $status,
+    //         'clients' => $clients,
+    //         'globalHeader' => false,
+    //     ]);
+    // }
     public function SelfStatus(Request $request, $status)
     {
         $userId = Auth::id();
-        $projects = Project::with([
+        $query = Project::with([
             'projectTeamMembers' => function($query) use ($userId) {
                 $query->where('user_id', $userId);
             },
@@ -168,13 +195,23 @@ class ProjectController extends Controller
             },
             'client'
         ])
-        ->where('project_status', $status)
         ->whereHas('projectTeamMembers', function($query) use ($userId) {
             $query->where('user_id', $userId);
-        })
-        ->latest()
-        ->get();
+        });
+
+        // Apply custom status logic
+        if ($status === 'Recent') {
+            // All except delivered
+            $query->where('project_status', '!=', 'deliver');
+        } elseif ($status !== 'All') {
+            // Normal specific status filter (keep old behavior)
+            $query->where('project_status', $status);
+        }
+        // If status == 'All', no filtering on status is applied
+
+        $projects = $query->latest()->get();
         $clients = Client::get();
+
         return Inertia('Pages/Project/Index', [
             'projects' => $projects,
             'status' => $status,
