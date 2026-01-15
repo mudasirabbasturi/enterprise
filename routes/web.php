@@ -13,6 +13,7 @@ use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\CandidateController;
+use App\Http\Controllers\LegalPageController;
 
 use Illuminate\Support\Facades\DB;
 
@@ -112,6 +113,13 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/application/candidates/{id}', [CandidateController::class, 'GenerateJobLetter'])->name('generate.jobletter');
     Route::put('/application/stats/{id}', [CandidateController::class, 'Stats'])->name('job_letter.stats');
     Route::delete('/application/destroy/{id}', [CandidateController::class, 'Destroy'])->name('candidate.destroy');
+
+    Route::get('/privacy-policy', [LegalPageController::class, 'privacy'])
+        ->name('privacy.policy');
+
+    Route::get('/terms-conditions', [LegalPageController::class, 'terms'])
+        ->name('terms.conditions');
+        
 });
 
 Route::get('/job/apply',[CandidateController::class, 'applicationForm'])->name('application.form');

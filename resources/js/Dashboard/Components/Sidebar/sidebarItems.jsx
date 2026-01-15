@@ -10,6 +10,8 @@ import {
   GatewayOutlined,
   FileDoneOutlined,
   SettingOutlined,
+  SafetyOutlined,
+  FileTextOutlined,
 } from "@shared/ui";
 
 // 🔑 helper function to check permission
@@ -433,5 +435,21 @@ export const getSidebarItems = ({
           },
         ]
       : []),
+
+      {
+          key: "privacy-policy",
+          label: (
+              <Link href={route("privacy.policy")}>Privacy Policy</Link>
+            ),
+          icon: <SafetyOutlined style={{ fontSize: "20px" }} />,
+
+      },
+      {
+          key: "terms-conditions",
+          label: (
+              <Link href={route("terms.conditions")}>Terms & Conditions</Link>
+            ),
+          icon: <FileTextOutlined style={{ fontSize: "20px" }} />,
+      }
   ];
 };

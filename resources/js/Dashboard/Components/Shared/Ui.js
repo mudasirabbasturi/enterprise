@@ -93,6 +93,7 @@ export {
   ExclamationCircleFilled,
   DownloadOutlined,
   BarChartOutlined,
+  FileTextOutlined
 } from "@ant-design/icons";
 
 export { PhoneInput } from "react-international-phone";
