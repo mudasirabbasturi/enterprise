@@ -24,6 +24,7 @@ import {
 import axios from "axios";
 import NProgress from "nprogress";
 const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
+
   const hasPermission = (userpermission, permName) =>
     userpermission?.some((p) => p.name === permName);
   const { auth } = usePage().props;

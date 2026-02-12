@@ -11,13 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('shifts', function (Blueprint $table) {
+        Schema::create('user_activities', function (Blueprint $table) {
             $table->id();
-            $table->string('name'); // e.g., "Morning", "Night"
-            $table->text('notes')->nullable(); // Any notes or extra info
-            $table->boolean('is_active')->default(true); // Toggle active/inactive
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->string('type'); // login, status_change, app_activity, system_power
+            $table->json('details');
+            $table->timestamp('event_time')->nullable();
             $table->timestamps();
-            $table->softDeletesTz('deleted_at', precision: 0);
         });
     }
 
@@ -26,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('shifts');
+        Schema::dropIfExists('user_activities');
     }
 };

@@ -254,6 +254,18 @@ const DashboardLayout = ({ children }) => {
             </div>{" "}
             <div className="right">
               <div className="d-flex">
+                <div>
+                  <button
+                    className="btn btn-sm btn-outline-primary me-3"
+                    onClick={() =>
+                      router.visit(route("user.tracking"))
+                    }
+                  >
+                    User Activity
+                  </button>
+
+                </div>
+
                 {can("View Project Chart") && (
                   <>
                     <div>

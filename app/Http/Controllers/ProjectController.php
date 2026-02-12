@@ -48,17 +48,6 @@ class ProjectController extends Controller
             'client'
         ])->find($project->id);
 
-        // $options = [ 
-        //     'cluster' => config('broadcasting.connections.pusher.options.cluster'), 
-        //     'useTLS' => true, 
-        // ];
-        // $pusher = new Pusher(
-        //     config('broadcasting.connections.pusher.key'),
-        //     config('broadcasting.connections.pusher.secret'),
-        //     config('broadcasting.connections.pusher.app_id'),
-        //     $options
-        // );
-
         $options = [ 
             'cluster' => 'ap2', 
             'useTLS' => true, 
@@ -106,7 +95,7 @@ class ProjectController extends Controller
             'message' => 'Project updated successfully.',
             'project' => $project,
         ]);
-        // return redirect()->back()->with('message', 'Project updated successfully.');
+       
     }
 
     public function Destroy($id)
@@ -156,32 +145,6 @@ class ProjectController extends Controller
         ]);
     }
 
-    // public function SelfStatus(Request $request, $status)
-    // {
-    //     $userId = Auth::id();
-    //     $projects = Project::with([
-    //         'projectTeamMembers' => function($query) use ($userId) {
-    //             $query->where('user_id', $userId);
-    //         },
-    //         'projectTeamMembers.user.media' => function($query) {
-    //             $query->where('category', 'profile')->latest()->limit(1);
-    //         },
-    //         'client'
-    //     ])
-    //     ->where('project_status', $status)
-    //     ->whereHas('projectTeamMembers', function($query) use ($userId) {
-    //         $query->where('user_id', $userId);
-    //     })
-    //     ->latest()
-    //     ->get();
-    //     $clients = Client::get();
-    //     return Inertia('Pages/Project/Index', [
-    //         'projects' => $projects,
-    //         'status' => $status,
-    //         'clients' => $clients,
-    //         'globalHeader' => false,
-    //     ]);
-    // }
     public function SelfStatus(Request $request, $status)
     {
         $userId = Auth::id();
@@ -546,31 +509,6 @@ class ProjectController extends Controller
         ]);
     }
 
-
-    // public function ProjectReport(Request $request)
-    // {
-    //     $projectsReport = DB::table('projects')
-    //         ->leftJoin('project_team_members', 'projects.id', '=', 'project_team_members.project_id')
-    //         ->leftJoin('users', 'project_team_members.user_id', '=', 'users.id')
-    //         ->whereYear('project_team_members.created_at', '>=', 2023)
-    //         ->select(
-    //             'users.name as username',
-    //             DB::raw('YEAR(project_team_members.created_at) as year'),
-    //             DB::raw('MONTHNAME(project_team_members.created_at) as month'),
-    //             DB::raw('SUM(projects.project_points) as total_points'),
-    //             DB::raw('SUM(project_team_members.points_gain) as points_gain'),
-    //             DB::raw('COUNT(DISTINCT projects.id) as projects_count'),
-    //             DB::raw('SUM(JSON_LENGTH(project_team_members.steps)) as tasks_count')
-    //         )
-    //         ->groupBy('users.name', 'year', 'month')
-    //         ->orderBy('year', 'desc')
-    //         ->orderBy(DB::raw('MONTH(project_team_members.created_at)'), 'asc')
-    //         ->get();
-
-    //     return Inertia('Pages/Project/Report', [
-    //         'reports' => $projectsReport,
-    //     ]);
-    // }
 
     public function ProjectReport(Request $request)
     {

@@ -14,6 +14,9 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\CandidateController;
 use App\Http\Controllers\LegalPageController;
+use App\Http\Controllers\ProjectTestController;
+use App\Http\Controllers\Api\TrackingController;
+
 
 use Illuminate\Support\Facades\DB;
 
@@ -120,7 +123,16 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/terms-conditions', [LegalPageController::class, 'terms'])
         ->name('terms.conditions');
         
+// Test page routes
+Route::get('/projects/test', [ProjectTestController::class, 'index'])->name('projects.test');
+Route::prefix('api/test')->group(function () {
+    Route::post('/more-projects', [ProjectTestController::class, 'getMoreProjects']);
+    Route::post('/team-members', [ProjectTestController::class, 'getTeamMembers']);
 });
+
+    Route::get('/user-tracking', [TrackingController::class, 'index'])->name('user.tracking');
+});
+
 
 Route::get('/job/apply',[CandidateController::class, 'applicationForm'])->name('application.form');
 Route::post('/job/apply',[CandidateController::class, 'submitApplicationForm'])->name('submit.application.form');

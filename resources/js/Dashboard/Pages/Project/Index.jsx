@@ -26,6 +26,8 @@ const AddEditPoint = lazy(() =>
 );
 
 const Index = ({ projects, clients }) => {
+  console.log("Projects:", projects);
+
   const { props } = usePage();
   const globalHeader = props.globalHeader ?? true;
   const user = props?.auth?.user ?? {};
