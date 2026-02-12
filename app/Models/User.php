@@ -96,7 +96,11 @@ class User extends Authenticatable
         return $this->belongsTo(Role::class);
     }
     
-      public function userAttendance(): HasMany {
+    public function userAttendance(): HasMany {
         return $this->hasMany(UserAttendance::class);
+    }
+
+    public function userAllowedIp(): HasMany {
+        return $this->hasMany(UserAllowedIp::class);
     }
 }

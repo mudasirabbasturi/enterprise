@@ -81,6 +81,11 @@ const DashboardLayout = ({ children }) => {
       label: <Link href={route("user.profile", user.id)}>Profile</Link>,
     },
     {
+      key: "my-attendance",
+      icon: <BarChartOutlined />,
+      label: <Link href={route("my-attendance.index")}>My Attendance</Link>,
+    },
+    {
       type: "divider",
     },
     {

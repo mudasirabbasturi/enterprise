@@ -16,7 +16,11 @@ use App\Http\Controllers\CandidateController;
 use App\Http\Controllers\LegalPageController;
 use App\Http\Controllers\ProjectTestController;
 use App\Http\Controllers\Api\TrackingController;
-
+use App\Http\Controllers\ShiftController;
+use App\Http\Controllers\UserShiftScheduleController;
+use App\Http\Controllers\UserAllowedIpController;
+use App\Http\Controllers\UserAttendanceController;
+use App\Http\Controllers\WorkScheduleController;
 
 use Illuminate\Support\Facades\DB;
 
@@ -131,6 +135,37 @@ Route::prefix('api/test')->group(function () {
 });
 
     Route::get('/user-tracking', [TrackingController::class, 'index'])->name('user.tracking');
+
+    /** Work Schedule Routes */
+    /** Work Schedule Routes */
+    Route::get('/schedule', [WorkScheduleController::class, 'Index'])->name('work-schedule.index');
+    
+    // Shifts
+    Route::get('/schedule/shifts', [ShiftController::class, 'Index'])->name('shifts.index');
+    Route::post('/schedule/shifts/store', [ShiftController::class, 'Store'])->name('shifts.store');
+    Route::put('/schedule/shifts/update/{id}', [ShiftController::class, 'Update'])->name('shifts.update');
+    Route::delete('/schedule/shifts/destroy/{id}', [ShiftController::class, 'Destroy'])->name('shifts.destroy');
+
+    // User Schedules
+    Route::get('/schedule/users-schedules', [UserShiftScheduleController::class, 'Index'])->name('users-schedules.index');
+    Route::post('/schedule/users-schedules/store', [UserShiftScheduleController::class, 'Store'])->name('users-schedules.store');
+    Route::put('/schedule/users-schedules/update/{id}', [UserShiftScheduleController::class, 'Update'])->name('users-schedules.update');
+    Route::delete('/schedule/users-schedules/destroy/{id}', [UserShiftScheduleController::class, 'Destroy'])->name('users-schedules.destroy');
+
+    // Allowed IPs
+    Route::get('/schedule/allowed-ips', [UserAllowedIpController::class, 'Index'])->name('allowed-ips.index');
+    Route::post('/schedule/allowed-ips/store', [UserAllowedIpController::class, 'Store'])->name('allowed-ips.store');
+    Route::put('/schedule/allowed-ips/update/{id}', [UserAllowedIpController::class, 'Update'])->name('allowed-ips.update');
+    Route::delete('/schedule/allowed-ips/destroy/{id}', [UserAllowedIpController::class, 'Destroy'])->name('allowed-ips.destroy');
+
+    // User Attendance
+    Route::get('/schedule/my-attendance', [UserAttendanceController::class, 'MyAttendance'])->name('my-attendance.index');
+    Route::get('/schedule/users-attendance', [UserAttendanceController::class, 'Index'])->name('users-attendance.index');
+    Route::post('/schedule/users-attendance/store', [UserAttendanceController::class, 'Store'])->name('users-attendance.store');
+    Route::put('/schedule/users-attendance/update/{id}', [UserAttendanceController::class, 'Update'])->name('users-attendance.update');
+    Route::delete('/schedule/users-attendance/destroy/{id}', [UserAttendanceController::class, 'Destroy'])->name('users-attendance.destroy');
+
+
 });
 
 

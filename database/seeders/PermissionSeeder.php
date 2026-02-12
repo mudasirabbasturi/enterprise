@@ -138,6 +138,23 @@ class PermissionSeeder extends Seeder
             // ['model' => 'ProjectTeamMember', 'type' => 'route', 'name' => 'Add/Update Score'],
             // ['model' => 'General', 'type' => 'column', 'name' => 'View Report'],
             // ['model' => 'General', 'type' => 'column', 'name' => 'View Project Chart'],
+
+            // ['model' => 'Shift', 'type' => 'route', 'name' => 'View Shift'],
+            // ['model' => 'Shift', 'type' => 'route', 'name' => 'Create Shift'],
+            // ['model' => 'Shift', 'type' => 'route', 'name' => 'Update Shift'],
+            // ['model' => 'Shift', 'type' => 'route', 'name' => 'Delete Shift'],
+            // ['model' => 'UserAttendance', 'type' => 'route', 'name' => 'View User Attendance'],
+            // ['model' => 'UserAttendance', 'type' => 'route', 'name' => 'Create User Attendance'],
+            // ['model' => 'UserAttendance', 'type' => 'route', 'name' => 'Update User Attendance'],
+            // ['model' => 'UserAttendance', 'type' => 'route', 'name' => 'Delete User Attendance'],
+            // ['model' => 'UserAllowedIp', 'type' => 'route', 'name' => 'View User Allowed IP'],
+            // ['model' => 'UserAllowedIp', 'type' => 'route', 'name' => 'Create User Allowed IP'],
+            // ['model' => 'UserAllowedIp', 'type' => 'route', 'name' => 'Update User Allowed IP'],
+            // ['model' => 'UserAllowedIp', 'type' => 'route', 'name' => 'Delete User Allowed IP'],
+            // ['model' => 'UserShiftSchedule', 'type' => 'route', 'name' => 'View User Shift Schedule'],
+            // ['model' => 'UserShiftSchedule', 'type' => 'route', 'name' => 'Create User Shift Schedule'],
+            // ['model' => 'UserShiftSchedule', 'type' => 'route', 'name' => 'Update User Shift Schedule'],
+            // ['model' => 'UserShiftSchedule', 'type' => 'route', 'name' => 'Delete User Shift Schedule'],
         ];
 
         foreach ($permissions as $perm) {

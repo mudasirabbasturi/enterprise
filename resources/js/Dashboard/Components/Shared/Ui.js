@@ -37,6 +37,9 @@ export {
   Typography,
   Spin,
   Dropdown,
+  Form,
+  Switch,
+  TimePicker,
 } from "antd";
 
 export {
@@ -54,7 +57,6 @@ export {
   PlusOutlined,
   MinusOutlined,
   UserOutlined,
-  FieldTimeOutlined,
   FolderAddOutlined,
   DiffOutlined,
   MinusCircleOutlined,
@@ -89,11 +91,16 @@ export {
   CiOutlined,
   BranchesOutlined,
   CaretDownOutlined,
+  LoginOutlined,
   LogoutOutlined,
   ExclamationCircleFilled,
   DownloadOutlined,
   BarChartOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  FieldTimeOutlined,
+  ScheduleOutlined,
+  CreditCardOutlined,
+
 } from "@ant-design/icons";
 
 export { PhoneInput } from "react-international-phone";
