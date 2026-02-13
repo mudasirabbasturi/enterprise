@@ -100,19 +100,34 @@ const MyAttendance = ({ attendances, selectedYear, auth }) => {
         {
             headerName: "Actions",
             width: 200,
-            cellRenderer: (params) => (
-                <button
-                    className="btn btn-primary btn-sm w-100 d-flex align-items-center justify-content-center"
-                    onClick={() => {
-                        setSelectedMonthForAttendance(params.data.monthIndex);
-                        setIsAttendanceGridModalOpen(true);
-                    }}
-                >
-                    View & Mark Attendance
-                </button>
-            )
+            cellRenderer: (params) => {
+                const now = dayjs();
+                const currentMonth = now.month();
+                const currentYear = now.year();
+
+                const isCurrentMonth = params.data.monthIndex === currentMonth && filterYear === currentYear;
+                const isPast = filterYear < currentYear || (filterYear === currentYear && params.data.monthIndex < currentMonth);
+
+                let buttonText = "View & Mark Attendance";
+                if (!isCurrentMonth) {
+                    buttonText = isPast ? "Closed" : "Upcoming";
+                }
+
+                return (
+                    <button
+                        className={`btn btn-sm w-100 d-flex align-items-center justify-content-center ${isCurrentMonth ? 'btn-primary' : 'btn-outline-secondary'}`}
+                        disabled={!isCurrentMonth}
+                        onClick={() => {
+                            setSelectedMonthForAttendance(params.data.monthIndex);
+                            setIsAttendanceGridModalOpen(true);
+                        }}
+                    >
+                        {buttonText}
+                    </button>
+                )
+            }
         }
-    ], []);
+    ], [filterYear]);
 
     const rowData = useMemo(() => {
         return months.map((m, i) => {
@@ -264,8 +279,16 @@ const MyAttendance = ({ attendances, selectedYear, auth }) => {
                         columnDefs={detailColumnDefs}
                         defaultColDef={defaultColDef}
                         theme={gridTheme}
-                        pagination={true}
-                        paginationPageSize={20}
+                        pagination={false}
+                        onFirstDataRendered={(params) => {
+                            const today = dayjs().format('YYYY-MM-DD');
+                            const rowIndex = userAttendanceRowData.findIndex(row => row.date === today);
+                            if (rowIndex !== -1) {
+                                params.api.ensureIndexVisible(rowIndex, 'middle');
+                                // Highlight the current day row briefly
+                                params.api.flashCells({ rowNodes: [params.api.getRowNode(params.api.getDisplayedRowAtIndex(rowIndex).id)] });
+                            }
+                        }}
                     />
                 </div>
             </Modal>

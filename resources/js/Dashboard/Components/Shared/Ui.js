@@ -40,6 +40,7 @@ export {
   Form,
   Switch,
   TimePicker,
+  Table
 } from "antd";
 
 export {
@@ -100,6 +101,8 @@ export {
   FieldTimeOutlined,
   ScheduleOutlined,
   CreditCardOutlined,
+  CloseCircleOutlined,
+  WalletOutlined,
 
 } from "@ant-design/icons";
 

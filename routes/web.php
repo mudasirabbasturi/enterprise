@@ -21,6 +21,11 @@ use App\Http\Controllers\UserShiftScheduleController;
 use App\Http\Controllers\UserAllowedIpController;
 use App\Http\Controllers\UserAttendanceController;
 use App\Http\Controllers\WorkScheduleController;
+use App\Http\Controllers\LeaveTypeController;
+use App\Http\Controllers\LeavePolicyController;
+use App\Http\Controllers\LeaveBalanceController;
+use App\Http\Controllers\LeaveRequestController;
+use App\Http\Controllers\HolidayController;
 
 use Illuminate\Support\Facades\DB;
 
@@ -149,6 +154,8 @@ Route::prefix('api/test')->group(function () {
     // User Schedules
     Route::get('/schedule/users-schedules', [UserShiftScheduleController::class, 'Index'])->name('users-schedules.index');
     Route::post('/schedule/users-schedules/store', [UserShiftScheduleController::class, 'Store'])->name('users-schedules.store');
+    Route::post('/schedule/users-schedules/bulk-store', [UserShiftScheduleController::class, 'BulkStore'])->name('users-schedules.bulk-store');
+    Route::delete('/schedule/users-schedules/bulk-destroy', [UserShiftScheduleController::class, 'BulkDestroy'])->name('users-schedules.bulk-destroy');
     Route::put('/schedule/users-schedules/update/{id}', [UserShiftScheduleController::class, 'Update'])->name('users-schedules.update');
     Route::delete('/schedule/users-schedules/destroy/{id}', [UserShiftScheduleController::class, 'Destroy'])->name('users-schedules.destroy');
 
@@ -164,6 +171,47 @@ Route::prefix('api/test')->group(function () {
     Route::post('/schedule/users-attendance/store', [UserAttendanceController::class, 'Store'])->name('users-attendance.store');
     Route::put('/schedule/users-attendance/update/{id}', [UserAttendanceController::class, 'Update'])->name('users-attendance.update');
     Route::delete('/schedule/users-attendance/destroy/{id}', [UserAttendanceController::class, 'Destroy'])->name('users-attendance.destroy');
+
+    /** Leave Management Routes */
+    // Leave Types
+    Route::get('/leave/types', [LeaveTypeController::class, 'Index'])->name('leave-types.index');
+    Route::post('/leave/types/store', [LeaveTypeController::class, 'Store'])->name('leave-types.store');
+    Route::put('/leave/types/update/{id}', [LeaveTypeController::class, 'Update'])->name('leave-types.update');
+    Route::delete('/leave/types/destroy/{id}', [LeaveTypeController::class, 'Destroy'])->name('leave-types.destroy');
+    Route::delete('/leave/types/bulk-destroy', [LeaveTypeController::class, 'BulkDestroy'])->name('leave-types.bulk-destroy');
+
+    // Leave Policies
+    Route::get('/leave/policies', [LeavePolicyController::class, 'Index'])->name('leave-policies.index');
+    Route::post('/leave/policies/store', [LeavePolicyController::class, 'Store'])->name('leave-policies.store');
+    Route::put('/leave/policies/update/{id}', [LeavePolicyController::class, 'Update'])->name('leave-policies.update');
+    Route::delete('/leave/policies/destroy/{id}', [LeavePolicyController::class, 'Destroy'])->name('leave-policies.destroy');
+    Route::delete('/leave/policies/bulk-destroy', [LeavePolicyController::class, 'BulkDestroy'])->name('leave-policies.bulk-destroy');
+
+    // Leave Balances
+    Route::get('/leave/balances', [LeaveBalanceController::class, 'Index'])->name('leave-balances.index');
+    Route::post('/leave/balances/store', [LeaveBalanceController::class, 'Store'])->name('leave-balances.store');
+    Route::put('/leave/balances/update/{id}', [LeaveBalanceController::class, 'Update'])->name('leave-balances.update');
+    Route::delete('/leave/balances/destroy/{id}', [LeaveBalanceController::class, 'Destroy'])->name('leave-balances.destroy');
+    Route::delete('/leave/balances/bulk-destroy', [LeaveBalanceController::class, 'BulkDestroy'])->name('leave-balances.bulk-destroy');
+
+    // Leave Requests
+    Route::get('/leave/requests', [LeaveRequestController::class, 'Index'])->name('leave-requests.index');
+    Route::post('/leave/requests/store', [LeaveRequestController::class, 'Store'])->name('leave-requests.store');
+    Route::put('/leave/requests/update/{id}', [LeaveRequestController::class, 'Update'])->name('leave-requests.update');
+    Route::delete('/leave/requests/destroy/{id}', [LeaveRequestController::class, 'Destroy'])->name('leave-requests.destroy');
+    Route::post('/leave/requests/status/{id}', [LeaveRequestController::class, 'UpdateStatus'])->name('leave-requests.status');
+    Route::delete('/leave/requests/bulk-destroy', [LeaveRequestController::class, 'BulkDestroy'])->name('leave-requests.bulk-destroy');
+
+    // Holidays
+    Route::get('/leave/holidays', [HolidayController::class, 'Index'])->name('holidays.index');
+    Route::post('/leave/holidays/store', [HolidayController::class, 'Store'])->name('holidays.store');
+    Route::put('/leave/holidays/update/{id}', [HolidayController::class, 'Update'])->name('holidays.update');
+    Route::delete('/leave/holidays/destroy/{id}', [HolidayController::class, 'Destroy'])->name('holidays.destroy');
+    Route::delete('/leave/holidays/bulk-destroy', [HolidayController::class, 'BulkDestroy'])->name('holidays.bulk-destroy');
+
+    // Personal Leave Management
+    Route::get('/my-leave-balances', [LeaveBalanceController::class, 'MyBalances'])->name('my-leave-balances.index');
+    Route::get('/my-leave-requests', [LeaveRequestController::class, 'MyRequests'])->name('my-leave-requests.index');
 
 
 });

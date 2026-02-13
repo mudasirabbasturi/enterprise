@@ -30,6 +30,13 @@ class DatabaseSeeder extends Seeder
             // RolePermissionSeeder,
             // RoleUser::class,
             // MediaSeeder::class,
+            
+            // Leave Management Seeders (uncomment to seed)
+            LeaveTypeSeeder::class,
+            LeavePolicySeeder::class,
+            LeaveBalanceSeeder::class,
+            LeaveRequestSeeder::class,
+            HolidaySeeder::class,
         ]);
     }
 }

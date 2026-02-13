@@ -204,6 +204,7 @@ Schema::create('user_attendances', function (Blueprint $table) {
     $table->softDeletesTz('deleted_at', precision: 0);
 });
 
+// leave management 
 
 Schema::create('leave_types', function (Blueprint $table) {
     $table->id();

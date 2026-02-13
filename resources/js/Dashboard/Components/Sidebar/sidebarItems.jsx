@@ -355,49 +355,72 @@ export const getSidebarItems = ({
         },
       ]
       : []),
-    // {
-    //   key: "leave-management",
-    //   label: "Leave Management",
-    //   icon: <ScheduleOutlined style={{ fontSize: "20px" }} />,
-    //   children: [
-    //     {
-    //       key: "leave-requests",
-    //       label: (
-    //         <Link href={route("")}>Leave Requests</Link>
-    //       ),
-    //       icon: <CheckCircleOutlined />,
-    //     },
-    //     {
-    //       key: "leave-balances",
-    //       label: (
-    //         <Link href={route("")}>Leave Balances</Link>
-    //       ),
-    //       icon: <CheckCircleOutlined />,
-    //     },
-    //     {
-    //       key: "leave-types",
-    //       label: (
-    //         <Link href={route("")}>Leave Types</Link>
-    //       ),
-    //       icon: <CheckCircleOutlined />,
-    //     },
-    //     {
-    //       key: "leave-policies",
-    //       label: (
-    //         <Link href={route("")}>Leave Policies</Link>
-    //       ),
-    //       icon: <CheckCircleOutlined />,
-    //     },
-    //     {
-    //       key: "holidays",
-    //       label: (
-    //         <Link href={route("")}>Holidays</Link>
-    //       ),
-    //       icon: <CheckCircleOutlined />,
-    //     },
-    //   ],
-
-    // },
+    ...(can("View Leave Request") || can("View Leave Balance") || can("View Leave Type") || can("View Leave Policy") || can("View Holiday")
+      ? [
+        {
+          key: "leave-management",
+          label: "Leave Management",
+          icon: <ScheduleOutlined style={{ fontSize: "20px" }} />,
+          children: [
+            ...(can("View Leave Request")
+              ? [
+                {
+                  key: "leave-requests",
+                  label: (
+                    <Link href={route("leave-requests.index")}>Leave Requests</Link>
+                  ),
+                  icon: <CheckCircleOutlined />,
+                },
+              ]
+              : []),
+            ...(can("View Leave Balance")
+              ? [
+                {
+                  key: "leave-balances",
+                  label: (
+                    <Link href={route("leave-balances.index")}>Leave Balances</Link>
+                  ),
+                  icon: <CheckCircleOutlined />,
+                },
+              ]
+              : []),
+            ...(can("View Leave Type")
+              ? [
+                {
+                  key: "leave-types",
+                  label: (
+                    <Link href={route("leave-types.index")}>Leave Types</Link>
+                  ),
+                  icon: <CheckCircleOutlined />,
+                },
+              ]
+              : []),
+            ...(can("View Leave Policy")
+              ? [
+                {
+                  key: "leave-policies",
+                  label: (
+                    <Link href={route("leave-policies.index")}>Leave Policies</Link>
+                  ),
+                  icon: <CheckCircleOutlined />,
+                },
+              ]
+              : []),
+            ...(can("View Holiday")
+              ? [
+                {
+                  key: "holidays",
+                  label: (
+                    <Link href={route("holidays.index")}>Holidays</Link>
+                  ),
+                  icon: <CheckCircleOutlined />,
+                },
+              ]
+              : []),
+          ],
+        },
+      ]
+      : []),
     // {
     //   key: "payroll-management",
     //   label: "Payroll Management",

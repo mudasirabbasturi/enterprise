@@ -27,6 +27,8 @@ import {
   CaretDownOutlined,
   LogoutOutlined,
   BarChartOutlined,
+  WalletOutlined,
+  ScheduleOutlined,
   /**
    * Ziggy
    */
@@ -84,6 +86,16 @@ const DashboardLayout = ({ children }) => {
       key: "my-attendance",
       icon: <BarChartOutlined />,
       label: <Link href={route("my-attendance.index")}>My Attendance</Link>,
+    },
+    {
+      key: "my-leave-balance",
+      icon: <WalletOutlined />,
+      label: <Link href={route("my-leave-balances.index")}>My Leave Balance</Link>,
+    },
+    {
+      key: "request-leave",
+      icon: <ScheduleOutlined />,
+      label: <Link href={route("my-leave-requests.index")}>Request Leave</Link>,
     },
     {
       type: "divider",
