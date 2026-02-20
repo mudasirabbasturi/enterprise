@@ -15,15 +15,10 @@ class UserShiftSchedule extends Model
         'user_id',
         'shift_id',
         'day',
-        'start_time',
-        'end_time',
-        'duration',
-        'is_available',
         'notes',
     ];
 
     protected $casts = [
-        'is_available' => 'boolean',
     ];
 
     public function user()

@@ -20,6 +20,9 @@ class ShiftController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'start_time' => 'required',
+            'end_time' => 'required',
+            'duration' => 'nullable|integer',
             'notes' => 'nullable|string',
             'is_active' => 'boolean',
         ]);
@@ -34,6 +37,9 @@ class ShiftController extends Controller
         $shift = Shift::findOrFail($id);
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'start_time' => 'required',
+            'end_time' => 'required',
+            'duration' => 'nullable|integer',
             'notes' => 'nullable|string',
             'is_active' => 'boolean',
         ]);

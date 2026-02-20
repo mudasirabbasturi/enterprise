@@ -103,4 +103,12 @@ class User extends Authenticatable
     public function userAllowedIp(): HasMany {
         return $this->hasMany(UserAllowedIp::class);
     }
+
+    public function salary(): \Illuminate\Database\Eloquent\Relations\HasOne {
+        return $this->hasOne(EmployeeSalary::class);
+    }
+
+    public function userShiftSchedules(): HasMany {
+        return $this->hasMany(UserShiftSchedule::class);
+    }
 }

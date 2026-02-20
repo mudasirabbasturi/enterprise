@@ -17,7 +17,6 @@ return new class extends Migration
             $table->ipAddress('ip_address');
             $table->text('notes')->nullable(); // Any notes or extra info
             $table->timestamps();
-            $table->softDeletesTz('deleted_at', precision: 0);
         });
     }
 

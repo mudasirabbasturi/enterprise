@@ -12,24 +12,55 @@ use Exception;
 
 class LeaveRequestController extends Controller
 {
-    public function Index()
+    public function Index(Request $request)
     {
+        $month = $request->input('month', now()->month);
+        $year = $request->input('year', now()->year);
+
+        $requests = LeaveRequest::with(['user', 'leaveType', 'approvedBy'])
+            ->where(function($query) use ($year, $month) {
+                $query->whereYear('start_date', $year)
+                      ->whereMonth('start_date', $month)
+                      ->orWhere(function($q) use ($year, $month) {
+                          $q->whereYear('end_date', $year)
+                            ->whereMonth('end_date', $month);
+                      });
+            })
+            ->get();
+
         return Inertia::render('Pages/LeaveManagement/LeaveRequests', [
-            'requests' => LeaveRequest::with(['user', 'leaveType', 'approvedBy'])->get(),
+            'requests' => $requests,
             'leaveTypes' => LeaveType::all(),
             'users' => User::all(),
+            'selectedMonth' => (int)$month,
+            'selectedYear' => (int)$year,
         ]);
     }
 
-    public function MyRequests()
+    public function MyRequests(Request $request)
     {
+        $month = $request->input('month', now()->month);
+        $year = $request->input('year', now()->year);
+
+        $requests = LeaveRequest::with(['user', 'leaveType', 'approvedBy'])
+            ->where('user_id', auth()->id())
+            ->where(function($query) use ($year, $month) {
+                $query->whereYear('start_date', $year)
+                      ->whereMonth('start_date', $month)
+                      ->orWhere(function($q) use ($year, $month) {
+                          $q->whereYear('end_date', $year)
+                            ->whereMonth('end_date', $month);
+                      });
+            })
+            ->get();
+
         return Inertia::render('Pages/LeaveManagement/LeaveRequests', [
-            'requests' => LeaveRequest::with(['user', 'leaveType', 'approvedBy'])
-                ->where('user_id', auth()->id())
-                ->get(),
+            'requests' => $requests,
             'leaveTypes' => LeaveType::all(),
             'users' => [auth()->user()],
             'isPersonal' => true,
+            'selectedMonth' => (int)$month,
+            'selectedYear' => (int)$year,
         ]);
     }
 

@@ -14,10 +14,12 @@ return new class extends Migration
         Schema::create('shifts', function (Blueprint $table) {
             $table->id();
             $table->string('name'); // e.g., "Morning", "Night"
+            $table->time('start_time');
+            $table->time('end_time');
+            $table->integer('duration')->default(30);
             $table->text('notes')->nullable(); // Any notes or extra info
             $table->boolean('is_active')->default(true); // Toggle active/inactive
             $table->timestamps();
-            $table->softDeletesTz('deleted_at', precision: 0);
         });
     }
 

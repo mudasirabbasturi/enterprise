@@ -25,7 +25,6 @@ return new class extends Migration
             $table->boolean('allow_half_day')->default(true);
 
             $table->timestamps();
-            $table->softDeletes();
         });
     }
 

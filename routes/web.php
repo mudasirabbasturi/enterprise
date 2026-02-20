@@ -26,6 +26,13 @@ use App\Http\Controllers\LeavePolicyController;
 use App\Http\Controllers\LeaveBalanceController;
 use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\HolidayController;
+use App\Http\Controllers\SalaryPackageController;
+use App\Http\Controllers\TaxRuleController;
+use App\Http\Controllers\PenaltyController;
+use App\Http\Controllers\SalarySetupController;
+use App\Http\Controllers\SalarySheetController;
+use App\Http\Controllers\PayrollConfigController;
+
 
 use Illuminate\Support\Facades\DB;
 
@@ -212,6 +219,43 @@ Route::prefix('api/test')->group(function () {
     // Personal Leave Management
     Route::get('/my-leave-balances', [LeaveBalanceController::class, 'MyBalances'])->name('my-leave-balances.index');
     Route::get('/my-leave-requests', [LeaveRequestController::class, 'MyRequests'])->name('my-leave-requests.index');
+
+    /** Payroll Management Routes */
+    // Salary Setup (Assignments)
+    Route::get('/payroll/salary-setup', [SalarySetupController::class, 'index'])->name('salary-setup.index');
+    Route::post('/payroll/salary-setup/store', [SalarySetupController::class, 'store'])->name('salary-setup.store');
+    Route::post('/payroll/salary-setup/bulk-store', [SalarySetupController::class, 'bulkStore'])->name('salary-setup.bulk-store');
+    Route::put('/payroll/salary-setup/update/{id}', [SalarySetupController::class, 'update'])->name('salary-setup.update');
+    Route::delete('/payroll/salary-setup/destroy/{id}', [SalarySetupController::class, 'destroy'])->name('salary-setup.destroy');
+    Route::delete('/payroll/salary-setup/bulk-destroy', [SalarySetupController::class, 'bulkDestroy'])->name('salary-setup.bulk-destroy');
+
+    // Salary Sheets & Payments
+    Route::get('/payroll/salary-sheets', [SalarySheetController::class, 'index'])->name('salary-sheets.index');
+    Route::post('/payroll/salary-sheets/pay', [SalarySheetController::class, 'processPayment'])->name('salary-sheets.pay');
+    Route::post('/payroll/salary-sheets/unpay', [SalarySheetController::class, 'unpayPayment'])->name('salary-sheets.unpay');
+    Route::post('/payroll/config/update', [PayrollConfigController::class, 'update'])->name('payroll.config.update');
+
+    // Tax Management
+    Route::get('/payroll/tax-management', [TaxRuleController::class, 'index'])->name('tax-management.index');
+    Route::post('/payroll/tax-management/store', [TaxRuleController::class, 'store'])->name('tax-management.store');
+    Route::put('/payroll/tax-management/update/{id}', [TaxRuleController::class, 'update'])->name('tax-management.update');
+    Route::delete('/payroll/tax-management/destroy/{id}', [TaxRuleController::class, 'destroy'])->name('tax-management.destroy');
+    Route::delete('/payroll/tax-management/bulk-destroy', [TaxRuleController::class, 'bulkDestroy'])->name('tax-management.bulk-destroy');
+
+    // Salary Packages
+    Route::get('/payroll/salary-packages', [SalaryPackageController::class, 'index'])->name('salary-packages.index');
+    Route::post('/payroll/salary-packages/store', [SalaryPackageController::class, 'store'])->name('salary-packages.store');
+    Route::put('/payroll/salary-packages/update/{id}', [SalaryPackageController::class, 'update'])->name('salary-packages.update');
+    Route::delete('/payroll/salary-packages/destroy/{id}', [SalaryPackageController::class, 'destroy'])->name('salary-packages.destroy');
+    Route::delete('/payroll/salary-packages/bulk-destroy', [SalaryPackageController::class, 'bulkDestroy'])->name('salary-packages.bulk-destroy');
+
+    // Penalty Management
+    Route::get('/payroll/penalty-management', [PenaltyController::class, 'index'])->name('penalty-management.index');
+    Route::post('/payroll/penalty-management/store', [PenaltyController::class, 'store'])->name('penalty-management.store');
+    Route::put('/payroll/penalty-management/update/{id}', [PenaltyController::class, 'update'])->name('penalty-management.update');
+    Route::delete('/payroll/penalty-management/destroy/{id}', [PenaltyController::class, 'destroy'])->name('penalty-management.destroy');
+    Route::delete('/payroll/penalty-management/bulk-destroy', [PenaltyController::class, 'bulkDestroy'])->name('penalty-management.bulk-destroy');
+
 
 
 });

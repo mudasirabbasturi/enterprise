@@ -32,11 +32,13 @@ class DatabaseSeeder extends Seeder
             // MediaSeeder::class,
             
             // Leave Management Seeders (uncomment to seed)
-            LeaveTypeSeeder::class,
-            LeavePolicySeeder::class,
-            LeaveBalanceSeeder::class,
-            LeaveRequestSeeder::class,
-            HolidaySeeder::class,
+            // LeaveTypeSeeder::class,
+            // LeavePolicySeeder::class,
+            // LeaveBalanceSeeder::class,
+            // LeaveRequestSeeder::class,
+            // HolidaySeeder::class,
+            // PayrollSeeder::class,
+            // PenaltySeeder::class,
         ]);
     }
 }

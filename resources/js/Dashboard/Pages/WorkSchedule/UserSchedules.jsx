@@ -29,6 +29,7 @@ import {
     Table,
     Checkbox
 } from "@shared/ui";
+import axios from "axios";
 import MainLayout from "@layout";
 
 const UserSchedules = ({ schedules, users, shifts }) => {
@@ -97,7 +98,14 @@ const UserSchedules = ({ schedules, users, shifts }) => {
         {
             headerName: "Time Slots",
             flex: 2,
-            valueGetter: (params) => `${params.data.start_time} - ${params.data.end_time}`,
+            headerName: "Time Slots",
+            flex: 2,
+            valueGetter: (params) => {
+                if (params.data.shift) {
+                    return `${params.data.shift.start_time} - ${params.data.shift.end_time}`;
+                }
+                return "N/A";
+            },
             cellClass: "font-monospace"
         },
         {
@@ -105,21 +113,12 @@ const UserSchedules = ({ schedules, users, shifts }) => {
             field: "duration",
             flex: 1,
             valueFormatter: (params) => {
-                if (!params.value) return "0m";
-                const h = Math.floor(params.value / 60);
-                const m = params.value % 60;
+                const duration = params.data.shift?.duration || params.value;
+                if (!duration) return "0m";
+                const h = Math.floor(duration / 60);
+                const m = duration % 60;
                 return h > 0 ? `${h}h ${m}m` : `${m}m`;
             }
-        },
-        {
-            headerName: "Available",
-            field: "is_available",
-            flex: 1,
-            cellRenderer: (params) => (
-                <Tag color={params.value ? "success" : "default"}>
-                    {params.value ? "YES" : "NO"}
-                </Tag>
-            )
         },
         {
             headerName: "Actions",
@@ -167,8 +166,6 @@ const UserSchedules = ({ schedules, users, shifts }) => {
         setEditingSchedule(schedule);
         form.setFieldsValue({
             ...schedule,
-            start_time: dayjs(schedule.start_time, 'HH:mm:ss'),
-            end_time: dayjs(schedule.end_time, 'HH:mm:ss'),
             is_available: !!schedule.is_available
         });
         setIsModalOpen(true);
@@ -224,7 +221,7 @@ const UserSchedules = ({ schedules, users, shifts }) => {
 
     const handleBulkAdd = () => {
         bulkForm.resetFields();
-        bulkForm.setFieldsValue({ is_available: true, duration: 30 });
+        bulkForm.setFieldsValue({ is_available: true });
         setSelectedUserIds([]);
         setIsBulkModalOpen(true);
     };
@@ -244,21 +241,26 @@ const UserSchedules = ({ schedules, users, shifts }) => {
             const submissionData = {
                 ...values,
                 user_ids: selectedUserIds,
-                start_time: values.start_time.format('HH:mm:ss'),
-                end_time: values.end_time.format('HH:mm:ss'),
             };
 
-            router.post(route('users-schedules.bulk-store'), submissionData, {
-                onSuccess: () => {
+            axios.post(route('users-schedules.bulk-store'), submissionData)
+                .then(response => {
                     setIsBulkModalOpen(false);
                     api.success({
                         message: "Success",
-                        description: "Bulk schedules created successfully",
+                        description: response.data.message || "Bulk schedules created successfully",
                         placement: "topRight"
                     });
-                },
-                onFinish: () => setLoading(false)
-            });
+                    router.reload();
+                })
+                .catch(error => {
+                    api.error({
+                        message: "Error",
+                        description: error.response?.data?.message || "Something went wrong",
+                        placement: "topRight"
+                    });
+                })
+                .finally(() => setLoading(false));
         });
     };
 
@@ -267,8 +269,6 @@ const UserSchedules = ({ schedules, users, shifts }) => {
             setLoading(true);
             const submissionData = {
                 ...values,
-                start_time: values.start_time.format('HH:mm:ss'),
-                end_time: values.end_time.format('HH:mm:ss'),
             };
 
             const url = editingSchedule ? route('users-schedules.update', editingSchedule.id) : route('users-schedules.store');
@@ -291,7 +291,12 @@ const UserSchedules = ({ schedules, users, shifts }) => {
     const handleAddShiftSubmit = () => {
         shiftForm.validateFields().then(values => {
             setShiftLoading(true);
-            router.post(route('shifts.store'), values, {
+            const submissionData = {
+                ...values,
+                start_time: values.start_time.format('HH:mm:ss'),
+                end_time: values.end_time.format('HH:mm:ss'),
+            };
+            router.post(route('shifts.store'), submissionData, {
                 preserveScroll: true,
                 onSuccess: () => {
                     setIsShiftModalOpen(false);
@@ -388,14 +393,6 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                     form={form}
                     layout="vertical"
                     className="mt-3"
-                    onValuesChange={(changedValues, allValues) => {
-                        if (changedValues.start_time || changedValues.end_time) {
-                            const duration = calculateDuration(allValues.start_time, allValues.end_time);
-                            if (duration !== null) {
-                                form.setFieldsValue({ duration });
-                            }
-                        }
-                    }}
                 >
                     <div className="row">
                         <div className="col-md-6">
@@ -439,7 +436,7 @@ const UserSchedules = ({ schedules, users, shifts }) => {
 
 
                     <div className="row">
-                        <div className="col-md-4">
+                        <div className="col-md-12">
                             <Form.Item
                                 name="day"
                                 label="Day of Week"
@@ -456,53 +453,18 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                                 </Select>
                             </Form.Item>
                         </div>
-                        <div className="col-md-4">
-                            <Form.Item
-                                name="start_time"
-                                label="Start Time"
-                                rules={[{ required: true }]}
-                            >
-                                <TimePicker className="w-100" />
-                            </Form.Item>
-                        </div>
-                        <div className="col-md-4">
-                            <Form.Item
-                                name="end_time"
-                                label="End Time"
-                                rules={[{ required: true }]}
-                            >
-                                <TimePicker className="w-100" />
-                            </Form.Item>
-                        </div>
                     </div>
 
                     <div className="row">
-                        <div className="col-md-6">
+                        <div className="col-md-12">
                             <Form.Item
-                                name="duration"
-                                label="Duration (Minutes)"
+                                name="notes"
+                                label="Notes"
                             >
-                                <InputNumber className="w-100" min={1} />
-                            </Form.Item>
-                        </div>
-                        <div className="col-md-6 d-flex align-items-center pt-3">
-                            <Form.Item
-                                name="is_available"
-                                label="Is Available"
-                                valuePropName="checked"
-                                className="mb-0"
-                            >
-                                <Switch checkedChildren="Available" unCheckedChildren="Unavailable" />
+                                <Input.TextArea rows={3} placeholder="Additional info..." />
                             </Form.Item>
                         </div>
                     </div>
-
-                    <Form.Item
-                        name="notes"
-                        label="Notes"
-                    >
-                        <Input.TextArea rows={3} placeholder="Additional info..." />
-                    </Form.Item>
                 </Form>
             </Modal>
 
@@ -520,14 +482,6 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                     form={bulkForm}
                     layout="vertical"
                     className="mt-3"
-                    onValuesChange={(changedValues, allValues) => {
-                        if (changedValues.start_time || changedValues.end_time) {
-                            const duration = calculateDuration(allValues.start_time, allValues.end_time);
-                            if (duration !== null) {
-                                bulkForm.setFieldsValue({ duration });
-                            }
-                        }
-                    }}
                 >
                     <div className="row">
                         <div className="col-md-12 d-flex justify-content-between align-items-center">
@@ -556,13 +510,13 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                     </div>
 
                     <div className="row">
-                        <div className="col-md-4">
+                        <div className="col-md-12">
                             <Form.Item
-                                name="day"
-                                label="Day of Week"
-                                rules={[{ required: true }]}
+                                name="days"
+                                label="Days of Week"
+                                rules={[{ required: true, message: 'Please select at least one day' }]}
                             >
-                                <Select placeholder="Select day">
+                                <Select mode="multiple" placeholder="Select days" maxTagCount="responsive">
                                     <Select.Option value="Sunday">Sunday</Select.Option>
                                     <Select.Option value="Monday">Monday</Select.Option>
                                     <Select.Option value="Tuesday">Tuesday</Select.Option>
@@ -573,53 +527,18 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                                 </Select>
                             </Form.Item>
                         </div>
-                        <div className="col-md-4">
-                            <Form.Item
-                                name="start_time"
-                                label="Start Time"
-                                rules={[{ required: true }]}
-                            >
-                                <TimePicker className="w-100" />
-                            </Form.Item>
-                        </div>
-                        <div className="col-md-4">
-                            <Form.Item
-                                name="end_time"
-                                label="End Time"
-                                rules={[{ required: true }]}
-                            >
-                                <TimePicker className="w-100" />
-                            </Form.Item>
-                        </div>
                     </div>
 
                     <div className="row">
-                        <div className="col-md-6">
+                        <div className="col-md-12">
                             <Form.Item
-                                name="duration"
-                                label="Duration (Minutes)"
+                                name="notes"
+                                label="Notes"
                             >
-                                <InputNumber className="w-100" min={1} />
-                            </Form.Item>
-                        </div>
-                        <div className="col-md-6 d-flex align-items-center pt-3">
-                            <Form.Item
-                                name="is_available"
-                                label="Is Available"
-                                valuePropName="checked"
-                                className="mb-0"
-                            >
-                                <Switch checkedChildren="Available" unCheckedChildren="Unavailable" />
+                                <Input.TextArea rows={2} placeholder="Additional info..." />
                             </Form.Item>
                         </div>
                     </div>
-
-                    <Form.Item
-                        name="notes"
-                        label="Notes"
-                    >
-                        <Input.TextArea rows={2} placeholder="Additional info..." />
-                    </Form.Item>
 
                     <div className="mt-4">
                         <div className="d-flex justify-content-between align-items-center mb-3">
@@ -716,13 +635,46 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                     layout="vertical"
                     className="mt-3"
                 >
-                    <Form.Item
-                        name="name"
-                        label="Shift Name"
-                        rules={[{ required: true, message: 'Please enter shift name' }]}
-                    >
-                        <Input placeholder="e.g. Morning Shift, Night Shift" />
-                    </Form.Item>
+                    <div className="row">
+                        <div className="col-md-6">
+                            <Form.Item
+                                name="name"
+                                label="Shift Name"
+                                rules={[{ required: true, message: 'Please enter shift name' }]}
+                            >
+                                <Input placeholder="e.g. Morning Shift, Night Shift" />
+                            </Form.Item>
+                        </div>
+                        <div className="col-md-6">
+                            <Form.Item
+                                name="duration"
+                                label="Duration (Minutes)"
+                            >
+                                <InputNumber className="w-100" min={1} />
+                            </Form.Item>
+                        </div>
+                    </div>
+
+                    <div className="row">
+                        <div className="col-md-6">
+                            <Form.Item
+                                name="start_time"
+                                label="Start Time"
+                                rules={[{ required: true }]}
+                            >
+                                <TimePicker className="w-100" />
+                            </Form.Item>
+                        </div>
+                        <div className="col-md-6">
+                            <Form.Item
+                                name="end_time"
+                                label="End Time"
+                                rules={[{ required: true }]}
+                            >
+                                <TimePicker className="w-100" />
+                            </Form.Item>
+                        </div>
+                    </div>
 
                     <Form.Item
                         name="notes"

@@ -22,7 +22,10 @@ import {
     Form,
     Input,
     Switch,
-    Tag
+    Tag,
+    TimePicker,
+    InputNumber,
+    dayjs
 } from "@shared/ui";
 import MainLayout from "@layout";
 
@@ -49,9 +52,32 @@ const Shifts = ({ shifts }) => {
             )
         },
         {
+            headerName: "Start Time",
+            field: "start_time",
+            flex: 1,
+            cellClass: "font-monospace"
+        },
+        {
+            headerName: "End Time",
+            field: "end_time",
+            flex: 1,
+            cellClass: "font-monospace"
+        },
+        {
+            headerName: "Duration",
+            field: "duration",
+            flex: 1,
+            valueFormatter: (params) => {
+                if (!params.value) return "0m";
+                const h = Math.floor(params.value / 60);
+                const m = params.value % 60;
+                return h > 0 ? `${h}h ${m}m` : `${m}m`;
+            }
+        },
+        {
             headerName: "Notes",
             field: "notes",
-            flex: 3,
+            flex: 2,
             cellRenderer: (params) => (
                 <span className="text-muted">{params.value || "No notes"}</span>
             )
@@ -107,8 +133,9 @@ const Shifts = ({ shifts }) => {
     const handleEdit = (shift) => {
         setEditingShift(shift);
         form.setFieldsValue({
-            name: shift.name,
-            notes: shift.notes,
+            ...shift,
+            start_time: shift.start_time ? dayjs(shift.start_time, 'HH:mm:ss') : null,
+            end_time: shift.end_time ? dayjs(shift.end_time, 'HH:mm:ss') : null,
             is_active: !!shift.is_active
         });
         setIsModalOpen(true);
@@ -129,17 +156,35 @@ const Shifts = ({ shifts }) => {
     const handleAddNew = () => {
         setEditingShift(null);
         form.resetFields();
-        form.setFieldsValue({ is_active: true });
+        form.setFieldsValue({ is_active: true, duration: 30 });
         setIsModalOpen(true);
+    };
+
+    const calculateDuration = (startTime, endTime) => {
+        if (dayjs.isDayjs(startTime) && dayjs.isDayjs(endTime)) {
+            const diffInMinutes = endTime.diff(startTime, 'minute');
+            if (diffInMinutes >= 0) {
+                return diffInMinutes;
+            } else {
+                return 1440 + diffInMinutes;
+            }
+        }
+        return null;
     };
 
     const handleModalSubmit = () => {
         form.validateFields().then(values => {
             setLoading(true);
+            const submissionData = {
+                ...values,
+                start_time: values.start_time.format('HH:mm:ss'),
+                end_time: values.end_time.format('HH:mm:ss'),
+            };
+
             const url = editingShift ? route('shifts.update', editingShift.id) : route('shifts.store');
             const method = editingShift ? 'put' : 'post';
 
-            router[method](url, values, {
+            router[method](url, submissionData, {
                 onSuccess: () => {
                     setIsModalOpen(false);
                     api.success({
@@ -208,13 +253,54 @@ const Shifts = ({ shifts }) => {
                     layout="vertical"
                     className="mt-3"
                 >
-                    <Form.Item
-                        name="name"
-                        label="Shift Name"
-                        rules={[{ required: true, message: 'Please enter shift name' }]}
-                    >
-                        <Input placeholder="e.g. Morning Shift, Night Shift" />
-                    </Form.Item>
+                    <div className="row">
+                        <div className="col-md-6">
+                            <Form.Item
+                                name="name"
+                                label="Shift Name"
+                                rules={[{ required: true, message: 'Please enter shift name' }]}
+                            >
+                                <Input placeholder="e.g. Morning Shift, Night Shift" />
+                            </Form.Item>
+                        </div>
+                        <div className="col-md-6">
+                            <Form.Item
+                                name="duration"
+                                label="Duration (Minutes)"
+                            >
+                                <InputNumber className="w-100" min={1} />
+                            </Form.Item>
+                        </div>
+                    </div>
+
+                    <div className="row">
+                        <div className="col-md-6">
+                            <Form.Item
+                                name="start_time"
+                                label="Start Time"
+                                rules={[{ required: true }]}
+                            >
+                                <TimePicker className="w-100" onChange={(time) => {
+                                    const endTime = form.getFieldValue('end_time');
+                                    const duration = calculateDuration(time, endTime);
+                                    if (duration !== null) form.setFieldsValue({ duration });
+                                }} />
+                            </Form.Item>
+                        </div>
+                        <div className="col-md-6">
+                            <Form.Item
+                                name="end_time"
+                                label="End Time"
+                                rules={[{ required: true }]}
+                            >
+                                <TimePicker className="w-100" onChange={(time) => {
+                                    const startTime = form.getFieldValue('start_time');
+                                    const duration = calculateDuration(startTime, time);
+                                    if (duration !== null) form.setFieldsValue({ duration });
+                                }} />
+                            </Form.Item>
+                        </div>
+                    </div>
 
                     <Form.Item
                         name="notes"

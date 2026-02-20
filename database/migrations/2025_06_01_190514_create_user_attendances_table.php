@@ -23,7 +23,6 @@ return new class extends Migration
             $table->string('status')->default('no action'); // present, late, absent, no action
             $table->text('notes')->nullable(); // Any notes or extra info
             $table->timestamps();
-            $table->softDeletesTz('deleted_at', precision: 0);
         });
     }
 

@@ -14,7 +14,7 @@ class UserShiftScheduleController extends Controller
     {
         $schedules = UserShiftSchedule::with(['user', 'shift'])->get();
         $users = User::select('id', 'name', 'status')->get();
-        $shifts = Shift::select('id', 'name')->get();
+        $shifts = Shift::where('is_active', true)->orderBy('name')->get();
 
         return Inertia::render('Pages/WorkSchedule/UserSchedules', [
             'schedules' => $schedules,
@@ -27,12 +27,8 @@ class UserShiftScheduleController extends Controller
     {
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
-            'shift_id' => 'nullable|exists:shifts,id',
+            'shift_id' => 'required|exists:shifts,id',
             'day' => 'required|in:Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday',
-            'start_time' => 'required',
-            'end_time' => 'required',
-            'duration' => 'integer',
-            'is_available' => 'boolean',
             'notes' => 'nullable|string',
         ]);
 
@@ -46,12 +42,8 @@ class UserShiftScheduleController extends Controller
         $schedule = UserShiftSchedule::findOrFail($id);
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
-            'shift_id' => 'nullable|exists:shifts,id',
+            'shift_id' => 'required|exists:shifts,id',
             'day' => 'required|in:Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday',
-            'start_time' => 'required',
-            'end_time' => 'required',
-            'duration' => 'integer',
-            'is_available' => 'boolean',
             'notes' => 'nullable|string',
         ]);
 
@@ -73,22 +65,27 @@ class UserShiftScheduleController extends Controller
         $validated = $request->validate([
             'user_ids' => 'required|array',
             'user_ids.*' => 'exists:users,id',
-            'shift_id' => 'nullable|exists:shifts,id',
-            'day' => 'required|in:Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday',
-            'start_time' => 'required',
-            'end_time' => 'required',
-            'duration' => 'integer',
-            'is_available' => 'boolean',
+            'shift_id' => 'required|exists:shifts,id',
+            'days' => 'required|array',
+            'days.*' => 'in:Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday',
             'notes' => 'nullable|string',
         ]);
 
         $userIds = $validated['user_ids'];
-        unset($validated['user_ids']);
+        $days = $validated['days'];
+        unset($validated['user_ids'], $validated['days']);
 
         foreach ($userIds as $userId) {
-            $data = $validated;
-            $data['user_id'] = $userId;
-            UserShiftSchedule::create($data);
+            foreach ($days as $day) {
+                $data = $validated;
+                $data['user_id'] = $userId;
+                $data['day'] = $day;
+                UserShiftSchedule::create($data);
+            }
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json(['message' => 'Bulk schedules created successfully.']);
         }
 
         return redirect()->back()->with('message', 'Bulk schedules created successfully.');

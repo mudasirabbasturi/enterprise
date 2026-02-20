@@ -38,14 +38,28 @@ class UserAttendanceController extends Controller
             ->whereMonth('date', $month)
             ->get();
 
-        // Fetch users with branch and allowed IPs for the master grid
+        // Fetch users with branch, allowed IPs, and shift schedules (with shift details) for the master grid
         $users = User::with(['branch', 'userAllowedIp' => function($query) {
             $query->select('user_id', 'ip_address', 'notes');
-        }])->select('id', 'name', 'email', 'branch_id')->get();
+        }, 'userShiftSchedules.shift'])->select('id', 'name', 'email', 'branch_id')->get();
+
+        // Fetch approved leave requests for the month to show in attendance
+        $leaveRequests = \App\Models\LeaveRequest::with('leaveType')
+            ->where('status', 'approved')
+            ->where(function($query) use ($year, $month) {
+                $query->whereYear('start_date', $year)
+                      ->whereMonth('start_date', $month)
+                      ->orWhere(function($q) use ($year, $month) {
+                          $q->whereYear('end_date', $year)
+                            ->whereMonth('end_date', $month);
+                      });
+            })
+            ->get();
 
         return Inertia::render('Pages/WorkSchedule/UserAttendance', [
             'attendances' => $attendances,
             'users' => $users,
+            'leaveRequests' => $leaveRequests,
             'selectedMonth' => (int)$month,
             'selectedYear' => (int)$year,
         ]);
@@ -59,14 +73,24 @@ class UserAttendanceController extends Controller
             'check_in' => 'nullable',
             'check_out' => 'nullable',
             'overtime_hours' => 'nullable|numeric',
+            'undertime_hours' => 'nullable|numeric',
             'check_in_ip' => 'nullable|ip',
             'check_out_ip' => 'nullable|ip',
             'status' => 'required|string',
             'notes' => 'nullable|string',
         ]);
 
-        // IP Restriction Logic
-        $user = User::with('userAllowedIp')->findOrFail($validated['user_id']);
+        // Shift Restriction Logic
+        $user = User::with(['userAllowedIp', 'userShiftSchedules'])->findOrFail($validated['user_id']);
+        $dayName = \Carbon\Carbon::parse($validated['date'])->format('l');
+        $hasShift = $user->userShiftSchedules->contains('day', $dayName);
+
+        if (!$hasShift) {
+            return redirect()->back()->withErrors([
+                'date' => "User {$user->name} is not scheduled to work on $dayName ($validated[date])."
+            ]);
+        }
+
         $allowedIps = $user->userAllowedIp->pluck('ip_address')->toArray();
 
         if (count($allowedIps) > 0) {
@@ -85,6 +109,10 @@ class UserAttendanceController extends Controller
 
         UserAttendance::create($validated);
 
+        if ($request->wantsJson()) {
+            return response()->json(['message' => 'Attendance record created successfully.']);
+        }
+
         return redirect()->back()->with('message', 'Attendance record created successfully.');
     }
 
@@ -97,14 +125,24 @@ class UserAttendanceController extends Controller
             'check_in' => 'nullable',
             'check_out' => 'nullable',
             'overtime_hours' => 'nullable|numeric',
+            'undertime_hours' => 'nullable|numeric',
             'check_in_ip' => 'nullable|ip',
             'check_out_ip' => 'nullable|ip',
             'status' => 'required|string',
             'notes' => 'nullable|string',
         ]);
 
-        // IP Restriction Logic
-        $user = User::with('userAllowedIp')->findOrFail($validated['user_id']);
+        // Shift Restriction Logic
+        $user = User::with(['userAllowedIp', 'userShiftSchedules'])->findOrFail($validated['user_id']);
+        $dayName = \Carbon\Carbon::parse($validated['date'])->format('l');
+        $hasShift = $user->userShiftSchedules->contains('day', $dayName);
+
+        if (!$hasShift) {
+            return redirect()->back()->withErrors([
+                'date' => "User {$user->name} is not scheduled to work on $dayName ($validated[date])."
+            ]);
+        }
+
         $allowedIps = $user->userAllowedIp->pluck('ip_address')->toArray();
 
         if (count($allowedIps) > 0) {
@@ -123,13 +161,21 @@ class UserAttendanceController extends Controller
 
         $attendance->update($validated);
 
+        if ($request->wantsJson()) {
+            return response()->json(['message' => 'Attendance record updated successfully.']);
+        }
+
         return redirect()->back()->with('message', 'Attendance record updated successfully.');
     }
 
-    public function Destroy($id)
+    public function Destroy(Request $request, $id)
     {
         $attendance = UserAttendance::findOrFail($id);
         $attendance->delete();
+
+        if ($request->wantsJson()) {
+            return response()->json(['message' => 'Attendance record deleted successfully.']);
+        }
 
         return redirect()->back()->with('message', 'Attendance record deleted successfully.');
     }

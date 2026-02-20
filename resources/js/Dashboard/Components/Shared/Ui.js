@@ -103,7 +103,9 @@ export {
   CreditCardOutlined,
   CloseCircleOutlined,
   WalletOutlined,
-
+  UnorderedListOutlined,
+  CheckCircleFilled,
+  PrinterOutlined
 } from "@ant-design/icons";
 
 export { PhoneInput } from "react-international-phone";

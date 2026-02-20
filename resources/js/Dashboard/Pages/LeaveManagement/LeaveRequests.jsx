@@ -23,9 +23,9 @@ import {
 } from "@shared/ui";
 import MainLayout from "@layout";
 import LeaveRequestForm from "@/Dashboard/Components/LeaveManagement/LeaveRequestForm";
-import { Input, Form } from "antd";
+import { Input, Form, Select } from "antd";
 
-const LeaveRequests = ({ requests, leaveTypes, users, isPersonal = false }) => {
+const LeaveRequests = ({ requests, leaveTypes, users, isPersonal = false, selectedMonth, selectedYear }) => {
     const [api, contextHolder] = notification.useNotification();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -35,6 +35,26 @@ const LeaveRequests = ({ requests, leaveTypes, users, isPersonal = false }) => {
     const [statusForm] = Form.useForm();
 
     const [selectedRows, setSelectedRows] = useState([]);
+    const [filterDate, setFilterDate] = useState({
+        month: (selectedMonth || dayjs().month() + 1) - 1,
+        year: selectedYear || dayjs().year()
+    });
+
+    const months = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ];
+
+    const years = Array.from({ length: 5 }, (_, i) => dayjs().year() - 2 + i);
+
+    const handleDateFilterChange = (key, value) => {
+        const newFilters = { ...filterDate, [key]: value };
+        setFilterDate(newFilters);
+        router.get(isPersonal ? route('my-leave-requests.index') : route('leave-requests.index'), {
+            month: newFilters.month + 1,
+            year: newFilters.year
+        }, { preserveState: true });
+    };
 
     const onSelectionChanged = (params) => {
         setSelectedRows(params.api.getSelectedRows());
@@ -117,19 +137,21 @@ const LeaveRequests = ({ requests, leaveTypes, users, isPersonal = false }) => {
                 pinned: "right",
                 cellRenderer: (params) => (
                     <div className="d-flex gap-2 align-items-center h-100">
-                        <Tooltip title="View Status">
-                            <button
-                                className="btn btn-outline-primary btn-sm rounded-circle d-flex align-items-center justify-content-center"
-                                style={{ width: '28px', height: '28px' }}
-                                onClick={() => {
-                                    setStatusAction({ type: params.data.status, id: params.data.id, record: params.data });
-                                    statusForm.setFieldsValue({ rejection_reason: params.data.rejection_reason });
-                                    setIsStatusModalOpen(true);
-                                }}
-                            >
-                                <EyeOutlined />
-                            </button>
-                        </Tooltip>
+                        {!isPersonal && (
+                            <Tooltip title="View Status">
+                                <button
+                                    className="btn btn-outline-primary btn-sm rounded-circle d-flex align-items-center justify-content-center"
+                                    style={{ width: '28px', height: '28px' }}
+                                    onClick={() => {
+                                        setStatusAction({ type: params.data.status, id: params.data.id, record: params.data });
+                                        statusForm.setFieldsValue({ rejection_reason: params.data.rejection_reason });
+                                        setIsStatusModalOpen(true);
+                                    }}
+                                >
+                                    <EyeOutlined />
+                                </button>
+                            </Tooltip>
+                        )}
                         {params.data.status === 'pending' && (
                             <Tooltip title="Edit">
                                 <button
@@ -144,22 +166,24 @@ const LeaveRequests = ({ requests, leaveTypes, users, isPersonal = false }) => {
                                 </button>
                             </Tooltip>
                         )}
-                        <Tooltip title="Delete">
-                            <Popconfirm
-                                title="Delete this request?"
-                                onConfirm={() => handleDelete(params.data.id)}
-                                okText="Yes"
-                                cancelText="No"
-                                okButtonProps={{ danger: true }}
-                            >
-                                <button
-                                    className="btn btn-outline-danger btn-sm rounded-circle d-flex align-items-center justify-content-center"
-                                    style={{ width: '28px', height: '28px' }}
+                        {!isPersonal && (
+                            <Tooltip title="Delete">
+                                <Popconfirm
+                                    title="Delete this request?"
+                                    onConfirm={() => handleDelete(params.data.id)}
+                                    okText="Yes"
+                                    cancelText="No"
+                                    okButtonProps={{ danger: true }}
                                 >
-                                    <DeleteOutlined />
-                                </button>
-                            </Popconfirm>
-                        </Tooltip>
+                                    <button
+                                        className="btn btn-outline-danger btn-sm rounded-circle d-flex align-items-center justify-content-center"
+                                        style={{ width: '28px', height: '28px' }}
+                                    >
+                                        <DeleteOutlined />
+                                    </button>
+                                </Popconfirm>
+                            </Tooltip>
+                        )}
                     </div>
                 )
             }
@@ -208,6 +232,18 @@ const LeaveRequests = ({ requests, leaveTypes, users, isPersonal = false }) => {
                         ]}
                     />
                     <div className="d-flex gap-2">
+                        <Select
+                            value={filterDate.month}
+                            onChange={(v) => handleDateFilterChange('month', v)}
+                            style={{ width: 130 }}
+                            options={months.map((m, i) => ({ label: m, value: i }))}
+                        />
+                        <Select
+                            value={filterDate.year}
+                            onChange={(v) => handleDateFilterChange('year', v)}
+                            style={{ width: 100 }}
+                            options={years.map(y => ({ label: y, value: y }))}
+                        />
                         {!isPersonal && selectedRows.length > 0 && (
                             <Popconfirm
                                 title={`Delete ${selectedRows.length} selected requests?`}
