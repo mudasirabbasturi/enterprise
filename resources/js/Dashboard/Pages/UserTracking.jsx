@@ -18,274 +18,36 @@ import {
 } from "@shared/ui";
 import MainLayout from "@layout";
 import axios from "axios";
-import { notification, Modal, Tag } from "antd";
+import { notification, Modal, Tag, Image } from "antd";
 
-const UserTracking = ({ trackingData }) => {
+const UserTracking = ({ users: initialUsers }) => {
     const [api, contextHolder] = notification.useNotification();
-    const [flatData, setFlatData] = useState(trackingData || []);
-    const [rowData, setRowData] = useState([]);
+    const [users, setUsers] = useState(initialUsers || []);
     const [loading, setLoading] = useState(false);
 
-    // Modal state for app details
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalAppName, setModalAppName] = useState("");
-    const [modalData, setModalData] = useState([]);
+    // Screenshot Modal state
+    const [isScreenshotModalOpen, setIsScreenshotModalOpen] = useState(false);
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [screenshots, setScreenshots] = useState([]);
+    const [screenshotLoading, setScreenshotLoading] = useState(false);
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [deleting, setDeleting] = useState(false);
 
-    // Duration formatting helper
-    const formatDuration = (totalSeconds) => {
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
-        return [h, m, s].map(v => String(v).padStart(2, '0')).join(":");
-    };
+    // Filters
+    const [day, setDay] = useState(new Date().getDate());
+    const [month, setMonth] = useState(new Date().getMonth() + 1);
+    const [year, setYear] = useState(new Date().getFullYear());
 
-    // Data processing logic: Group by User -> Group by App
-    const processData = useCallback((data) => {
-        if (!data || !Array.isArray(data)) return [];
-
-        const groupedByUser = data.reduce((acc, curr) => {
-            const userName = curr.user_name || "Unknown User";
-            if (!acc[userName]) {
-                acc[userName] = {
-                    user_name: userName,
-                    total_screen_time_seconds: 0,
-                    appGroups: {} // Grouping apps inside user
-                };
-            }
-
-            const appName = curr.application || "Hidden/System";
-            if (!acc[userName].appGroups[appName]) {
-                acc[userName].appGroups[appName] = {
-                    application: appName,
-                    userName: userName, // Keep track of user for filtering
-                    total_time_seconds: 0,
-                    activities: []
-                };
-            }
-
-            acc[userName].appGroups[appName].activities.push(curr);
-
-            // Sum up duration
-            if (curr.duration) {
-                const parts = curr.duration.split(':').map(Number);
-                if (parts.length === 3) {
-                    const seconds = (parts[0] * 3600) + (parts[1] * 60) + parts[2];
-                    acc[userName].appGroups[appName].total_time_seconds += seconds;
-                    acc[userName].total_screen_time_seconds += seconds;
-                }
-            }
-            return acc;
-        }, {});
-
-        const processed = Object.values(groupedByUser).map(user => ({
-            ...user,
-            total_screen_time: formatDuration(user.total_screen_time_seconds),
-            sleep_time: "07:30:15",
-            applications: Object.values(user.appGroups).map(app => ({
-                ...app,
-                total_duration: formatDuration(app.total_time_seconds)
-            }))
-        }));
-
-        return processed;
-    }, []);
-
-    // Sync modal data if it's open and data changes
-    useEffect(() => {
-        if (isModalOpen && modalAppName) {
-            const updatedRows = processData(flatData);
-            // Find the current app's data again to refresh the modal view
-            for (const user of updatedRows) {
-                const app = user.applications.find(a => a.application === modalAppName && user.user_name === modalData[0]?.user_name);
-                if (app) {
-                    setModalData(app.activities);
-                    return;
-                }
-            }
-            // If app no longer exists (all records deleted), close modal
-            setIsModalOpen(false);
-        }
-    }, [flatData, isModalOpen, modalAppName, processData]);
-
-    const openAppDetails = (appName, activities) => {
-        setModalAppName(appName);
-        setModalData(activities);
-        setIsModalOpen(true);
-    };
-
-    // Master Column Definitions (Users)
-    const masterColDefs = useMemo(() => [
-        {
-            headerName: "User Name",
-            field: "user_name",
-            cellRenderer: "agGroupCellRenderer",
-            cellRendererParams: {
-                innerRenderer: (params) => (
-                    <div className="d-flex align-items-center h-100">
-                        <div className="avatar-sm me-2 bg-soft-primary text-primary rounded-circle d-flex align-items-center justify-content-center"
-                            style={{ width: '28px', height: '28px', backgroundColor: '#e7f1ff', fontSize: '12px', fontWeight: 'bold' }}>
-                            {params.value ? params.value.charAt(0).toUpperCase() : '?'}
-                        </div>
-                        <span className="fw-bold text-dark">{params.value}</span>
-                    </div>
-                )
-            },
-            flex: 2
-        },
-        {
-            headerName: "Total Screen Time",
-            field: "total_screen_time",
-            cellClass: "text-center font-monospace fw-medium text-primary",
-            flex: 1
-        },
-        {
-            headerName: "Sleep Time",
-            field: "sleep_time",
-            cellClass: "text-center font-monospace text-muted",
-            flex: 1
-        }
-    ], []);
-
-    // Detail Grid Column Definitions (Applications)
-    const detailColDefs = useMemo(() => [
-        {
-            headerName: "Application Name",
-            field: "application",
-            cellRenderer: (params) => (
-                <div className="d-flex align-items-center gap-2">
-                    <div className="bg-light p-1 rounded d-flex align-items-center justify-content-center" style={{ width: '24px', height: '24px' }}>
-                        <i className={`bi bi-${params.value.toLowerCase().includes('chrome') ? 'browser-chrome' : params.value.toLowerCase().includes('vscode') ? 'code-slash' : 'app'}`}></i>
-                    </div>
-                    <span className="fw-medium">{params.value}</span>
-                </div>
-            ),
-            flex: 2
-        },
-        {
-            headerName: "Total Used Time",
-            field: "total_duration",
-            cellClass: "text-center font-monospace fw-bold text-success",
-            flex: 1
-        },
-        {
-            headerName: "Action",
-            width: 100,
-            cellRenderer: (params) => (
-                <div className="d-flex justify-content-center align-items-center h-100 gap-2">
-                    <Tooltip title="View Full Activity Log">
-                        <button
-                            className="btn btn-outline-primary btn-sm rounded-circle d-flex align-items-center justify-content-center"
-                            style={{ width: '28px', height: '28px' }}
-                            onClick={() => openAppDetails(params.data.application, params.data.activities)}
-                        >
-                            <EyeOutlined />
-                        </button>
-                    </Tooltip>
-                </div>
-            ),
-            flex: 0.5
-        }
-    ], []);
-
-    // Selection state for bulk delete
-    const [selectedRows, setSelectedRows] = useState([]);
-
-    // Modal Grid Column Definitions (Granular Activities)
-    const modalColDefs = useMemo(() => [
-        {
-            headerName: "",
-            field: "checkbox",
-            width: 50,
-            checkboxSelection: true,
-            headerCheckboxSelection: true,
-            flex: 0.2,
-            filter: false,
-            sortable: false,
-            floatingFilter: false,
-            resizable: false,
-
-        },
-        {
-            headerName: "Activity / Window Title",
-            field: "activity",
-            tooltipField: "activity",
-            flex: 3,
-            filter: false,
-            sortable: false,
-            floatingFilter: false,
-        },
-        {
-            headerName: "Start Time",
-            field: "start_time",
-            flex: 1.5,
-            filter: false,
-            sortable: false,
-            floatingFilter: false,
-        },
-        {
-            headerName: "End Time",
-            field: "end_time",
-            flex: 1.5,
-            filter: false,
-            sortable: false,
-            floatingFilter: false,
-        },
-        {
-            headerName: "Duration",
-            field: "duration",
-            cellClass: "text-center font-monospace",
-            flex: 1,
-            filter: false,
-            sortable: false,
-            floatingFilter: false,
-        },
-        {
-            headerName: "Delete",
-            width: 80,
-            filter: false,
-            sortable: false,
-            floatingFilter: false,
-            cellRenderer: (params) => (
-                <div className="d-flex align-items-center h-100 justify-content-center">
-                    <Popconfirm
-                        title="Delete this record?"
-                        onConfirm={() => handleDelete(params.data.id)}
-                    >
-                        <button className="btn btn-link text-danger p-0 border-0">
-                            <DeleteOutlined />
-                        </button>
-                    </Popconfirm>
-                </div>
-            ),
-        }
-    ], []);
-
-    // Master-Detail configurations
-    const detailCellRendererParams = useMemo(() => ({
-        detailGridOptions: {
-            columnDefs: detailColDefs,
-            defaultColDef: {
-                ...defaultColDef,
-                sortable: true,
-                filter: true,
-            },
-            theme: gridTheme,
-        },
-        getDetailRowData: (params) => {
-            params.successCallback(params.data.applications);
-        },
-    }), [detailColDefs]);
-
-    const fetchTrackingData = async () => {
+    const fetchUsers = async () => {
         setLoading(true);
         try {
-            const response = await axios.get("/api/track/data");
-            setFlatData(response.data);
+            const response = await axios.get("/api/track/users");
+            setUsers(response.data);
         } catch (error) {
-            console.error("Error fetching tracking data:", error);
+            console.error("Error fetching users:", error);
             api.error({
                 message: "Error",
-                description: "Failed to refresh tracking data",
+                description: "Failed to refresh users list",
                 placement: "topRight"
             });
         } finally {
@@ -293,53 +55,150 @@ const UserTracking = ({ trackingData }) => {
         }
     };
 
-    const handleDelete = async (ids) => {
-        const idList = Array.isArray(ids) ? ids : [ids];
-        if (idList.length === 0) return;
-
+    const fetchScreenshots = useCallback(async (userId, d, m, y) => {
+        setScreenshotLoading(true);
+        setSelectedIds([]); // Reset selection on fetch
         try {
-            await axios.post("/api/track/data/bulk-delete", { ids: idList });
-            setFlatData((prev) => prev.filter((item) => !idList.includes(item.id)));
-            setSelectedRows([]); // Clear selection
-            api.success({
-                message: "Success",
-                description: `${idList.length} record(s) deleted successfully`,
+            const response = await axios.get("/api/track/screenshots", {
+                params: {
+                    user_id: userId,
+                    day: d,
+                    month: m,
+                    year: y
+                }
+            });
+            setScreenshots(response.data);
+        } catch (error) {
+            console.error("Error fetching screenshots:", error);
+            api.error({
+                message: "Error",
+                description: "Failed to fetch screenshots",
                 placement: "topRight"
             });
+        } finally {
+            setScreenshotLoading(false);
+        }
+    }, [api]);
+
+    useEffect(() => {
+        if (isScreenshotModalOpen && selectedUser) {
+            fetchScreenshots(selectedUser.id, day, month, year);
+        }
+    }, [isScreenshotModalOpen, selectedUser, day, month, year, fetchScreenshots]);
+
+    const openScreenshotModal = (user) => {
+        setSelectedUser(user);
+        setIsScreenshotModalOpen(true);
+    };
+
+    const toggleSelect = (id) => {
+        setSelectedIds(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    const selectAll = () => {
+        if (selectedIds.length === screenshots.length) {
+            setSelectedIds([]);
+        } else {
+            setSelectedIds(screenshots.map(s => s.id));
+        }
+    };
+
+    const deleteSelected = async () => {
+        if (selectedIds.length === 0) return;
+
+        setDeleting(true);
+        try {
+            await axios.post("/api/track/screenshots/delete", { ids: selectedIds });
+            api.success({
+                message: "Success",
+                description: `${selectedIds.length} screenshots deleted successfully`,
+                placement: "topRight"
+            });
+            fetchScreenshots(selectedUser.id, day, month, year);
         } catch (error) {
-            console.error("Error deleting record:", error);
-            // Fallback to single delete if bulk endpoint doesn't exist yet
-            if (idList.length === 1) {
-                try {
-                    await axios.delete(`/api/track/data/${idList[0]}`);
-                    setFlatData((prev) => prev.filter((item) => item.id !== idList[0]));
-                    api.success({
-                        message: "Success",
-                        description: "Record deleted successfully",
-                        placement: "topRight"
-                    });
-                } catch (err) {
-                    api.error({ message: "Error", description: "Failed to delete" });
-                }
-            } else {
-                api.error({ message: "Error", description: "Failed to perform bulk delete" });
-            }
+            console.error("Error deleting screenshots:", error);
+            api.error({
+                message: "Error",
+                description: "Failed to delete screenshots",
+                placement: "topRight"
+            });
+        } finally {
+            setDeleting(false);
         }
     };
 
-    const handleSelectionChanged = (event) => {
-        setSelectedRows(event.api.getSelectedRows());
+    const triggerScreenshot = async (user) => {
+        try {
+            await axios.post("/api/track/screenshot/trigger", { user_id: user.id });
+            api.success({
+                message: "Screenshot Requested",
+                description: `A screenshot will be captured from ${user.name}'s machine within 10 seconds. If nothing appears, their Tracker app may not be running.`,
+                placement: "topRight",
+                duration: 8
+            });
+        } catch (error) {
+            console.error("Error triggering screenshot:", error);
+            api.error({
+                message: "Error",
+                description: "Failed to request screenshot",
+                placement: "topRight"
+            });
+        }
     };
 
-    useEffect(() => {
-        setRowData(processData(flatData));
-    }, [flatData, processData]);
-
-    useEffect(() => {
-        if (trackingData) {
-            setFlatData(trackingData);
+    // User Grid Column Definitions
+    const userColDefs = useMemo(() => [
+        {
+            headerName: "User Name",
+            field: "name",
+            cellRenderer: (params) => (
+                <div className="d-flex align-items-center h-100">
+                    <div className="avatar-sm me-2 bg-soft-primary text-primary rounded-circle d-flex align-items-center justify-content-center"
+                        style={{ width: '28px', height: '28px', backgroundColor: '#e7f1ff', fontSize: '12px', fontWeight: 'bold' }}>
+                        {params.value ? params.value.charAt(0).toUpperCase() : '?'}
+                    </div>
+                    <span className="fw-bold text-dark">{params.value}</span>
+                </div>
+            ),
+            flex: 2
+        },
+        {
+            headerName: "Email",
+            field: "email",
+            flex: 2
+        },
+        {
+            headerName: "Action",
+            minWidth: 250,
+            cellRenderer: (params) => (
+                <div className="d-flex justify-content-center align-items-center h-100 gap-2">
+                    <button
+                        className="btn btn-primary btn-sm rounded-pill px-3"
+                        onClick={() => openScreenshotModal(params.data)}
+                    >
+                        <EyeOutlined className="me-1" />
+                        Screenshots
+                    </button>
+                    <Tooltip title="Capture screenshot now">
+                        <button
+                            className="btn btn-warning btn-sm rounded-pill px-2"
+                            onClick={() => triggerScreenshot(params.data)}
+                        >
+                            <i className="bi bi-camera-fill me-1" />
+                            Take
+                        </button>
+                    </Tooltip>
+                </div>
+            ),
+            flex: 1.5
         }
-    }, [trackingData]);
+    ], []);
+
+    const days = Array.from({ length: 31 }, (_, i) => i + 1);
+    const months = Array.from({ length: 12 }, (_, i) => i + 1);
+    const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 
     return (
         <>
@@ -353,11 +212,11 @@ const UserTracking = ({ trackingData }) => {
                     />
                     <button
                         className="btn btn-primary btn-sm d-flex align-items-center"
-                        onClick={fetchTrackingData}
+                        onClick={fetchUsers}
                         disabled={loading}
                     >
                         {loading ? <SyncOutlined spin className="me-1" /> : <i className="bi bi-arrow-clockwise me-1"></i>}
-                        Refresh Data
+                        Refresh Users
                     </button>
                 </div>
 
@@ -365,8 +224,8 @@ const UserTracking = ({ trackingData }) => {
                     <div className="card-body p-0">
                         <div className="ag-grid-wrapper" >
                             <AgGridReact
-                                rowData={rowData}
-                                columnDefs={masterColDefs}
+                                rowData={users}
+                                columnDefs={userColDefs}
                                 defaultColDef={{
                                     ...defaultColDef,
                                     flex: 1,
@@ -375,72 +234,196 @@ const UserTracking = ({ trackingData }) => {
                                 theme={gridTheme}
                                 pagination={true}
                                 paginationPageSize={20}
-                                sideBar={sideBarConfig}
-                                masterDetail={true}
-                                detailCellRendererParams={detailCellRendererParams}
-                                detailRowHeight={350}
-                                isRowMaster={() => true}
                                 onGridReady={gridOptionsConfig.onGridReady}
-                                onColumnMoved={gridOptionsConfig.onColumnMoved}
-                                onColumnPinned={gridOptionsConfig.onColumnPinned}
-                                onColumnVisible={gridOptionsConfig.onColumnVisible}
-                                onColumnResized={gridOptionsConfig.onColumnResized}
-                                onSortChanged={gridOptionsConfig.onSortChanged}
-                                maintainColumnOrder={true}
                             />
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Custom Modal for Full App History */}
+            {/* Screenshot Modal */}
             <Modal
                 title={
-                    <div className="d-flex align-items-center justify-content-between pe-4">
-                        <div className="d-flex align-items-center gap-2">
-                            <span className="text-primary fw-bold">Detailed Activity Log:</span>
-                            <Tag color="blue" className="fs-6 px-2 m-0">{modalAppName}</Tag>
+                    <div className="d-flex align-items-center justify-content-between pe-4 w-100">
+                        <div className="d-flex align-items-center gap-3">
+                            <span className="text-primary fw-bold fs-5">Screenshots for: {selectedUser?.name}</span>
+                            {screenshots.length > 0 && (
+                                <div className="d-flex gap-2">
+                                    <button className="btn btn-outline-secondary btn-sm" onClick={selectAll}>
+                                        {selectedIds.length === screenshots.length ? 'Deselect All' : 'Select All'}
+                                    </button>
+                                    {selectedIds.length > 0 && (
+                                        <Popconfirm
+                                            title="Delete Screenshots"
+                                            description={`Are you sure you want to delete ${selectedIds.length} screenshots?`}
+                                            onConfirm={deleteSelected}
+                                            okText="Yes"
+                                            cancelText="No"
+                                        >
+                                            <button className="btn btn-danger btn-sm d-flex align-items-center" disabled={deleting}>
+                                                {deleting ? <SyncOutlined spin className="me-1" /> : <DeleteOutlined className="me-1" />}
+                                                Delete Selected ({selectedIds.length})
+                                            </button>
+                                        </Popconfirm>
+                                    )}
+                                </div>
+                            )}
                         </div>
-                        {selectedRows.length > 0 && (
-                            <Popconfirm
-                                title={`Delete ${selectedRows.length} selected records?`}
-                                onConfirm={() => handleDelete(selectedRows.map(r => r.id))}
-                                okText="Yes"
-                                cancelText="Cancel"
-                                okButtonProps={{ danger: true }}
-                            >
-                                <button className="btn btn-danger btn-sm shadow-sm animate__animated animate__fadeIn">
-                                    <DeleteOutlined className="me-1" />
-                                    Bulk Delete ({selectedRows.length})
-                                </button>
-                            </Popconfirm>
-                        )}
+                        <div className="d-flex gap-2 align-items-center">
+                            <select className="form-select form-select-sm w-auto" value={day} onChange={(e) => setDay(e.target.value)}>
+                                {days.map(d => <option key={d} value={d}>{d}</option>)}
+                            </select>
+                            <select className="form-select form-select-sm w-auto" value={month} onChange={(e) => setMonth(e.target.value)}>
+                                {months.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                            <select className="form-select form-select-sm w-auto" value={year} onChange={(e) => setYear(e.target.value)}>
+                                {years.map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                        </div>
                     </div>
                 }
-                open={isModalOpen}
-                onCancel={() => setIsModalOpen(false)}
+                open={isScreenshotModalOpen}
+                onCancel={() => setIsScreenshotModalOpen(false)}
                 footer={null}
-                width={1200}
+                width="95%"
                 centered
-                className="activity-modal"
-                styles={{ body: { padding: '10px' } }}
+                styles={{
+                    body: {
+                        padding: '20px',
+                        backgroundColor: '#f8f9fa',
+                        height: '75vh',
+                        overflowY: 'auto'
+                    },
+                    content: {
+                        height: '90vh',
+                        display: 'flex',
+                        flexDirection: 'column'
+                    }
+                }}
             >
-                <div className="ag-theme-alpine" style={{ height: '600px', width: '100%' }}>
-                    <AgGridReact
-                        rowData={modalData}
-                        columnDefs={modalColDefs}
-                        rowSelection="multiple"
-                        onSelectionChanged={handleSelectionChanged}
-                        defaultColDef={{
-                            ...defaultColDef,
-                            flex: 1,
+                {screenshotLoading ? (
+                    <div className="d-flex justify-content-center align-items-center h-100">
+                        <SyncOutlined spin style={{ fontSize: '32px' }} />
+                    </div>
+                ) : (
+                    <Image.PreviewGroup
+                        preview={{
+                            toolbarRender: (_, { transform: { scale }, actions: { onZoomOut, onZoomIn, onRotateLeft, onRotateRight } }) => null,
+                            countRender: (current, total) => `${current} / ${total}`,
                         }}
-                        theme={gridTheme}
-                        pagination={true}
-                        paginationPageSize={15}
-                    />
-                </div>
+                    >
+                        <div className="row g-4">
+                            {screenshots.length > 0 ? (
+                                screenshots.map((s, idx) => (
+                                    <div key={s.id} className="col-sm-6 col-md-4 col-lg-3 col-xl-2">
+                                        <div
+                                            className={`card shadow-sm border-0 h-100 screenshot-card position-relative ${selectedIds.includes(s.id) ? 'border border-primary border-2' : ''}`}
+                                            style={{ transition: 'all 0.2s', borderRadius: '12px', cursor: 'pointer', outline: selectedIds.includes(s.id) ? '2px solid #0d6efd' : 'none' }}
+                                            onClick={() => toggleSelect(s.id)}
+                                        >
+                                            {/* Selection Checkbox Overlay */}
+                                            <div className="position-absolute top-0 start-0 p-2 z-3" style={{ opacity: selectedIds.includes(s.id) ? 1 : 0.7 }}>
+                                                <input
+                                                    type="checkbox"
+                                                    className="form-check-input border-2 border-primary"
+                                                    checked={selectedIds.includes(s.id)}
+                                                    readOnly
+                                                    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                                                />
+                                            </div>
+
+                                            <div className="position-relative overflow-hidden" style={{ borderRadius: '12px 12px 0 0' }}>
+                                                {/* Hidden Ant Design Image for preview group */}
+                                                <Image
+                                                    src={s.url}
+                                                    alt={`Screenshot at ${s.time}`}
+                                                    style={{ display: 'none' }}
+                                                    preview={{ src: s.url }}
+                                                />
+                                                {/* Visible thumbnail with click handler to open lightbox */}
+                                                <img
+                                                    src={s.url}
+                                                    alt={`Screenshot at ${s.time}`}
+                                                    className="img-fluid w-100"
+                                                    style={{ height: '160px', objectFit: 'cover', display: 'block' }}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        // Trigger the hidden Ant Design Image preview
+                                                        const hiddenImg = e.currentTarget.previousSibling?.querySelector('.ant-image-img, img');
+                                                        e.currentTarget.previousSibling?.click();
+                                                    }}
+                                                />
+                                                {/* Hover overlay with zoom icon */}
+                                                <div
+                                                    className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center screenshot-hover-overlay"
+                                                    style={{ background: 'rgba(0,0,0,0)', transition: 'background 0.2s', borderRadius: '12px 12px 0 0', pointerEvents: 'none' }}
+                                                >
+                                                    <span style={{ color: 'white', fontSize: '28px', opacity: 0, transition: 'opacity 0.2s' }} className="screenshot-zoom-icon">🔍</span>
+                                                </div>
+                                                <div
+                                                    className="position-absolute bottom-0 end-0 bg-dark text-white px-2 py-1 small opacity-75 m-1 rounded"
+                                                    style={{ fontSize: '11px' }}
+                                                >
+                                                    {s.time}
+                                                </div>
+
+                                                {/* Lightbox trigger overlay shown on hover */}
+                                                <div
+                                                    className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center screenshot-preview-overlay"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        // Click the hidden ant-design image to open lightbox
+                                                        const antImg = e.currentTarget.parentNode?.querySelector('.ant-image');
+                                                        if (antImg) antImg.click();
+                                                    }}
+                                                    style={{ borderRadius: '12px 12px 0 0' }}
+                                                >
+                                                    <EyeOutlined style={{ color: 'white', fontSize: '28px' }} className="preview-eye-icon" />
+                                                </div>
+                                            </div>
+                                            <div className="card-body p-2 text-center bg-white" style={{ borderRadius: '0 0 12px 12px' }}>
+                                                <span className="text-muted small fw-medium">{s.date}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="col-12 text-center py-5">
+                                    <i className="bi bi-camera-video-off fs-1 text-muted d-block mb-3"></i>
+                                    <div className="text-muted fs-5">No screenshots found for this date.</div>
+                                    <p className="text-secondary small">Try selecting a different date or check if the tracker app is running.</p>
+                                </div>
+                            )}
+                        </div>
+                    </Image.PreviewGroup>
+                )}
             </Modal>
+            <style>{`
+                .hover-opacity-100:hover {
+                    opacity: 1 !important;
+                }
+                .screenshot-card:hover {
+                    transform: translateY(-4px);
+                    box-shadow: 0 8px 15px rgba(0,0,0,0.1) !important;
+                }
+                .screenshot-card:hover .screenshot-preview-overlay {
+                    background: rgba(0, 0, 0, 0.45);
+                    cursor: zoom-in;
+                }
+                .screenshot-preview-overlay {
+                    background: rgba(0, 0, 0, 0);
+                    transition: background 0.2s ease;
+                }
+                .preview-eye-icon {
+                    opacity: 0;
+                    transition: opacity 0.2s ease, transform 0.2s ease;
+                    transform: scale(0.8);
+                }
+                .screenshot-card:hover .preview-eye-icon {
+                    opacity: 1;
+                    transform: scale(1);
+                }
+            `}</style>
         </>
     );
 };

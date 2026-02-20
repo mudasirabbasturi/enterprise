@@ -421,48 +421,133 @@ export const getSidebarItems = ({
         },
       ]
       : []),
-    {
-      key: "payroll-management",
-      label: "Payroll Management",
-      icon: <CreditCardOutlined style={{ fontSize: "20px" }} />,
-      children: [
-        {
-          key: "salary-setup",
-          label: (
-            <Link href={route("salary-setup.index")}>Salary Setup</Link>
-          ),
-          icon: <CheckCircleOutlined />,
-        },
-        {
-          key: "salary-sheets",
-          label: (
-            <Link href={route("salary-sheets.index")}>Salary Sheets</Link>
-          ),
-          icon: <CheckCircleOutlined />,
-        },
-        {
-          key: "tax-management",
-          label: (
-            <Link href={route("tax-management.index")}>Tax Management</Link>
-          ),
-          icon: <CheckCircleOutlined />,
-        },
-        {
-          key: "salary-packages",
-          label: (
-            <Link href={route("salary-packages.index")}>Salary Packages</Link>
-          ),
-          icon: <CheckCircleOutlined />,
-        },
-        {
-          key: "penalty-management",
-          label: (
-            <Link href={route("penalty-management.index")}>Penalty Management</Link>
-          ),
-          icon: <CheckCircleOutlined />,
-        },
-      ],
+    // {
+    //   key: "payroll-management",
+    //   label: "Payroll Management",
+    //   icon: <CreditCardOutlined style={{ fontSize: "20px" }} />,
+    //   children: [
+    //     {
+    //       key: "salary-setup",
+    //       label: (
+    //         <Link href={route("salary-setup.index")}>Salary Setup</Link>
+    //       ),
+    //       icon: <CheckCircleOutlined />,
+    //     },
+    //     {
+    //       key: "salary-sheets",
+    //       label: (
+    //         <Link href={route("salary-sheets.index")}>Salary Sheets</Link>
+    //       ),
+    //       icon: <CheckCircleOutlined />,
+    //     },
+    //     {
+    //       key: "tax-management",
+    //       label: (
+    //         <Link href={route("tax-management.index")}>Tax Management</Link>
+    //       ),
+    //       icon: <CheckCircleOutlined />,
+    //     },
+    //     {
+    //       key: "salary-packages",
+    //       label: (
+    //         <Link href={route("salary-packages.index")}>Salary Packages</Link>
+    //       ),
+    //       icon: <CheckCircleOutlined />,
+    //     },
+    //     {
+    //       key: "penalty-management",
+    //       label: (
+    //         <Link href={route("penalty-management.index")}>Penalty Management</Link>
+    //       ),
+    //       icon: <CheckCircleOutlined />,
+    //     },
+    //   ],
 
-    }
+    // }
+    ...(can("View Salary Setup") ||
+      can("View Salary Sheets") ||
+      can("View Tax Management") ||
+      can("View Salary Packages") ||
+      can("View Penalty Management")
+      ? [
+        {
+          key: "payroll-management",
+          label: "Payroll Management",
+          icon: <CreditCardOutlined style={{ fontSize: "20px" }} />,
+          children: [
+
+            ...(can("View Salary Setup")
+              ? [
+                {
+                  key: "salary-setup",
+                  label: (
+                    <Link href={route("salary-setup.index")}>
+                      Salary Setup
+                    </Link>
+                  ),
+                  icon: <CheckCircleOutlined />,
+                },
+              ]
+              : []),
+
+            ...(can("View Salary Sheets")
+              ? [
+                {
+                  key: "salary-sheets",
+                  label: (
+                    <Link href={route("salary-sheets.index")}>
+                      Salary Sheets
+                    </Link>
+                  ),
+                  icon: <CheckCircleOutlined />,
+                },
+              ]
+              : []),
+
+            ...(can("View Tax Management")
+              ? [
+                {
+                  key: "tax-management",
+                  label: (
+                    <Link href={route("tax-management.index")}>
+                      Tax Management
+                    </Link>
+                  ),
+                  icon: <CheckCircleOutlined />,
+                },
+              ]
+              : []),
+
+            ...(can("View Salary Packages")
+              ? [
+                {
+                  key: "salary-packages",
+                  label: (
+                    <Link href={route("salary-packages.index")}>
+                      Salary Packages
+                    </Link>
+                  ),
+                  icon: <CheckCircleOutlined />,
+                },
+              ]
+              : []),
+
+            ...(can("View Penalty Management")
+              ? [
+                {
+                  key: "penalty-management",
+                  label: (
+                    <Link href={route("penalty-management.index")}>
+                      Penalty Management
+                    </Link>
+                  ),
+                  icon: <CheckCircleOutlined />,
+                },
+              ]
+              : []),
+          ],
+        },
+      ]
+      : []),
   ];
 };

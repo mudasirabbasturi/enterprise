@@ -111,4 +111,8 @@ class User extends Authenticatable
     public function userShiftSchedules(): HasMany {
         return $this->hasMany(UserShiftSchedule::class);
     }
+
+    public function userScreenshots(): HasMany {
+        return $this->hasMany(UserScreenshot::class);
+    }
 }

@@ -175,6 +175,11 @@ class PermissionSeeder extends Seeder
             // ['model' => 'Holiday', 'type' => 'route', 'name' => 'Create Holiday'],
             // ['model' => 'Holiday', 'type' => 'route', 'name' => 'Update Holiday'],
             // ['model' => 'Holiday', 'type' => 'route', 'name' => 'Delete Holiday'],
+            //    ['model' => 'EmployeeSalary', 'type' => 'route', 'name' => 'View Salary Setup'],
+            //    ['model' => 'PayrollPayment', 'type' => 'route', 'name' => 'View Salary Sheets'],
+            //    ['model' => 'PayrollTaxRule', 'type' => 'route', 'name' => 'View Tax Management'],
+            //    ['model' => 'SalaryPackage', 'type' => 'route', 'name' => 'View Salary Packages'],
+            //    ['model' => 'PayrollPenalty', 'type' => 'route', 'name' => 'View Penalty Management'],
         ];
 
         foreach ($permissions as $perm) {
