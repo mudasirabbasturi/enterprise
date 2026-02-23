@@ -105,7 +105,12 @@ export {
   WalletOutlined,
   UnorderedListOutlined,
   CheckCircleFilled,
-  PrinterOutlined
+  PrinterOutlined,
+  DeleteFilled,
+  DeleteTwoTone,
+  ExclamationCircleOutlined,
+  InfoCircleOutlined
+
 } from "@ant-design/icons";
 
 export { PhoneInput } from "react-international-phone";

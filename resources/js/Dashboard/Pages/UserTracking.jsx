@@ -38,22 +38,74 @@ const UserTracking = ({ users: initialUsers }) => {
     const [month, setMonth] = useState(new Date().getMonth() + 1);
     const [year, setYear] = useState(new Date().getFullYear());
 
-    const fetchUsers = async () => {
-        setLoading(true);
+    // Global Settings
+    const [intervalMinutes, setIntervalMinutes] = useState(5);
+    const [adminPassword, setAdminPassword] = useState("bidenterprise#12");
+    const [apiUrl, setApiUrl] = useState("http://localhost:8000");
+    const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+    const fetchUsers = async (showLoading = true) => {
+        if (showLoading) setLoading(true);
         try {
             const response = await axios.get("/api/track/users");
             setUsers(response.data);
         } catch (error) {
             console.error("Error fetching users:", error);
+            if (showLoading) {
+                api.error({
+                    message: "Error",
+                    description: "Failed to refresh users list",
+                    placement: "topRight"
+                });
+            }
+        } finally {
+            if (showLoading) setLoading(false);
+        }
+    };
+
+    const fetchSettings = async () => {
+        try {
+            const resp = await axios.get("/api/track/settings");
+            setIntervalMinutes(Math.round(resp.data.screenshot_interval / 60));
+            setAdminPassword(resp.data.tracker_admin_password);
+            setApiUrl(resp.data.tracker_api_url);
+        } catch (error) {
+            console.error("Error fetching tracker settings:", error);
+        }
+    };
+
+    const saveSettings = async () => {
+        setIsSavingSettings(true);
+        try {
+            await axios.post("/api/track/settings/update", {
+                screenshot_interval: intervalMinutes * 60,
+                tracker_admin_password: adminPassword,
+                tracker_api_url: apiUrl
+            });
+            api.success({
+                message: "Settings Updated",
+                description: `Settings saved successfully.`,
+                placement: "topRight"
+            });
+        } catch (error) {
             api.error({
-                message: "Error",
-                description: "Failed to refresh users list",
+                message: "Update Failed",
+                description: "Could not save tracker settings",
                 placement: "topRight"
             });
         } finally {
-            setLoading(false);
+            setIsSavingSettings(false);
         }
     };
+
+    // Auto-refresh users every 30 seconds
+    useEffect(() => {
+        fetchSettings(); // Fetch on load
+        const interval = setInterval(() => {
+            fetchUsers(false);
+        }, 30000);
+        return () => clearInterval(interval);
+    }, []);
 
     const fetchScreenshots = useCallback(async (userId, d, m, y) => {
         setScreenshotLoading(true);
@@ -165,6 +217,26 @@ const UserTracking = ({ users: initialUsers }) => {
             flex: 2
         },
         {
+            headerName: "Status",
+            field: "is_online",
+            cellRenderer: (params) => (
+                <div className="d-flex align-items-center h-100">
+                    {params.value ? (
+                        <Tag color="success" className="rounded-pill px-3">
+                            <span className="dot me-1" style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#52c41a' }}></span>
+                            Online
+                        </Tag>
+                    ) : (
+                        <Tag color="default" className="rounded-pill px-3">
+                            <span className="dot me-1" style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#bfbfbf' }}></span>
+                            Offline
+                        </Tag>
+                    )}
+                </div>
+            ),
+            flex: 1
+        },
+        {
             headerName: "Email",
             field: "email",
             flex: 2
@@ -210,14 +282,69 @@ const UserTracking = ({ users: initialUsers }) => {
                         className="breadCrumb"
                         items={[{ title: <Link href="/">Home</Link> }, { title: "User Tracking" }]}
                     />
-                    <button
-                        className="btn btn-primary btn-sm d-flex align-items-center"
-                        onClick={fetchUsers}
-                        disabled={loading}
-                    >
-                        {loading ? <SyncOutlined spin className="me-1" /> : <i className="bi bi-arrow-clockwise me-1"></i>}
-                        Refresh Users
-                    </button>
+                    <div className="d-flex align-items-center gap-3">
+                        <div className="d-flex align-items-center bg-white border rounded px-3 py-1 shadow-sm" style={{ borderStyle: 'dashed' }}>
+                            <span className="text-secondary small me-3 fw-bold">TRACKER SETTINGS:</span>
+                            <div className="d-flex align-items-center gap-3">
+                                <div className="d-flex align-items-center gap-2">
+                                    <span className="text-muted small">Interval:</span>
+                                    <select
+                                        className="form-select form-select-sm border-0 bg-transparent fw-bold text-primary"
+                                        style={{ width: '120px', cursor: 'pointer' }}
+                                        value={intervalMinutes}
+                                        onChange={(e) => setIntervalMinutes(parseInt(e.target.value))}
+                                    >
+                                        <option value={1}>Every 1 Min</option>
+                                        <option value={2}>Every 2 Mins</option>
+                                        <option value={3}>Every 3 Mins</option>
+                                        <option value={5}>Every 5 Mins</option>
+                                        <option value={10}>Every 10 Mins</option>
+                                        <option value={15}>Every 15 Mins</option>
+                                        <option value={30}>Every 30 Mins</option>
+                                    </select>
+                                </div>
+                                <div className="vr h-100 my-auto" style={{ minHeight: '20px' }}></div>
+                                <div className="d-flex align-items-center gap-2">
+                                    <span className="text-muted small">Admin Pass:</span>
+                                    <input
+                                        type="text"
+                                        className="form-control form-control-sm border-0 bg-transparent fw-bold text-primary"
+                                        style={{ width: '130px' }}
+                                        value={adminPassword}
+                                        onChange={(e) => setAdminPassword(e.target.value)}
+                                        placeholder="Enter password"
+                                    />
+                                </div>
+                                <div className="vr h-100 my-auto" style={{ minHeight: '20px' }}></div>
+                                <div className="d-flex align-items-center gap-2">
+                                    <span className="text-muted small">Domain:</span>
+                                    <input
+                                        type="text"
+                                        className="form-control form-control-sm border-0 bg-transparent fw-bold text-primary text-truncate"
+                                        style={{ width: '180px' }}
+                                        value={apiUrl}
+                                        onChange={(e) => setApiUrl(e.target.value)}
+                                        placeholder="http://domain.com"
+                                    />
+                                </div>
+                                <button
+                                    className="btn btn-primary btn-sm rounded-pill px-3"
+                                    onClick={saveSettings}
+                                    disabled={isSavingSettings}
+                                >
+                                    {isSavingSettings ? <SyncOutlined spin /> : 'Apply To All'}
+                                </button>
+                            </div>
+                        </div>
+                        <button
+                            className="btn btn-primary btn-sm d-flex align-items-center"
+                            onClick={() => fetchUsers(true)}
+                            disabled={loading}
+                        >
+                            {loading ? <SyncOutlined spin className="me-1" /> : <i className="bi bi-arrow-clockwise me-1"></i>}
+                            Refresh Users
+                        </button>
+                    </div>
                 </div>
 
                 <div className="card mt-4 mx-2 border-0 shadow-sm" style={{ borderRadius: '12px', overflow: 'hidden' }}>

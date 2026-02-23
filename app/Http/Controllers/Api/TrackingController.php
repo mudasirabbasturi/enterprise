@@ -10,7 +10,13 @@ class TrackingController extends Controller
 {
     public function index()
     {
-        $users = \App\Models\User::all();
+        $recentCutoff = \Carbon\Carbon::now()->subMinutes(15);
+        $users = \App\Models\User::all()->map(function($user) use ($recentCutoff) {
+            $user->is_online = \App\Models\UserScreenshot::where('user_id', $user->id)
+                ->where('screenshot_time', '>=', $recentCutoff)
+                ->exists();
+            return $user;
+        });
 
         return inertia('Pages/UserTracking', [
             'users' => $users,
@@ -48,6 +54,12 @@ class TrackingController extends Controller
             \App\Models\PendingScreenshot::where('user_id', $request->user_id)
                 ->where('is_completed', false)
                 ->update(['is_completed' => true]);
+
+            // Update user online status
+            \App\Models\User::where('id', $request->user_id)->update([
+                'is_online' => true,
+                'last_active_at' => now(),
+            ]);
 
             return response()->json(['status' => 'success', 'message' => 'Screenshot saved']);
         }
@@ -186,19 +198,64 @@ class TrackingController extends Controller
 
     public function getActiveStatus($userId)
     {
-        // Check recent upload (30 min window = 6 screenshot cycles of buffer)
-        $recentCutoff = \Carbon\Carbon::now()->subMinutes(30);
-        $hasRecent = \App\Models\UserScreenshot::where('user_id', $userId)
-            ->where('screenshot_time', '>=', $recentCutoff)
-            ->exists();
+        $user = \App\Models\User::find($userId);
+        return response()->json(['active' => $user ? $user->is_online : false]);
+    }
 
-        // Fallback: any screenshot today means they were active today
-        $todayCutoff = \Carbon\Carbon::now()->startOfDay();
-        $hasToday = \App\Models\UserScreenshot::where('user_id', $userId)
-            ->where('screenshot_time', '>=', $todayCutoff)
-            ->exists();
+    public function updateStatus(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'status' => 'required|in:online,offline'
+        ]);
 
-        return response()->json(['active' => $hasRecent || $hasToday]);
+        $isOnline = $request->status === 'online';
+
+        \App\Models\User::where('id', $request->user_id)->update([
+            'is_online' => $isOnline,
+            'last_active_at' => $isOnline ? now() : null
+        ]);
+
+        return response()->json(['status' => 'success', 'message' => 'Status updated']);
+    }
+
+    public function getTrackerSettings()
+    {
+        $interval = \App\Models\PayrollConfig::where('key', 'tracker_screenshot_interval')->first();
+        $password = \App\Models\PayrollConfig::where('key', 'tracker_admin_password')->first();
+        $apiUrl = \App\Models\PayrollConfig::where('key', 'tracker_api_url')->first();
+        
+        return response()->json([
+            'screenshot_interval' => $interval ? (int)$interval->value : 300,
+            'tracker_admin_password' => $password ? $password->value : 'bidenterprise#12',
+            'tracker_api_url' => $apiUrl ? $apiUrl->value : 'http://localhost:8000'
+        ]);
+    }
+
+    public function updateTrackerSettings(Request $request)
+    {
+        $request->validate([
+            'screenshot_interval' => 'required|integer|min:60',
+            'tracker_admin_password' => 'required|string|min:4',
+            'tracker_api_url' => 'required|url'
+        ]);
+
+        \App\Models\PayrollConfig::updateOrCreate(
+            ['key' => 'tracker_screenshot_interval'],
+            ['value' => $request->screenshot_interval]
+        );
+
+        \App\Models\PayrollConfig::updateOrCreate(
+            ['key' => 'tracker_admin_password'],
+            ['value' => $request->tracker_admin_password]
+        );
+
+        \App\Models\PayrollConfig::updateOrCreate(
+            ['key' => 'tracker_api_url'],
+            ['value' => rtrim($request->tracker_api_url, '/')]
+        );
+
+        return response()->json(['status' => 'success', 'message' => 'Settings updated successfully']);
     }
 
     public function getAllUsers()

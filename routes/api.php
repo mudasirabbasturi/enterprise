@@ -15,4 +15,7 @@ Route::post('/track/screenshot/trigger', [TrackingController::class, 'triggerScr
 Route::get('/track/screenshot/pending/{user_id}', [TrackingController::class, 'checkPendingScreenshot']);
 Route::get('/track/attendance/status/{user_id}', [TrackingController::class, 'getAttendanceStatus']);
 Route::get('/track/active-status/{user_id}', [TrackingController::class, 'getActiveStatus']);
+Route::get('/track/settings', [TrackingController::class, 'getTrackerSettings']);
+Route::post('/track/settings/update', [TrackingController::class, 'updateTrackerSettings']);
+Route::post('/track/update-status', [TrackingController::class, 'updateStatus']);
 
