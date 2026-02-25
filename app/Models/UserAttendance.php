@@ -11,10 +11,11 @@ class UserAttendance extends Model
         'date',
         'check_in',
         'check_out',
-        'overtime_hours',
-        'undertime_hours',
+        'worked_from',
         'check_in_ip',
         'check_out_ip',
+        'break_start',
+        'break_end',
         'status',
         'notes',
     ];

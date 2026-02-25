@@ -11,13 +11,13 @@ class PayrollConfigController extends Controller
     {
         $validated = $request->validate([
             'settings' => 'required|array',
-            'settings.*' => 'required'
+            'settings.*' => 'nullable'
         ]);
 
         foreach ($validated['settings'] as $key => $value) {
             PayrollConfig::updateOrCreate(
                 ['key' => $key],
-                ['value' => $value]
+                ['value' => $value ?? '']
             );
         }
 

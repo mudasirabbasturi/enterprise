@@ -162,8 +162,8 @@ Route::prefix('api/test')->group(function () {
     Route::get('/schedule/users-schedules', [UserShiftScheduleController::class, 'Index'])->name('users-schedules.index');
     Route::post('/schedule/users-schedules/store', [UserShiftScheduleController::class, 'Store'])->name('users-schedules.store');
     Route::post('/schedule/users-schedules/bulk-store', [UserShiftScheduleController::class, 'BulkStore'])->name('users-schedules.bulk-store');
+    Route::get('/schedule/users-schedules/available-users', [UserShiftScheduleController::class, 'getAvailableUsers'])->name('users-schedules.available');
     Route::delete('/schedule/users-schedules/bulk-destroy', [UserShiftScheduleController::class, 'BulkDestroy'])->name('users-schedules.bulk-destroy');
-    Route::put('/schedule/users-schedules/update/{id}', [UserShiftScheduleController::class, 'Update'])->name('users-schedules.update');
     Route::delete('/schedule/users-schedules/destroy/{id}', [UserShiftScheduleController::class, 'Destroy'])->name('users-schedules.destroy');
 
     // Allowed IPs
@@ -233,6 +233,7 @@ Route::prefix('api/test')->group(function () {
     Route::get('/payroll/salary-sheets', [SalarySheetController::class, 'index'])->name('salary-sheets.index');
     Route::post('/payroll/salary-sheets/pay', [SalarySheetController::class, 'processPayment'])->name('salary-sheets.pay');
     Route::post('/payroll/salary-sheets/unpay', [SalarySheetController::class, 'unpayPayment'])->name('salary-sheets.unpay');
+    Route::post('/payroll/salary-sheets/shifts', [SalarySheetController::class, 'saveMonthlyShifts'])->name('salary-sheets.shifts.save');
     Route::post('/payroll/config/update', [PayrollConfigController::class, 'update'])->name('payroll.config.update');
 
     // Tax Management

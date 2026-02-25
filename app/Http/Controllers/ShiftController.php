@@ -23,6 +23,7 @@ class ShiftController extends Controller
             'start_time' => 'required',
             'end_time' => 'required',
             'duration' => 'nullable|integer',
+            'total_break_minutes' => 'nullable|integer',
             'notes' => 'nullable|string',
             'is_active' => 'boolean',
         ]);
@@ -40,6 +41,7 @@ class ShiftController extends Controller
             'start_time' => 'required',
             'end_time' => 'required',
             'duration' => 'nullable|integer',
+            'total_break_minutes' => 'nullable|integer',
             'notes' => 'nullable|string',
             'is_active' => 'boolean',
         ]);

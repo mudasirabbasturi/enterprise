@@ -28,29 +28,38 @@ class UserShiftScheduleController extends Controller
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
             'shift_id' => 'required|exists:shifts,id',
-            'day' => 'required|in:Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday',
+            'days' => 'required|array',
+            'days.*' => 'in:Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday',
             'notes' => 'nullable|string',
         ]);
 
-        UserShiftSchedule::create($validated);
+        // Check if user already has any shift
+        $exists = UserShiftSchedule::where('user_id', $validated['user_id'])->exists();
+        if ($exists) {
+            return redirect()->back()->withErrors(['user_id' => 'User has already assigned one shift so delete that first and add new one.']);
+        }
 
-        return redirect()->back()->with('message', 'Schedule created successfully.');
+        foreach ($validated['days'] as $day) {
+            UserShiftSchedule::create([
+                'user_id' => $validated['user_id'],
+                'shift_id' => $validated['shift_id'],
+                'day' => $day,
+                'notes' => $validated['notes'] ?? null,
+            ]);
+        }
+
+        return redirect()->back()->with('message', 'Schedules created successfully.');
     }
 
-    public function Update(Request $request, $id)
+    public function getAvailableUsers()
     {
-        $schedule = UserShiftSchedule::findOrFail($id);
-        $validated = $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'shift_id' => 'required|exists:shifts,id',
-            'day' => 'required|in:Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday',
-            'notes' => 'nullable|string',
-        ]);
+        $users = User::whereDoesntHave('userShiftSchedules')
+            ->select('id', 'name', 'status')
+            ->get();
 
-        $schedule->update($validated);
-
-        return redirect()->back()->with('message', 'Schedule updated successfully.');
+        return response()->json($users);
     }
+
 
     public function Destroy($id)
     {

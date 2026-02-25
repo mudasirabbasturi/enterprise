@@ -19,8 +19,23 @@ class UserAttendanceController extends Controller
             ->whereYear('date', $year)
             ->get();
 
+        // Load shift schedules for the authenticated user
+        $user->load('userShiftSchedules.shift');
+
+        // Fetch approved leave requests for the year
+        $leaveRequests = \App\Models\LeaveRequest::with('leaveType')
+            ->where('user_id', $user->id)
+            ->where('status', 'approved')
+            ->where(function($query) use ($year) {
+                $query->whereYear('start_date', $year)
+                      ->orWhereYear('end_date', $year);
+            })
+            ->get();
+
         return Inertia::render('Pages/WorkSchedule/MyAttendance', [
             'attendances' => $attendances,
+            'leaveRequests' => $leaveRequests,
+            'userShiftSchedules' => $user->userShiftSchedules,
             'selectedYear' => (int)$year,
         ]);
     }
@@ -72,8 +87,7 @@ class UserAttendanceController extends Controller
             'date' => 'required|date',
             'check_in' => 'nullable',
             'check_out' => 'nullable',
-            'overtime_hours' => 'nullable|numeric',
-            'undertime_hours' => 'nullable|numeric',
+            'worked_from' => 'required|in:home,office',
             'check_in_ip' => 'nullable|ip',
             'check_out_ip' => 'nullable|ip',
             'status' => 'required|string',
@@ -124,8 +138,7 @@ class UserAttendanceController extends Controller
             'date' => 'required|date',
             'check_in' => 'nullable',
             'check_out' => 'nullable',
-            'overtime_hours' => 'nullable|numeric',
-            'undertime_hours' => 'nullable|numeric',
+            'worked_from' => 'required|in:home,office',
             'check_in_ip' => 'nullable|ip',
             'check_out_ip' => 'nullable|ip',
             'status' => 'required|string',

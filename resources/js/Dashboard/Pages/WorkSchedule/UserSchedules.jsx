@@ -36,21 +36,40 @@ const UserSchedules = ({ schedules, users, shifts }) => {
     const [api, contextHolder] = notification.useNotification();
     const [loading, setLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingSchedule, setEditingSchedule] = useState(null);
     const [form] = Form.useForm();
     const [bulkForm] = Form.useForm();
     const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
     const [selectedUserIds, setSelectedUserIds] = useState([]);
     const [selectedGridRows, setSelectedGridRows] = useState([]);
+    const [availableUsers, setAvailableUsers] = useState([]);
+    const [isShiftSelected, setIsShiftSelected] = useState(false);
 
     const groupedUsers = useMemo(() => {
-        return users.reduce((acc, user) => {
+        const usersToGroup = availableUsers.length > 0 ? availableUsers : [];
+        return usersToGroup.reduce((acc, user) => {
             const status = user.status || 'Unknown';
             if (!acc[status]) acc[status] = [];
             acc[status].push(user);
             return acc;
         }, {});
-    }, [users]);
+    }, [availableUsers]);
+
+    const fetchAvailableUsers = () => {
+        setLoading(true);
+        setIsShiftSelected(true);
+        axios.get(route('users-schedules.available'))
+            .then(response => {
+                setAvailableUsers(response.data);
+            })
+            .catch(error => {
+                api.error({
+                    message: "Error",
+                    description: "Failed to fetch available users",
+                    placement: "topRight"
+                });
+            })
+            .finally(() => setLoading(false));
+    };
 
     const columns = useMemo(() => [
         {
@@ -110,15 +129,26 @@ const UserSchedules = ({ schedules, users, shifts }) => {
         },
         {
             headerName: "Duration",
-            field: "duration",
+            field: "shift.duration",
             flex: 1,
             valueFormatter: (params) => {
-                const duration = params.data.shift?.duration || params.value;
+                const duration = params.value;
                 if (!duration) return "0m";
                 const h = Math.floor(duration / 60);
                 const m = duration % 60;
                 return h > 0 ? `${h}h ${m}m` : `${m}m`;
             }
+        },
+        {
+            headerName: "Break Allowed",
+            field: "shift.total_break_minutes",
+            flex: 1,
+            valueFormatter: (params) => {
+                const duration = params.value;
+                if (!duration) return "0m";
+                return `${duration}m`;
+            },
+            cellClass: "text-info fw-bold"
         },
         {
             headerName: "Actions",
@@ -128,15 +158,6 @@ const UserSchedules = ({ schedules, users, shifts }) => {
             pinned: "right",
             cellRenderer: (params) => (
                 <div className="d-flex gap-2 align-items-center h-100">
-                    <Tooltip title="Edit Schedule">
-                        <button
-                            className="btn btn-outline-warning btn-sm rounded-circle d-flex align-items-center justify-content-center"
-                            style={{ width: '28px', height: '28px' }}
-                            onClick={() => handleEdit(params.data)}
-                        >
-                            <EditOutlined />
-                        </button>
-                    </Tooltip>
                     <Tooltip title="Delete Schedule">
                         <Popconfirm
                             title="Are you sure you want to delete this schedule?"
@@ -162,14 +183,6 @@ const UserSchedules = ({ schedules, users, shifts }) => {
     const [shiftLoading, setShiftLoading] = useState(false);
     const [shiftForm] = Form.useForm();
 
-    const handleEdit = (schedule) => {
-        setEditingSchedule(schedule);
-        form.setFieldsValue({
-            ...schedule,
-            is_available: !!schedule.is_available
-        });
-        setIsModalOpen(true);
-    };
 
     const handleDelete = (id) => {
         router.delete(route('users-schedules.destroy', id), {
@@ -213,7 +226,6 @@ const UserSchedules = ({ schedules, users, shifts }) => {
     };
 
     const handleAddNew = () => {
-        setEditingSchedule(null);
         form.resetFields();
         form.setFieldsValue({ is_available: true, duration: 30 });
         setIsModalOpen(true);
@@ -223,6 +235,8 @@ const UserSchedules = ({ schedules, users, shifts }) => {
         bulkForm.resetFields();
         bulkForm.setFieldsValue({ is_available: true });
         setSelectedUserIds([]);
+        setAvailableUsers([]); // Reset available users
+        setIsShiftSelected(false);
         setIsBulkModalOpen(true);
     };
 
@@ -271,17 +285,26 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                 ...values,
             };
 
-            const url = editingSchedule ? route('users-schedules.update', editingSchedule.id) : route('users-schedules.store');
-            const method = editingSchedule ? 'put' : 'post';
+            const url = route('users-schedules.store');
+            const method = 'post';
 
             router[method](url, submissionData, {
                 onSuccess: () => {
                     setIsModalOpen(false);
                     api.success({
                         message: "Success",
-                        description: `Schedule ${editingSchedule ? 'updated' : 'created'} successfully`,
+                        description: `Schedule created successfully`,
                         placement: "topRight"
                     });
+                },
+                onError: (errors) => {
+                    if (errors.user_id) {
+                        api.error({
+                            message: "Error",
+                            description: errors.user_id,
+                            placement: "topRight"
+                        });
+                    }
                 },
                 onFinish: () => setLoading(false)
             });
@@ -358,9 +381,9 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                     </div>
                 </div>
 
-                <div className="card mt-4 mx-2 border-0 shadow-sm" style={{ borderRadius: '12px', overflow: 'hidden' }}>
+                <div className="card mt-4 mx-2 border-0 shadow-sm overflow-hidden" style={{ borderRadius: '12px' }}>
                     <div className="card-body p-0">
-                        <div className="ag-grid-wrapper">
+                        <div className="ag-grid-wrapper" style={{ height: 'calc(100vh - 200px)', minHeight: '400px' }}>
                             <AgGridReact
                                 rowData={schedules}
                                 columnDefs={columns}
@@ -373,6 +396,10 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                                 onSelectionChanged={(event) => {
                                     setSelectedGridRows(event.api.getSelectedRows());
                                 }}
+                                autoSizeStrategy={{
+                                    type: 'fitGridWidth',
+                                    defaultMinWidth: 100
+                                }}
                                 onGridReady={gridOptionsConfig.onGridReady}
                             />
                         </div>
@@ -381,7 +408,7 @@ const UserSchedules = ({ schedules, users, shifts }) => {
             </div>
 
             <Modal
-                title={editingSchedule ? "Edit User Schedule" : "Add New User Schedule"}
+                title="Add New User Schedule"
                 open={isModalOpen}
                 onOk={handleModalSubmit}
                 onCancel={() => setIsModalOpen(false)}
@@ -438,11 +465,11 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                     <div className="row">
                         <div className="col-md-12">
                             <Form.Item
-                                name="day"
-                                label="Day of Week"
-                                rules={[{ required: true }]}
+                                name="days"
+                                label="Days of Week"
+                                rules={[{ required: true, message: 'Please select at least one day' }]}
                             >
-                                <Select placeholder="Select day">
+                                <Select mode="multiple" placeholder="Select days" maxTagCount="responsive">
                                     <Select.Option value="Sunday">Sunday</Select.Option>
                                     <Select.Option value="Monday">Monday</Select.Option>
                                     <Select.Option value="Tuesday">Tuesday</Select.Option>
@@ -498,6 +525,7 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                                 <Select
                                     placeholder="Select a shift"
                                     options={shifts.map(s => ({ label: s.name, value: s.id }))}
+                                    onChange={() => fetchAvailableUsers()}
                                 />
                             </Form.Item>
                             <Tooltip title="Add New Shift" style={{ cursor: 'pointer' }}>
@@ -509,114 +537,129 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                         </div>
                     </div>
 
-                    <div className="row">
-                        <div className="col-md-12">
-                            <Form.Item
-                                name="days"
-                                label="Days of Week"
-                                rules={[{ required: true, message: 'Please select at least one day' }]}
-                            >
-                                <Select mode="multiple" placeholder="Select days" maxTagCount="responsive">
-                                    <Select.Option value="Sunday">Sunday</Select.Option>
-                                    <Select.Option value="Monday">Monday</Select.Option>
-                                    <Select.Option value="Tuesday">Tuesday</Select.Option>
-                                    <Select.Option value="Wednesday">Wednesday</Select.Option>
-                                    <Select.Option value="Thursday">Thursday</Select.Option>
-                                    <Select.Option value="Friday">Friday</Select.Option>
-                                    <Select.Option value="Saturday">Saturday</Select.Option>
-                                </Select>
-                            </Form.Item>
-                        </div>
-                    </div>
+                    {isShiftSelected ? (
+                        availableUsers.length > 0 ? (
+                            <>
+                                <div className="row">
+                                    <div className="col-md-12">
+                                        <Form.Item
+                                            name="days"
+                                            label="Days of Week"
+                                            rules={[{ required: true, message: 'Please select at least one day' }]}
+                                        >
+                                            <Select mode="multiple" placeholder="Select days" maxTagCount="responsive">
+                                                <Select.Option value="Sunday">Sunday</Select.Option>
+                                                <Select.Option value="Monday">Monday</Select.Option>
+                                                <Select.Option value="Tuesday">Tuesday</Select.Option>
+                                                <Select.Option value="Wednesday">Wednesday</Select.Option>
+                                                <Select.Option value="Thursday">Thursday</Select.Option>
+                                                <Select.Option value="Friday">Friday</Select.Option>
+                                                <Select.Option value="Saturday">Saturday</Select.Option>
+                                            </Select>
+                                        </Form.Item>
+                                    </div>
+                                </div>
 
-                    <div className="row">
-                        <div className="col-md-12">
-                            <Form.Item
-                                name="notes"
-                                label="Notes"
-                            >
-                                <Input.TextArea rows={2} placeholder="Additional info..." />
-                            </Form.Item>
-                        </div>
-                    </div>
+                                <div className="row">
+                                    <div className="col-md-12">
+                                        <Form.Item
+                                            name="notes"
+                                            label="Notes"
+                                        >
+                                            <Input.TextArea rows={2} placeholder="Additional info..." />
+                                        </Form.Item>
+                                    </div>
+                                </div>
 
-                    <div className="mt-4">
-                        <div className="d-flex justify-content-between align-items-center mb-3">
-                            <label className="fw-bold fs-6">Select Users to Apply Schedule</label>
-                            <Checkbox
-                                checked={selectedUserIds.length === users.length && users.length > 0}
-                                indeterminate={selectedUserIds.length > 0 && selectedUserIds.length < users.length}
-                                onChange={(e) => setSelectedUserIds(e.target.checked ? users.map(u => u.id) : [])}
-                            >
-                                Select All Users
-                            </Checkbox>
-                        </div>
+                                <div className="mt-4">
+                                    <div className="d-flex justify-content-between align-items-center mb-3">
+                                        <label className="fw-bold fs-6">Select Users to Apply Schedule</label>
+                                        <Checkbox
+                                            checked={selectedUserIds.length === availableUsers.length && availableUsers.length > 0}
+                                            indeterminate={selectedUserIds.length > 0 && selectedUserIds.length < availableUsers.length}
+                                            onChange={(e) => setSelectedUserIds(e.target.checked ? availableUsers.map(u => u.id) : [])}
+                                        >
+                                            Select All Users
+                                        </Checkbox>
+                                    </div>
 
-                        <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '10px' }}>
-                            {Object.entries(groupedUsers).map(([status, statusUsers]) => {
-                                const statusUserIds = statusUsers.map(u => u.id);
-                                const isAllStatusSelected = statusUserIds.every(id => selectedUserIds.includes(id));
-                                const isSomeStatusSelected = statusUserIds.some(id => selectedUserIds.includes(id)) && !isAllStatusSelected;
+                                    <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '10px' }}>
+                                        {Object.entries(groupedUsers).map(([status, statusUsers]) => {
+                                            const statusUserIds = statusUsers.map(u => u.id);
+                                            const isAllStatusSelected = statusUserIds.every(id => selectedUserIds.includes(id));
+                                            const isSomeStatusSelected = statusUserIds.some(id => selectedUserIds.includes(id)) && !isAllStatusSelected;
 
-                                return (
-                                    <div key={status} className="mb-4 p-3 border rounded shadow-sm bg-light bg-opacity-10">
-                                        <div className="d-flex align-items-center justify-content-between mb-3 border-bottom pb-2">
-                                            <h6 className="text-uppercase fw-bold mb-0 d-flex align-items-center">
-                                                <Tag color={
-                                                    status.toLowerCase() === 'active' ? 'success' :
-                                                        status.toLowerCase() === 'pending' ? 'warning' : 'default'
-                                                }>
-                                                    {status}
-                                                </Tag>
-                                                <span className="ms-2 text-muted" style={{ fontSize: '0.8rem' }}>
-                                                    ({statusUsers.length} Users)
-                                                </span>
-                                            </h6>
-                                            <Checkbox
-                                                checked={isAllStatusSelected}
-                                                indeterminate={isSomeStatusSelected}
-                                                onChange={(e) => {
-                                                    if (e.target.checked) {
-                                                        setSelectedUserIds(prev => Array.from(new Set([...prev, ...statusUserIds])));
-                                                    } else {
-                                                        setSelectedUserIds(prev => prev.filter(id => !statusUserIds.includes(id)));
-                                                    }
-                                                }}
-                                            >
-                                                Select All {status}
-                                            </Checkbox>
-                                        </div>
-                                        <div className="row g-2">
-                                            {statusUsers.map(user => (
-                                                <div key={user.id} className="col-md-4 col-sm-6">
-                                                    <div
-                                                        className={`p-2 border rounded d-flex align-items-center gap-2 cursor-pointer transition-all ${selectedUserIds.includes(user.id) ? 'border-primary bg-primary bg-opacity-10' : 'bg-white'}`}
-                                                        onClick={() => {
-                                                            setSelectedUserIds(prev =>
-                                                                prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id]
-                                                            );
-                                                        }}
-                                                        style={{ transition: 'all 0.2s' }}
-                                                    >
+                                            return (
+                                                <div key={status} className="mb-4 p-3 border rounded shadow-sm bg-light bg-opacity-10">
+                                                    <div className="d-flex align-items-center justify-content-between mb-3 border-bottom pb-2">
+                                                        <h6 className="text-uppercase fw-bold mb-0 d-flex align-items-center">
+                                                            <Tag color={
+                                                                status.toLowerCase() === 'active' ? 'success' :
+                                                                    status.toLowerCase() === 'pending' ? 'warning' : 'default'
+                                                            }>
+                                                                {status}
+                                                            </Tag>
+                                                            <span className="ms-2 text-muted" style={{ fontSize: '0.8rem' }}>
+                                                                ({statusUsers.length} Users)
+                                                            </span>
+                                                        </h6>
                                                         <Checkbox
-                                                            checked={selectedUserIds.includes(user.id)}
-                                                            onClick={(e) => e.stopPropagation()}
+                                                            checked={isAllStatusSelected}
+                                                            indeterminate={isSomeStatusSelected}
                                                             onChange={(e) => {
-                                                                setSelectedUserIds(prev =>
-                                                                    e.target.checked ? [...prev, user.id] : prev.filter(id => id !== user.id)
-                                                                );
+                                                                if (e.target.checked) {
+                                                                    setSelectedUserIds(prev => Array.from(new Set([...prev, ...statusUserIds])));
+                                                                } else {
+                                                                    setSelectedUserIds(prev => prev.filter(id => !statusUserIds.includes(id)));
+                                                                }
                                                             }}
-                                                        />
-                                                        <span className="text-truncate" style={{ fontSize: '0.9rem' }}>{user.name}</span>
+                                                        >
+                                                            Select All {status}
+                                                        </Checkbox>
+                                                    </div>
+                                                    <div className="row g-2">
+                                                        {statusUsers.map(user => (
+                                                            <div key={user.id} className="col-md-4 col-sm-6">
+                                                                <div
+                                                                    className={`p-2 border rounded d-flex align-items-center gap-2 cursor-pointer transition-all ${selectedUserIds.includes(user.id) ? 'border-primary bg-primary bg-opacity-10' : 'bg-white'}`}
+                                                                    onClick={() => {
+                                                                        setSelectedUserIds(prev =>
+                                                                            prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id]
+                                                                        );
+                                                                    }}
+                                                                    style={{ transition: 'all 0.2s' }}
+                                                                >
+                                                                    <Checkbox
+                                                                        checked={selectedUserIds.includes(user.id)}
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        onChange={(e) => {
+                                                                            setSelectedUserIds(prev =>
+                                                                                e.target.checked ? [...prev, user.id] : prev.filter(id => id !== user.id)
+                                                                            );
+                                                                        }}
+                                                                    />
+                                                                    <span className="text-truncate" style={{ fontSize: '0.9rem' }}>{user.name}</span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </div>
-                                            ))}
-                                        </div>
+                                            );
+                                        })}
                                     </div>
-                                );
-                            })}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="text-center p-5 border rounded bg-light mt-3">
+                                <i className="ri-error-warning-line fs-1 text-warning d-block mb-2"></i>
+                                <p className="mb-0 text-muted">All users are assigned to shifts. Unassign users to add a new shift.</p>
+                            </div>
+                        )
+                    ) : (
+                        <div className="text-center p-5 border rounded bg-light mt-3">
+                            <p className="mb-0 text-muted">Please select a shift above to see eligible users for assignment.</p>
                         </div>
-                    </div>
+                    )}
                 </Form>
             </Modal>
 
@@ -636,7 +679,7 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                     className="mt-3"
                 >
                     <div className="row">
-                        <div className="col-md-6">
+                        <div className="col-md-4">
                             <Form.Item
                                 name="name"
                                 label="Shift Name"
@@ -645,12 +688,22 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                                 <Input placeholder="e.g. Morning Shift, Night Shift" />
                             </Form.Item>
                         </div>
-                        <div className="col-md-6">
+                        <div className="col-md-4">
                             <Form.Item
                                 name="duration"
                                 label="Duration (Minutes)"
                             >
-                                <InputNumber className="w-100" min={1} />
+                                <InputNumber className="w-100" min={1} readOnly disabled />
+                            </Form.Item>
+                        </div>
+                        <div className="col-md-4">
+                            <Form.Item
+                                name="total_break_minutes"
+                                label="Break Time (Min)"
+                                initialValue={30}
+                                rules={[{ required: true, message: 'Required' }]}
+                            >
+                                <InputNumber className="w-100" min={0} />
                             </Form.Item>
                         </div>
                     </div>
@@ -662,7 +715,11 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                                 label="Start Time"
                                 rules={[{ required: true }]}
                             >
-                                <TimePicker className="w-100" />
+                                <TimePicker className="w-100" onChange={(time) => {
+                                    const endTime = shiftForm.getFieldValue('end_time');
+                                    const duration = calculateDuration(time, endTime);
+                                    if (duration !== null) shiftForm.setFieldsValue({ duration });
+                                }} />
                             </Form.Item>
                         </div>
                         <div className="col-md-6">
@@ -671,7 +728,11 @@ const UserSchedules = ({ schedules, users, shifts }) => {
                                 label="End Time"
                                 rules={[{ required: true }]}
                             >
-                                <TimePicker className="w-100" />
+                                <TimePicker className="w-100" onChange={(time) => {
+                                    const startTime = shiftForm.getFieldValue('start_time');
+                                    const duration = calculateDuration(startTime, time);
+                                    if (duration !== null) shiftForm.setFieldsValue({ duration });
+                                }} />
                             </Form.Item>
                         </div>
                     </div>

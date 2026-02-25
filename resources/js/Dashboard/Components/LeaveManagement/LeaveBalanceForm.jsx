@@ -131,7 +131,7 @@ const LeaveBalanceForm = forwardRef(({ initialValues, mode, onClose, users, leav
                     </div>
                     <div className="col-md-4">
                         <Form.Item name="used" label="Used">
-                            <InputNumber className="w-100" min={0} />
+                            <InputNumber className="w-100" min={0} disabled />
                         </Form.Item>
                     </div>
                 </div>
@@ -139,7 +139,7 @@ const LeaveBalanceForm = forwardRef(({ initialValues, mode, onClose, users, leav
                 <div className="row">
                     <div className="col-md-6">
                         <Form.Item name="pending" label="Pending">
-                            <InputNumber className="w-100" min={0} />
+                            <InputNumber className="w-100" min={0} disabled />
                         </Form.Item>
                     </div>
                     <div className="col-md-6">

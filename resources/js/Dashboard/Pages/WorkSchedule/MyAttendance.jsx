@@ -20,7 +20,7 @@ import {
 } from "@shared/ui";
 import MainLayout from "@layout";
 
-const MyAttendance = ({ attendances, selectedYear, auth }) => {
+const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShiftSchedules }) => {
     const [api, contextHolder] = notification.useNotification();
     const [loading, setLoading] = useState(false);
     const [isAttendanceGridModalOpen, setIsAttendanceGridModalOpen] = useState(false);
@@ -57,7 +57,8 @@ const MyAttendance = ({ attendances, selectedYear, auth }) => {
             user_id: user.id,
             date: date,
             status: 'present',
-            check_in: dayjs().format('HH:mm:ss')
+            check_in: dayjs().format('HH:mm:ss'),
+            worked_from: 'office' // Default to office for quick check-in
         }, {
             onSuccess: () => api.success({ message: "Checked In Successfully" }),
             onError: (err) => api.error({ message: "Check In Failed", description: Object.values(err)[0] }),
@@ -158,10 +159,14 @@ const MyAttendance = ({ attendances, selectedYear, auth }) => {
                     'present': 'success',
                     'late': 'warning',
                     'absent': 'error',
+                    'leave': 'blue',
+                    'On Leave': 'blue',
                     'no action': 'default',
-                    'Not Marked': 'processing'
+                    'Not Marked': 'processing',
+                    'Weekend': 'default'
                 };
-                return <Tag color={colors[params.value] || 'default'}>{params.value.toUpperCase()}</Tag>;
+                const label = params.value === 'On Leave' ? 'LEAVE' : params.value;
+                return <Tag color={colors[params.value] || 'default'}>{label.toUpperCase()}</Tag>;
             }
         },
         {
@@ -177,12 +182,37 @@ const MyAttendance = ({ attendances, selectedYear, auth }) => {
             cellRenderer: (params) => params.value ? <Tag color="blue">{params.value}</Tag> : "-"
         },
         {
+            headerName: "Worked From",
+            field: "worked_from",
+            flex: 1,
+            cellRenderer: (params) => (
+                <Tag color={params.value === 'home' ? 'blue' : 'orange'}>
+                    {params.value ? params.value.toUpperCase() : 'OFFICE'}
+                </Tag>
+            )
+        },
+        {
+            headerName: "Check In IP",
+            field: "check_in_ip",
+            flex: 1,
+            cellRenderer: (params) => params.value ? <small className="font-monospace text-muted" style={{ fontSize: '10px' }}>{params.value}</small> : "-"
+        },
+        {
+            headerName: "Check Out IP",
+            field: "check_out_ip",
+            flex: 1,
+            cellRenderer: (params) => params.value ? <small className="font-monospace text-muted" style={{ fontSize: '10px' }}>{params.value}</small> : "-"
+        },
+        {
             headerName: "Actions",
             width: 250,
             sortable: false,
             filter: false,
             pinned: "right",
             cellRenderer: (params) => {
+                if (params.data.status === 'On Leave') return <Tag color="blue">ON LEAVE</Tag>;
+                if (params.data.status === 'Weekend') return <Tag>WEEKEND</Tag>;
+
                 const isToday = params.data.date === dayjs().format('YYYY-MM-DD');
                 const hasCheckIn = !!params.data.check_in;
                 const hasCheckOut = !!params.data.check_out;
@@ -219,10 +249,28 @@ const MyAttendance = ({ attendances, selectedYear, auth }) => {
 
         return days.map(d => {
             const existing = userRecs.find(a => a.date === d);
-            return existing || {
+            const dayName = dayjs(d).format('dddd');
+            const hasShift = (userShiftSchedules || []).some(s => s.day === dayName);
+
+            // Check if this date falls within an approved leave
+            const onLeave = (leaveRequests || []).find(leave => {
+                const leaveStart = dayjs(leave.start_date);
+                const leaveEnd = dayjs(leave.end_date);
+                const currentDate = dayjs(d);
+                return currentDate.isSameOrAfter(leaveStart, 'day') && currentDate.isSameOrBefore(leaveEnd, 'day');
+            });
+
+            if (existing) {
+                return {
+                    ...existing,
+                    status: onLeave ? 'On Leave' : existing.status
+                };
+            }
+
+            return {
                 user_id: user.id,
                 date: d,
-                status: 'Not Marked',
+                status: onLeave ? 'On Leave' : (hasShift ? 'Not Marked' : 'Weekend'),
                 isPlaceholder: true
             };
         }).sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix());

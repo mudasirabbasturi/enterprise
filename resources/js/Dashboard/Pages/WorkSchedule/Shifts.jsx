@@ -75,6 +75,16 @@ const Shifts = ({ shifts }) => {
             }
         },
         {
+            headerName: "Break Duration",
+            field: "total_break_minutes",
+            flex: 1,
+            valueFormatter: (params) => {
+                if (!params.value) return "0m";
+                return `${params.value}m`;
+            },
+            cellClass: "text-info fw-bold"
+        },
+        {
             headerName: "Notes",
             field: "notes",
             flex: 2,
@@ -221,9 +231,9 @@ const Shifts = ({ shifts }) => {
                     </button>
                 </div>
 
-                <div className="card mt-4 mx-2 border-0 shadow-sm" style={{ borderRadius: '12px', overflow: 'hidden' }}>
+                <div className="card mt-4 mx-2 border-0 shadow-sm overflow-hidden" style={{ borderRadius: '12px' }}>
                     <div className="card-body p-0">
-                        <div className="ag-grid-wrapper">
+                        <div className="ag-grid-wrapper" style={{ height: 'calc(100vh - 200px)', minHeight: '400px' }}>
                             <AgGridReact
                                 rowData={shifts}
                                 columnDefs={columns}
@@ -232,6 +242,10 @@ const Shifts = ({ shifts }) => {
                                 pagination={true}
                                 paginationPageSize={20}
                                 sideBar={sideBarConfig}
+                                autoSizeStrategy={{
+                                    type: 'fitGridWidth',
+                                    defaultMinWidth: 100
+                                }}
                                 onGridReady={gridOptionsConfig.onGridReady}
                             />
                         </div>
@@ -254,7 +268,7 @@ const Shifts = ({ shifts }) => {
                     className="mt-3"
                 >
                     <div className="row">
-                        <div className="col-md-6">
+                        <div className="col-md-4">
                             <Form.Item
                                 name="name"
                                 label="Shift Name"
@@ -263,12 +277,22 @@ const Shifts = ({ shifts }) => {
                                 <Input placeholder="e.g. Morning Shift, Night Shift" />
                             </Form.Item>
                         </div>
-                        <div className="col-md-6">
+                        <div className="col-md-4">
                             <Form.Item
                                 name="duration"
                                 label="Duration (Minutes)"
                             >
-                                <InputNumber className="w-100" min={1} />
+                                <InputNumber className="w-100" min={1} readOnly disabled />
+                            </Form.Item>
+                        </div>
+                        <div className="col-md-4">
+                            <Form.Item
+                                name="total_break_minutes"
+                                label="Break Time (Min)"
+                                initialValue={30}
+                                rules={[{ required: true, message: 'Required' }]}
+                            >
+                                <InputNumber className="w-100" min={0} />
                             </Form.Item>
                         </div>
                     </div>

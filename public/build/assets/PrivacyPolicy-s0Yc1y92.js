@@ -1,0 +1,1 @@
+import{j as s}from"./app-DthN4yGx.js";function a({content:e}){return s.jsxs("div",{className:"container pt-4 pb-4",children:[s.jsx("h2",{className:"",children:"Privacy Policy"}),s.jsx("hr",{}),e?s.jsx("div",{className:"prose max-w-none",dangerouslySetInnerHTML:{__html:e}}):s.jsx("p",{children:"Loading content…"})]})}export{a as default};

@@ -8,19 +8,51 @@ use App\Models\PayrollPayment;
 use App\Models\UserAttendance;
 use App\Models\PayrollConfig;
 use App\Models\PayrollPenalty;
+use App\Models\MonthlyShiftAssignment;
 use App\Models\PayrollAdjustment;
+use App\Models\Shift;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Carbon\Carbon;
 
 class SalarySheetController extends Controller
 {
+    public function saveMonthlyShifts(Request $request)
+    {
+        $validated = $request->validate([
+            'month' => 'required|integer|between:1,12',
+            'year' => 'required|integer',
+            'shifts' => 'nullable|array',
+            'shifts.*.shift_id' => 'required|exists:shifts,id',
+            'shifts.*.start_day' => 'required|integer|min:1|max:31',
+            'shifts.*.end_day' => 'required|integer|min:1|max:31',
+        ]);
+
+        MonthlyShiftAssignment::where('month', $validated['month'])
+            ->where('year', $validated['year'])
+            ->delete();
+
+        if (isset($validated['shifts'])) {
+            foreach ($validated['shifts'] as $shift) {
+                MonthlyShiftAssignment::create([
+                    'month' => $validated['month'],
+                    'year' => $validated['year'],
+                    'shift_id' => $shift['shift_id'],
+                    'start_day' => $shift['start_day'],
+                    'end_day' => $shift['end_day'],
+                ]);
+            }
+        }
+
+        return redirect()->back()->with('message', 'Monthly shift ranges updated successfully.');
+    }
+
     public function index(Request $request)
     {
         $month = $request->input('month', Carbon::now()->month);
         $year = $request->input('year', Carbon::now()->year);
 
-        $users = User::with(['salary.package.allowances', 'salary.package.taxRules'])->get();
+        $users = User::with(['salary.package.allowances', 'salary.package.taxRules', 'userShiftSchedules.shift'])->get();
         
         $attendances = UserAttendance::whereMonth('date', $month)
             ->whereYear('date', $year)
@@ -60,6 +92,12 @@ class SalarySheetController extends Controller
             })
             ->get();
 
+        $shifts = Shift::where('is_active', true)->get();
+
+        $monthlyShiftAssignments = MonthlyShiftAssignment::where('month', $month)
+            ->where('year', $year)
+            ->get();
+
         return Inertia::render('Pages/Payroll/SalarySheet', [
             'users' => $users,
             'attendances' => $attendances,
@@ -70,7 +108,9 @@ class SalarySheetController extends Controller
             'leaveRequests' => $leaveRequests,
             'projectPoints' => $projectPoints,
             'selectedMonth' => (int)$month,
-            'selectedYear' => (int)$year
+            'selectedYear' => (int)$year,
+            'shifts' => $shifts,
+            'monthlyShiftAssignments' => $monthlyShiftAssignments
         ]);
     }
 

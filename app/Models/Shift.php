@@ -15,6 +15,7 @@ class Shift extends Model
         'end_time',
         'duration',
         'notes',
+        'total_break_minutes',
         'is_active',
     ];
 

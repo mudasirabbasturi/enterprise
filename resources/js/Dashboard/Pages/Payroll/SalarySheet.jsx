@@ -1,19 +1,14 @@
-import { useState, useMemo, useRef } from 'react';
-import { Head, Link, Breadcrumb, EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, DownloadOutlined, DollarOutlined, SettingOutlined, CheckCircleFilled, router, notification, PlusCircleOutlined, PrinterOutlined } from "@shared/ui";
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { Head, Link, Breadcrumb, EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, DownloadOutlined, DollarOutlined, SettingOutlined, CheckCircleFilled, router, notification, PlusCircleOutlined, PrinterOutlined, CalendarOutlined, dayjs } from "@shared/ui";
 import { AgGridReact, gridTheme, defaultColDef } from "@agConfig/AgGridConfig";
 import { Select, Button, Modal, Form, Input, InputNumber, DatePicker, Card, Typography, Divider, Tag, Tooltip, Dropdown, Menu } from 'antd';
 import MainLayout from "@layout";
-import dayjs from 'dayjs';
-import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
-import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
-
-dayjs.extend(isSameOrBefore);
-dayjs.extend(isSameOrAfter);
+import { calc } from 'antd/es/theme/internal';
 
 const { Text, Title } = Typography;
 
 const SalarySheet =
-    ({ users, attendances, penalties, payments, config, selectedMonth, selectedYear, leaveRequests, adjustments, projectPoints }) => {
+    ({ users, attendances, penalties, payments, config, selectedMonth, selectedYear, leaveRequests, adjustments, projectPoints, shifts, monthlyShiftAssignments }) => {
         const [api, contextHolder] = notification.useNotification();
         const [modal, modalContextHolder] = Modal.useModal();
         const gridRef = useRef();
@@ -25,6 +20,15 @@ const SalarySheet =
         const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
         const [form] = Form.useForm();
         const [configForm] = Form.useForm();
+        const [shiftForm] = Form.useForm();
+        const [appliedShifts, setAppliedShifts] = useState(monthlyShiftAssignments || []);
+        const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
+
+        // Sync local state when prop changes (e.g. month change)
+        useEffect(() => {
+            setAppliedShifts(monthlyShiftAssignments || []);
+            shiftForm.setFieldsValue({ shifts: monthlyShiftAssignments || [] });
+        }, [monthlyShiftAssignments]);
         const watchedAdjustments = Form.useWatch('manual_adjustments', form);
 
         const monthOptions = [
@@ -55,10 +59,24 @@ const SalarySheet =
 
         const calculatedWorkingDays = useMemo(() => getWorkingDays(month, year), [month, year]);
 
+        const getMinutes = (timeStr) => {
+            if (!timeStr) return 0;
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+        };
+
+        const getDuration = (start, end) => {
+            if (!start || !end) return 0;
+            let s = getMinutes(start);
+            let e = getMinutes(end);
+            if (e < s) e += 1440; // Midnight crossing
+            return e - s;
+        };
+
         const rowData = useMemo(() => {
-            const workingDays = parseInt(config?.working_days_override) || calculatedWorkingDays;
-            const lateRate = parseInt(config?.late_deduction_rate) || 500;
             const pointRate = parseFloat(config?.project_point_rate) || 0;
+            const startOfMonth = dayjs(`${year}-${String(month).padStart(2, '0')}-01`);
+            const lastDayOfMonth = startOfMonth.endOf('month').date();
 
             return users.map(user => {
                 if (!user.salary) return null;
@@ -68,52 +86,107 @@ const SalarySheet =
                 const totalAllowances = (pkg.allowances || []).reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
                 const grossSalary = baseSalary + totalAllowances;
 
-                // Attendance calculations
+                // Shift-aware Attendance Calculations
                 const userAttendances = attendances.filter(a => a.user_id === user.id);
-                const presentDays = userAttendances.filter(a => a.status === 'present').length;
-                const lateDays = userAttendances.filter(a => {
-                    if (!a.check_in) return false;
-                    const [h, m] = a.check_in.split(':').map(Number);
-                    return (h > 9) || (h === 9 && m > 15);
-                }).length;
-
-                // Calculate approved leave days for this user in this month
                 const userLeaves = (leaveRequests || []).filter(l => l.user_id === user.id && l.status === 'approved');
+
+                let totalRequiredMinutes = 0;
+                let totalActualWorkedMinutes = 0;
+                let totalLateDays = 0;
+                let presentDays = 0;
+                let absentHours = 0;
+                let undertimeHours = 0;
+                let overtimeHours = 0;
                 let approvedLeaveDays = 0;
+                let absentDays = 0;
+                let requiredDays = 0;
 
-                userLeaves.forEach(leave => {
-                    const leaveStart = dayjs(leave.start_date);
-                    const leaveEnd = dayjs(leave.end_date);
-                    const monthStart = dayjs(`${year} -${String(month).padStart(2, '0')}-01`);
-                    const monthEnd = monthStart.endOf('month');
+                for (let d = 1; d <= lastDayOfMonth; d++) {
+                    const dateObj = startOfMonth.date(d);
+                    const dateStr = dateObj.format('YYYY-MM-DD');
+                    const dayName = dateObj.format('dddd');
 
-                    // Calculate overlap between leave period and current month
-                    const overlapStart = leaveStart.isAfter(monthStart) ? leaveStart : monthStart;
-                    const overlapEnd = leaveEnd.isBefore(monthEnd) ? leaveEnd : monthEnd;
+                    // Skip weekends entirely for payroll logic (Sat/Sun are off)
+                    if (dayName === 'Saturday' || dayName === 'Sunday') continue;
 
-                    if (overlapStart.isSameOrBefore(overlapEnd)) {
-                        approvedLeaveDays += overlapEnd.diff(overlapStart, 'day') + 1;
+                    // Check if on approved leave
+                    const onLeave = userLeaves.find(leave => {
+                        const leaveStart = dayjs(leave.start_date);
+                        const leaveEnd = dayjs(leave.end_date);
+                        return dateObj.isSameOrAfter(leaveStart, 'day') && dateObj.isSameOrBefore(leaveEnd, 'day');
+                    });
+
+                    // Match shift for the day
+                    const shiftRange = appliedShifts.find(s => d >= s.start_day && d <= s.end_day);
+                    let shift = null;
+                    if (shiftRange) {
+                        shift = shifts.find(s => s.id === shiftRange.shift_id);
+                    } else {
+                        const weeklyShift = user.user_shift_schedules?.find(s => s.day === dayName);
+                        shift = weeklyShift?.shift;
                     }
-                });
 
-                // IMPORTANT: Absent days = Total working days - Present days - Approved leave days
-                // Only unauthorized absences are deducted
-                const totalAbsentDays = Math.max(0, workingDays - presentDays);
-                const unauthorizedAbsentDays = Math.max(0, totalAbsentDays - approvedLeaveDays);
+                    if (onLeave) {
+                        approvedLeaveDays++;
+                    }
 
-                const absentRate = parseFloat(config?.absent_penalty_rate) || (grossSalary / workingDays);
-                const absentDeduction = unauthorizedAbsentDays * absentRate;
+                    // Only require hours if a shift is defined AND user is NOT on leave
+                    if (shift && !onLeave) {
+                        requiredDays++;
+                        const shiftDur = getDuration(shift.start_time, shift.end_time) - (shift.total_break_minutes || 0);
+                        totalRequiredMinutes += shiftDur;
 
+                        const att = userAttendances.find(a => a.date === dateStr);
+                        if (att && att.status === 'present') {
+                            presentDays++;
+                            const workedDur = getDuration(att.check_in, att.check_out);
+                            const breakDur = getDuration(att.break_start, att.break_end);
+                            const actualBreak = (breakDur > 0) ? breakDur : (shift.total_break_minutes || 0);
+                            const netWorked = workedDur - actualBreak;
 
-                // Undertime Deduction
-                const totalUndertimeHours = userAttendances.reduce((acc, curr) => acc + (parseFloat(curr.undertime_hours) || 0), 0);
-                const undertimeRate = parseFloat(config?.undertime_penalty_per_hour) || 0;
-                const undertimeDeduction = totalUndertimeHours * undertimeRate;
+                            totalActualWorkedMinutes += netWorked;
 
-                // Overtime Bonus
-                const totalOvertimeHours = userAttendances.reduce((acc, curr) => acc + (parseFloat(curr.overtime_hours) || 0), 0);
+                            if (netWorked < shiftDur) {
+                                undertimeHours += (shiftDur - netWorked) / 60;
+                            } else if (netWorked > shiftDur) {
+                                overtimeHours += (netWorked - shiftDur) / 60;
+                            }
+
+                            // Late calculation (15 min grace)
+                            if (att.check_in) {
+                                const sTotal = getMinutes(shift.start_time);
+                                const aTotal = getMinutes(att.check_in);
+                                if (aTotal > (sTotal + 15)) {
+                                    totalLateDays++;
+                                }
+                            }
+                        } else {
+                            // Absent
+                            absentDays++;
+                            absentHours += shiftDur / 60;
+                        }
+                    }
+                }
+
+                // Fallback to standard 22 days/8 hours if no shifts assigned
+                let finalRequiredMinutes = totalRequiredMinutes;
+                let finalRequiredDays = requiredDays;
+                if (finalRequiredMinutes === 0) {
+                    finalRequiredDays = parseFloat(config?.working_days_override) || calculatedWorkingDays;
+                    finalRequiredMinutes = finalRequiredDays * 8 * 60;
+                }
+
+                const totalRequiredHours = finalRequiredMinutes / 60;
+                const totalWorkedHours = totalActualWorkedMinutes / 60;
+
+                const hourlyRate = grossSalary / (Math.max(1, totalRequiredHours));
+                const undertimeRate = parseFloat(config?.undertime_penalty_per_hour) || hourlyRate;
+                const absentRate = parseFloat(config?.absent_penalty_rate) || hourlyRate;
                 const overtimeRate = parseFloat(config?.overtime_bonus_per_hour) || 0;
-                const overtimeBonus = totalOvertimeHours * overtimeRate;
+
+                const absentDeduction = absentHours * absentRate;
+                const undertimeDeduction = undertimeHours * undertimeRate;
+                const overtimeBonus = overtimeHours * overtimeRate;
 
                 // Manual Penalties
                 const userPenalties = penalties.filter(p => p.user_id === user.id);
@@ -132,12 +205,12 @@ const SalarySheet =
                     taxesBreakdown.push({
                         name: rule.name || 'Tax',
                         amount: amount,
-                        rate: rule.type === 'percentage' ? `${ruleVal}% ` : `Rs.${ruleVal} `
+                        rate: rule.type === 'percentage' ? `${ruleVal}%` : `Rs.${ruleVal}`
                     });
                 });
                 const totalTax = taxesBreakdown.reduce((acc, curr) => acc + curr.amount, 0);
 
-                // Manual Adjustments (Bonuses and extra deductions)
+                // Manual Adjustments
                 const userAdjustments = adjustments?.filter(a => a.user_id === user.id) || [];
                 const bonusTotal = userAdjustments.filter(a => a.type === 'bonus').reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
                 const manualPointsTotal = userAdjustments.filter(a => a.type === 'points').reduce((acc, curr) => acc + (parseFloat(curr.amount) * pointRate), 0);
@@ -155,14 +228,19 @@ const SalarySheet =
                     gross_salary: grossSalary,
                     present_days: presentDays,
                     leave_days: approvedLeaveDays,
-                    absent_days: unauthorizedAbsentDays,
-                    total_absent_days: totalAbsentDays,
+                    absent_days: absentDays,
+                    required_days: finalRequiredDays,
+                    absent_hours: absentHours,
+                    undertime_hours: undertimeHours,
+                    late_days: totalLateDays,
+                    total_required_hours: totalRequiredHours,
+                    total_worked_hours: totalWorkedHours,
 
                     // Detailed Breakdown for Modal
                     breakdown: {
                         benefits: [
-                            { label: 'Approved Leaves', count: approvedLeaveDays, amount: (approvedLeaveDays * absentRate), unit: 'd' },
-                            { label: 'Overtime Bonus', count: totalOvertimeHours.toFixed(2), rate: overtimeRate, amount: overtimeBonus, unit: 'hrs', status: 'Bonus' },
+                            { label: 'Approved Leaves', count: approvedLeaveDays, amount: 0, unit: 'd' },
+                            { label: 'Overtime Bonus', count: overtimeHours.toFixed(2), rate: overtimeRate, amount: overtimeBonus, unit: 'hrs', status: 'Bonus' },
                             { label: 'Project Points', count: userProjectPoints, rate: pointRate, amount: projectPointsAmount, unit: 'pts', status: 'Bonus' },
                             ...userAdjustments.filter(a => a.type === 'bonus' || a.type === 'points').map((a, i) => ({
                                 label: a.label,
@@ -170,14 +248,14 @@ const SalarySheet =
                                 status: 'Bonus',
                                 count: a.type === 'points' ? parseFloat(a.amount) : undefined,
                                 unit: a.type === 'points' ? 'pts' : undefined,
-                                key: `adj - b - ${i} `
+                                key: `adj-b-${i}`
                             }))
-                        ].filter(b => (b.count > 0 || b.amount > 0) || b.label === 'Approved Leaves' && b.count > 0),
+                        ].filter(b => (b.count > 0 || b.amount > 0)),
                         penalties: [
-                            { label: 'Absence Penalty', count: unauthorizedAbsentDays, rate: absentRate, amount: absentDeduction },
-                            { label: 'Undertime Penalty', count: totalUndertimeHours.toFixed(2), rate: undertimeRate, amount: undertimeDeduction, unit: 'hrs' },
-                            ...manualPenaltiesBreakdown.map((p, i) => ({ label: `Manual Penalty: ${p.type} `, reason: p.reason, amount: p.amount, key: `manual - ${i} ` })),
-                            ...userAdjustments.filter(a => a.type === 'deduction').map((a, i) => ({ label: a.label, reason: a.reason, amount: parseFloat(a.amount), key: `adj - d - ${i} ` }))
+                            { label: 'Absence Penalty', count: absentHours.toFixed(2), rate: absentRate, amount: absentDeduction, unit: 'hrs' },
+                            { label: 'Undertime Penalty', count: undertimeHours.toFixed(2), rate: undertimeRate, amount: undertimeDeduction, unit: 'hrs' },
+                            ...manualPenaltiesBreakdown.map((p, i) => ({ label: `Manual Penalty: ${p.type}`, reason: p.reason, amount: p.amount, key: `manual-${i}` })),
+                            ...userAdjustments.filter(a => a.type === 'deduction').map((a, i) => ({ label: a.label, reason: a.reason, amount: parseFloat(a.amount), key: `adj-d-${i}` }))
                         ].filter(p => p.amount > 0),
                         taxes: taxesBreakdown
                     },
@@ -185,7 +263,7 @@ const SalarySheet =
                     absent_deduction: absentDeduction,
                     undertime_deduction: undertimeDeduction,
                     overtime_bonus: overtimeBonus,
-                    manual_penalty: totalManualPenalty, // Only from penalties table
+                    manual_penalty: totalManualPenalty,
                     bonus_total: bonusTotal,
                     adjustment_deduction: deductionTotal,
                     total_tax: totalTax,
@@ -199,28 +277,24 @@ const SalarySheet =
                     project_points_amount: projectPointsAmount
                 };
             }).filter(Boolean);
-        }, [users, attendances, penalties, payments, adjustments, config, leaveRequests, month, year]);
+        }, [users, attendances, penalties, payments, adjustments, config, leaveRequests, month, year, appliedShifts, shifts]);
 
         const columnDefs = useMemo(() => [
             { headerName: "Employee", field: "name", pinned: 'left', width: 200 },
             {
-                headerName: "Pre/Abs/Leave",
-                valueGetter: params => `${params.data.present_days} / ${params.data.absent_days} / ${params.data.leave_days} `,
+                headerName: "Required/Worked Hrs",
+                valueGetter: params => `${params.data.total_required_hours?.toFixed(1)} / ${params.data.total_worked_hours?.toFixed(1)}`,
                 cellRenderer: params => (
                     <div className="text-center">
-                        <span className="text-success">{params.data.present_days}</span>
+                        <span className="text-primary">{params.data.total_required_hours?.toFixed(1)}</span>
                         <span className="mx-1">/</span>
-                        <span className="text-danger">{params.data.absent_days}</span>
-                        <span className="mx-1">/</span>
-                        <span className="text-info">{params.data.leave_days}</span>
+                        <span className="text-success">{params.data.total_worked_hours?.toFixed(1)}</span>
                     </div>
                 ),
-                width: 140,
+                width: 160,
                 filter: false,
                 sortable: false,
                 cellClass: 'fw-bold',
-                suppressMenu: true,
-                suppressHeaderMenuButton: true,
             },
             {
                 headerName: "Gross Salary",
@@ -402,7 +476,6 @@ const SalarySheet =
 
             const manualAdjs = values.manual_adjustments || [];
             const bonusTotal = manualAdjs.filter(a => a.type === 'bonus').reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
-            const pointsTotal = manualAdjs.filter(a => a.type === 'points').reduce((acc, curr) => acc + (parseFloat(curr.amount) * selectedUser.point_rate || 0), 0);
             const deductionTotal = manualAdjs.filter(a => a.type === 'deduction').reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
 
             // Calculate final net pay: Base Net Pay (from rowData) + New Bonus Total - New Deduction Total
@@ -413,7 +486,7 @@ const SalarySheet =
             // manual_penalty here might already include existing deduction adjustments if we aren't careful.
             // Let's use the raw values if possible, or just be consistent.
 
-            const netPayCalculated = selectedUser.gross_salary + selectedUser.overtime_bonus + selectedUser.project_points_amount + bonusTotal + pointsTotal - (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.total_tax + deductionTotal);
+            const netPayCalculated = selectedUser.gross_salary + selectedUser.overtime_bonus + selectedUser.project_points_amount + bonusTotal - (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.total_tax + deductionTotal);
 
             const payload = {
                 ...values,
@@ -486,6 +559,16 @@ const SalarySheet =
                             <Select value={month} onChange={setMonth} options={monthOptions} style={{ width: 130 }} />
                             <Select value={year} onChange={setYear} options={yearOptions} style={{ width: 100 }} />
                             <Button type="primary" onClick={handleFilter}>Filter</Button>
+                            <Button
+                                icon={<CalendarOutlined />}
+                                className="bg-info text-white border-info"
+                                onClick={() => {
+                                    shiftForm.setFieldsValue({ shifts: appliedShifts });
+                                    setIsShiftModalOpen(true);
+                                }}
+                            >
+                                Define Shifts
+                            </Button>
                             <Dropdown menu={{ items: exportItems, onClick: ({ key }) => onExport(key) }} placement="bottomRight">
                                 <Button icon={<DownloadOutlined />} className="bg-success text-white border-success">
                                     Export
@@ -525,7 +608,7 @@ const SalarySheet =
                     open={isPayModalOpen}
                     onCancel={() => setIsPayModalOpen(false)}
                     footer={null}
-                    width={600}
+                    width="80%"
                 >
                     <Form form={form} layout="vertical" onFinish={submitPayment}>
                         {selectedUser && (
@@ -538,6 +621,75 @@ const SalarySheet =
                                     <Divider style={{ margin: '15px 0' }} />
                                 </div>
                                 <Card className="bg-light border-0 shadow-sm" bodyStyle={{ padding: '20px' }}>
+                                    <div className="bg-white p-3 rounded mb-4 shadow-sm border">
+                                        <Text type="secondary" strong className="d-block mb-3 text-uppercase" style={{ fontSize: '11px', letterSpacing: '1px' }}>
+                                            Attendance & Productivity Summary
+                                        </Text>
+                                        <div className="row g-3">
+                                            <div className="col-3 text-center border-end">
+                                                <Title level={4} className="m-0 text-dark">
+                                                    {selectedUser.required_days}D <span style={{ fontSize: '12px', fontWeight: 'normal' }}>/ {selectedUser.total_required_hours.toFixed(0)}H</span>
+                                                </Title>
+                                                <Text type="secondary" style={{ fontSize: '10px' }}>Expected(Required)</Text>
+                                            </div>
+                                            <div className="col-3 text-center border-end">
+                                                <Title level={4} className="m-0 text-primary">
+                                                    {selectedUser.total_worked_hours.toFixed(1)}H
+                                                </Title>
+                                                <Text type="secondary" style={{ fontSize: '10px' }}>Productive(Worked)</Text>
+                                            </div>
+                                            <div className="col-3 text-center border-end">
+                                                <div className="d-flex flex-column align-items-center">
+                                                    <Title level={4} className="m-0 text-danger">
+                                                        {selectedUser.absent_days > 0 ? `${selectedUser.absent_days}D` : ''}
+                                                        {selectedUser.undertime_hours > 0 ? ` ${selectedUser.undertime_hours.toFixed(1)}H` : ''}
+                                                        {selectedUser.late_days > 0 ? ` +${selectedUser.late_days}L` : (selectedUser.absent_days === 0 && selectedUser.undertime_hours === 0 ? '0' : '')}
+                                                    </Title>
+                                                    <div style={{ fontSize: '9px', color: '#ff4d4f', marginTop: '2px', fontWeight: 'bold' }}>
+                                                        {selectedUser.absent_days > 0 ? 'ABS' : ''} {selectedUser.undertime_hours > 0 ? 'UT' : ''} {selectedUser.late_days > 0 ? 'LATE' : ''}
+                                                    </div>
+                                                </div>
+                                                <Text type="secondary" style={{ fontSize: '10px' }}>Missed (Deficit)</Text>
+                                            </div>
+                                            <div className="col-3 text-center">
+                                                <Title level={4} className="m-0 text-success">
+                                                    {selectedUser.project_points} <span style={{ fontSize: '12px', fontWeight: 'normal' }}>Pts</span>
+                                                </Title>
+                                                <Text type="secondary" style={{ fontSize: '10px' }}>Incentives(Points)</Text>
+                                            </div>
+                                        </div>
+                                        <div className="d-flex justify-content-between mt-3 pt-3 border-top">
+                                            <div className="w-100" style={{ fontSize: '11px' }}>
+                                                <div className="row g-2">
+                                                    <div className="col-6">
+                                                        <div className="d-flex justify-content-between px-2">
+                                                            <Text type="secondary">Scheduled / Required:</Text>
+                                                            <Text strong>{selectedUser.required_days} Work Days / {selectedUser.total_required_hours.toFixed(0)} Hrs</Text>
+                                                        </div>
+                                                        <div className="d-flex justify-content-between px-2">
+                                                            <Text type="secondary">Actual Presence:</Text>
+                                                            <Text strong>{selectedUser.present_days} Days / {selectedUser.late_days} Late</Text>
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-6 border-start">
+                                                        <div className="d-flex justify-content-between px-2">
+                                                            <Text type="secondary">Total Abs / Leaves:</Text>
+                                                            <Text strong>{selectedUser.absent_days} Abs / {selectedUser.leave_days} L</Text>
+                                                        </div>
+                                                        <div className="d-flex justify-content-between px-2">
+                                                            <Text type="secondary">Undertime Hours:</Text>
+                                                            <Text strong className="text-danger">-{selectedUser.undertime_hours.toFixed(1)} Hrs</Text>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="d-flex justify-content-between mt-2 pt-2 border-top" style={{ fontSize: '9px', color: '#8c8c8c' }}>
+                                            <span>Month Calendar: <b>{dayjs(`${year}-${month}-01`).endOf('month').date()} Days (excluding Sat/Sun for Required)</b></span>
+                                            <span>System Default: <b>{parseFloat(config?.working_days_override) || calculatedWorkingDays} Days</b></span>
+                                        </div>
+                                    </div>
+
                                     <div className="d-flex justify-content-between align-items-center mb-3">
                                         <Text strong style={{ fontSize: '16px' }}>Gross Salary Breakdown</Text>
                                         <Text strong style={{ fontSize: '16px' }}>Rs. {selectedUser.gross_salary.toLocaleString()}</Text>
@@ -648,8 +800,7 @@ const SalarySheet =
                                                 selectedUser.gross_salary +
                                                 selectedUser.overtime_bonus +
                                                 selectedUser.project_points_amount +
-                                                ((watchedAdjustments?.filter(a => a?.type === 'bonus').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0) +
-                                                    (watchedAdjustments?.filter(a => a?.type === 'points').reduce((acc, curr) => acc + (parseFloat(curr?.amount) * selectedUser.point_rate || 0), 0) || 0)) -
+                                                (watchedAdjustments?.filter(a => a?.type === 'bonus').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0) -
                                                 (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.manual_penalty + selectedUser.total_tax + (watchedAdjustments?.filter(a => a?.type === 'deduction').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0))
                                             ).toLocaleString()}
                                         </Title>
@@ -681,7 +832,6 @@ const SalarySheet =
                                                 >
                                                     <Select>
                                                         <Select.Option value="bonus">Bonus (+)</Select.Option>
-                                                        <Select.Option value="points">Project Points (+)</Select.Option>
                                                         <Select.Option value="deduction">Deduction (-)</Select.Option>
                                                     </Select>
                                                 </Form.Item>
@@ -781,7 +931,7 @@ const SalarySheet =
                             </div>
                         </div>
                     </Form>
-                </Modal>
+                </Modal >
 
                 <Modal
                     title="Payroll Global Settings"
@@ -797,16 +947,16 @@ const SalarySheet =
 
                         <Form.Item
                             name="absent_penalty_rate"
-                            label="Absent Penalty Rate (PKR per day)"
-                            extra="If not set, it defaults to (Gross Salary / Working Days)"
+                            label="Absent Penalty Rate (PKR per hour)"
+                            extra="If not set, it defaults to (Gross Salary / Total Required Hours)"
                         >
-                            <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 1000" />
+                            <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 500" />
                         </Form.Item>
 
                         <Form.Item
                             name="working_days_override"
-                            label="Working Days in Month (Manual Override)"
-                            extra={`If not set, it defaults to weekdays in month (${calculatedWorkingDays} for this month).`}
+                            label="Standard Working Days (Override)"
+                            extra={`Only used if no shifts are assigned. Defaults to weekdays in month (${calculatedWorkingDays}).`}
                         >
                             <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 22" />
                         </Form.Item>
@@ -842,6 +992,89 @@ const SalarySheet =
                                 Save Configuration
                             </Button>
                         </div>
+                    </Form>
+                </Modal>
+
+                <Modal
+                    title="Define Monthly Shift Ranges"
+                    open={isShiftModalOpen}
+                    onCancel={() => setIsShiftModalOpen(false)}
+                    onOk={() => {
+                        shiftForm.validateFields().then(values => {
+                            setLoading(true);
+                            router.post(route('salary-sheets.shifts.save'), {
+                                month,
+                                year,
+                                shifts: values.shifts
+                            }, {
+                                onSuccess: () => {
+                                    setLoading(false);
+                                    setIsShiftModalOpen(false);
+                                    api.success({ message: 'Shifts Saved', description: 'Monthly shift rules persisted and applied.' });
+                                },
+                                onError: () => setLoading(false)
+                            });
+                        });
+                    }}
+                    width={700}
+                >
+                    <div className="alert alert-warning mb-4" style={{ fontSize: '12px' }}>
+                        Define date ranges for shifts in {monthOptions.find(m => m.value === month)?.label}.
+                        Dates outside these ranges will use the default calculation.
+                    </div>
+                    <Form form={shiftForm} layout="vertical">
+                        <Form.List name="shifts">
+                            {(fields, { add, remove }) => (
+                                <>
+                                    {fields.map(({ key, name, ...restField }) => (
+                                        <div key={key} className="row g-2 mb-3 bg-light p-3 rounded mx-0">
+                                            <div className="col-md-5">
+                                                <Form.Item
+                                                    {...restField}
+                                                    name={[name, 'shift_id']}
+                                                    label="Shift"
+                                                    rules={[{ required: true, message: 'Select shift' }]}
+                                                >
+                                                    <Select
+                                                        options={shifts.map(s => ({
+                                                            label: `${s.name} (${s.start_time} - ${s.end_time})`,
+                                                            value: s.id
+                                                        }))}
+                                                        placeholder="Select Shift"
+                                                    />
+                                                </Form.Item>
+                                            </div>
+                                            <div className="col-md-3">
+                                                <Form.Item
+                                                    {...restField}
+                                                    name={[name, 'start_day']}
+                                                    label="Start Day"
+                                                    rules={[{ required: true, message: 'Req' }]}
+                                                >
+                                                    <InputNumber min={1} max={31} placeholder="1" style={{ width: '100%' }} />
+                                                </Form.Item>
+                                            </div>
+                                            <div className="col-md-3">
+                                                <Form.Item
+                                                    {...restField}
+                                                    name={[name, 'end_day']}
+                                                    label="End Day"
+                                                    rules={[{ required: true, message: 'Req' }]}
+                                                >
+                                                    <InputNumber min={1} max={31} placeholder="31" style={{ width: '100%' }} />
+                                                </Form.Item>
+                                            </div>
+                                            <div className="col-md-1 d-flex align-items-center pt-3">
+                                                <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(name)} />
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <Button type="dashed" onClick={() => add()} block icon={<PlusCircleOutlined />}>
+                                        Add Shift Range
+                                    </Button>
+                                </>
+                            )}
+                        </Form.List>
                     </Form>
                 </Modal>
 

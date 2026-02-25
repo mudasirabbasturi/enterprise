@@ -155,38 +155,6 @@ const UserAttendance =
                 }
             },
             {
-                headerName: "OT Hours",
-                field: "id",
-                width: 110,
-                cellClass: "text-primary fw-bold text-center",
-                valueGetter: (params) => {
-                    const userId = params.data.id;
-                    const monthStr = (filterDate.month + 1).toString().padStart(2, '0');
-                    const userRecs = attendances.filter(a =>
-                        a.user_id === userId &&
-                        a.date.startsWith(`${filterDate.year}-${monthStr}`)
-                    );
-                    const total = userRecs.reduce((acc, curr) => acc + (parseFloat(curr.overtime_hours) || 0), 0);
-                    return `${total.toFixed(1)} hrs`;
-                }
-            },
-            {
-                headerName: "UT Hours",
-                field: "id",
-                width: 110,
-                cellClass: "text-warning fw-bold text-center",
-                valueGetter: (params) => {
-                    const userId = params.data.id;
-                    const monthStr = (filterDate.month + 1).toString().padStart(2, '0');
-                    const userRecs = attendances.filter(a =>
-                        a.user_id === userId &&
-                        a.date.startsWith(`${filterDate.year}-${monthStr}`)
-                    );
-                    const total = userRecs.reduce((acc, curr) => acc + (parseFloat(curr.undertime_hours) || 0), 0);
-                    return `${total.toFixed(1)} hrs`;
-                }
-            },
-            {
                 headerName: "Actions",
                 width: 150,
                 cellRenderer: (params) => (
@@ -220,10 +188,15 @@ const UserAttendance =
                         'present': 'success',
                         'late': 'warning',
                         'absent': 'error',
+                        'leave': 'blue',
+                        'On Leave': 'blue',
                         'no action': 'default',
-                        'Not Marked': 'processing'
+                        'Not Marked': 'processing',
+                        'Weekend': 'default'
                     };
-                    return <Tag color={colors[params.value] || 'default'}>{params.value.toUpperCase()}</Tag>;
+                    const label = params.value === 'On Leave' ? 'LEAVE' : params.value;
+                    const color = colors[params.value] || 'default';
+                    return <Tag color={color}>{label.toUpperCase()}</Tag>;
                 }
             },
             {
@@ -248,22 +221,26 @@ const UserAttendance =
                 }
             },
             {
-                headerName: "OT",
-                field: "overtime_hours",
-                width: 90,
-                cellRenderer: (params) => params.value > 0 ? <Tag color="purple">{params.value} hrs</Tag> : "-"
+                headerName: "Worked From",
+                field: "worked_from",
+                flex: 1,
+                cellRenderer: (params) => (
+                    <Tag color={params.value === 'home' ? 'blue' : 'orange'}>
+                        {params.value ? params.value.toUpperCase() : 'OFFICE'}
+                    </Tag>
+                )
             },
             {
-                headerName: "UT",
-                field: "undertime_hours",
-                width: 90,
-                cellRenderer: (params) => params.value > 0 ? <Tag color="orange">{params.value} hrs</Tag> : "-"
-            },
-            {
-                headerName: "IP Used",
+                headerName: "Check In IP",
                 field: "check_in_ip",
-                flex: 1.2,
-                cellRenderer: (params) => params.value ? <small className="font-monospace text-muted">{params.value}</small> : "-"
+                flex: 1,
+                cellRenderer: (params) => params.value ? <small className="font-monospace text-muted" style={{ fontSize: '10px' }}>{params.value}</small> : "-"
+            },
+            {
+                headerName: "Check Out IP",
+                field: "check_out_ip",
+                flex: 1,
+                cellRenderer: (params) => params.value ? <small className="font-monospace text-muted" style={{ fontSize: '10px' }}>{params.value}</small> : "-"
             },
             {
                 headerName: "Leave",
@@ -280,52 +257,56 @@ const UserAttendance =
                 sortable: false,
                 filter: false,
                 pinned: "right",
-                cellRenderer: (params) => (
-                    <div className="d-flex gap-2 align-items-center h-100">
-                        {params.data.isPlaceholder && (
-                            <>
-                                <button
-                                    className="btn btn-success btn-sm"
-                                    style={{ fontSize: '11px', padding: '2px 8px' }}
-                                    onClick={() => handleQuickMark(params.data, 'present')}
-                                >
-                                    ✓ Present
-                                </button>
-                                <button
-                                    className="btn btn-danger btn-sm"
-                                    style={{ fontSize: '11px', padding: '2px 8px' }}
-                                    onClick={() => handleQuickMark(params.data, 'absent')}
-                                >
-                                    ✗ Absent
-                                </button>
-                            </>
-                        )}
-                        <Tooltip title={params.data.isPlaceholder ? "Mark Attendance" : "Edit Record"}>
-                            <button
-                                className={`btn btn-outline-${params.data.isPlaceholder ? 'primary' : 'warning'} btn-sm rounded-circle d-flex align-items-center justify-content-center`}
-                                style={{ width: '28px', height: '28px' }}
-                                onClick={() => handleEdit(params.data)}
-                            >
-                                <EditOutlined />
-                            </button>
-                        </Tooltip>
-                        {!params.data.isPlaceholder && (
-                            <Tooltip title="Delete">
-                                <Popconfirm
-                                    title="Are you sure?"
-                                    onConfirm={() => handleDelete(params.data.id)}
-                                >
+                cellRenderer: (params) => {
+                    if (params.data.status === 'On Leave') return <Tag color="blue">ON LEAVE</Tag>;
+                    if (params.data.status === 'Weekend') return <Tag>WEEKEND</Tag>;
+                    return (
+                        <div className="d-flex gap-2 align-items-center h-100">
+                            {params.data.isPlaceholder && (
+                                <>
                                     <button
-                                        className="btn btn-outline-danger btn-sm rounded-circle d-flex align-items-center justify-content-center"
-                                        style={{ width: '28px', height: '28px' }}
+                                        className="btn btn-success btn-sm"
+                                        style={{ fontSize: '11px', padding: '2px 8px' }}
+                                        onClick={() => handleQuickMark(params.data, 'present')}
                                     >
-                                        <DeleteOutlined />
+                                        ✓ Present
                                     </button>
-                                </Popconfirm>
+                                    <button
+                                        className="btn btn-danger btn-sm"
+                                        style={{ fontSize: '11px', padding: '2px 8px' }}
+                                        onClick={() => handleQuickMark(params.data, 'absent')}
+                                    >
+                                        ✗ Absent
+                                    </button>
+                                </>
+                            )}
+                            <Tooltip title={params.data.isPlaceholder ? "Mark Attendance" : "Edit Record"}>
+                                <button
+                                    className={`btn btn-outline-${params.data.isPlaceholder ? 'primary' : 'warning'} btn-sm rounded-circle d-flex align-items-center justify-content-center`}
+                                    style={{ width: '28px', height: '28px' }}
+                                    onClick={() => handleEdit(params.data)}
+                                >
+                                    <EditOutlined />
+                                </button>
                             </Tooltip>
-                        )}
-                    </div>
-                )
+                            {!params.data.isPlaceholder && (
+                                <Tooltip title="Delete">
+                                    <Popconfirm
+                                        title="Are you sure?"
+                                        onConfirm={() => handleDelete(params.data.id)}
+                                    >
+                                        <button
+                                            className="btn btn-outline-danger btn-sm rounded-circle d-flex align-items-center justify-content-center"
+                                            style={{ width: '28px', height: '28px' }}
+                                        >
+                                            <DeleteOutlined />
+                                        </button>
+                                    </Popconfirm>
+                                </Tooltip>
+                            )}
+                        </div>
+                    );
+                }
             }
         ], []);
 
@@ -340,6 +321,8 @@ const UserAttendance =
 
             return days.map(d => {
                 const existing = userRecs.find(a => a.date === d);
+                const dayName = dayjs(d).format('dddd');
+                const hasShift = selectedUserForAttendance.user_shift_schedules?.some(s => s.day === dayName);
 
                 // Check if this date falls within an approved leave
                 const onLeave = userLeaves.find(leave => {
@@ -352,6 +335,7 @@ const UserAttendance =
                 if (existing) {
                     return {
                         ...existing,
+                        status: onLeave ? 'On Leave' : existing.status,
                         leave_status: onLeave ? onLeave.leave_type?.name || 'On Leave' : null
                     };
                 }
@@ -359,7 +343,7 @@ const UserAttendance =
                 return {
                     user_id: selectedUserForAttendance.id,
                     date: d,
-                    status: onLeave ? 'On Leave' : 'Not Marked',
+                    status: onLeave ? 'On Leave' : (hasShift ? 'Not Marked' : 'Weekend'),
                     leave_status: onLeave ? onLeave.leave_type?.name || 'On Leave' : null,
                     isPlaceholder: true
                 };
@@ -367,31 +351,7 @@ const UserAttendance =
         }, [selectedUserForAttendance, attendances, filterDate, getDaysInMonth, leaveRequests]);
 
         const handleValuesChange = (changedValues, allValues) => {
-            if (changedValues.check_in || changedValues.check_out || changedValues.date || changedValues.user_id) {
-                const { check_in, check_out, date, user_id } = allValues;
-
-                if (check_in && check_out && date && user_id) {
-                    const user = users.find(u => u.id == user_id);
-                    if (!user) return;
-
-                    const dayName = date.format('dddd');
-                    const schedule = user.user_shift_schedules?.find(s => s.day === dayName);
-
-                    if (schedule && schedule.shift) {
-                        const worked = calculateHours(check_in.format('HH:mm:ss'), check_out.format('HH:mm:ss'));
-                        // Convert duration from minutes to hours
-                        const expectedHours = schedule.shift.duration ? parseFloat(schedule.shift.duration) / 60 : calculateHours(schedule.shift.start_time, schedule.shift.end_time);
-
-                        const ot = Math.max(0, worked - expectedHours);
-                        const ut = Math.max(0, expectedHours - worked);
-
-                        form.setFieldsValue({
-                            overtime_hours: parseFloat(ot.toFixed(2)),
-                            undertime_hours: parseFloat(ut.toFixed(2))
-                        });
-                    }
-                }
-            }
+            // Logic for automatic calculation can be added here if needed in the future
         };
 
         const handleQuickMark = async (rec, status) => {
@@ -416,8 +376,7 @@ const UserAttendance =
                     status: status,
                     check_in: null,
                     check_out: null,
-                    overtime_hours: 0,
-                    undertime_hours: 0
+                    worked_from: 'office'
                 });
 
                 api.success({
@@ -458,7 +417,7 @@ const UserAttendance =
                 check_in: rec.check_in ? dayjs(rec.check_in, 'HH:mm:ss') : null,
                 check_out: rec.check_out ? dayjs(rec.check_out, 'HH:mm:ss') : null,
                 status: rec.isPlaceholder ? 'present' : rec.status,
-                overtime_hours: rec.overtime_hours || 0,
+                worked_from: rec.worked_from || 'office',
                 notes: rec.notes || ''
             });
             setIsModalOpen(true);
@@ -475,7 +434,7 @@ const UserAttendance =
         const handleAddNew = () => {
             setEditingAttendance(null);
             form.resetFields();
-            form.setFieldsValue({ date: dayjs(), status: 'present' });
+            form.setFieldsValue({ date: dayjs(), status: 'present', worked_from: 'office' });
             setIsModalOpen(true);
         };
 
@@ -632,17 +591,19 @@ const UserAttendance =
                                 </Form.Item>
                             </div>
                             <div className="col-md-4">
-                                <Form.Item name="overtime_hours" label="OT Hours"><InputNumber className="w-100" min={0} step={0.1} /></Form.Item>
-                            </div>
-                            <div className="col-md-4">
-                                <Form.Item name="undertime_hours" label="UT Hours"><InputNumber className="w-100" min={0} step={0.1} /></Form.Item>
+                                <Form.Item name="worked_from" label="Worked From" rules={[{ required: true }]}>
+                                    <Select options={[
+                                        { label: 'Office', value: 'office' },
+                                        { label: 'Home', value: 'home' }
+                                    ]} />
+                                </Form.Item>
                             </div>
                         </div>
                         <Form.Item name="status" label="Status" rules={[{ required: true }]}>
                             <Select options={[
                                 { label: 'Present', value: 'present' },
-                                { label: 'Late', value: 'late' },
                                 { label: 'Absent', value: 'absent' },
+                                { label: 'Leave', value: 'leave' },
                                 { label: 'No Action', value: 'no action' }
                             ]} />
                         </Form.Item>

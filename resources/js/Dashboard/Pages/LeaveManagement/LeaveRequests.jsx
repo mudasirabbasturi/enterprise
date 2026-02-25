@@ -19,7 +19,8 @@ import {
     dayjs,
     EyeOutlined,
     CheckCircleOutlined,
-    CloseCircleOutlined
+    CloseCircleOutlined,
+    SyncOutlined
 } from "@shared/ui";
 import MainLayout from "@layout";
 import LeaveRequestForm from "@/Dashboard/Components/LeaveManagement/LeaveRequestForm";
@@ -319,40 +320,52 @@ const LeaveRequests = ({ requests, leaveTypes, users, isPersonal = false, select
                             <p className="fw-medium p-2 bg-light rounded">{statusAction.record.reason}</p>
                         </div>
 
-                        {statusAction.record.status === 'pending' ? (
-                            !isPersonal ? (
-                                <Form form={statusForm} layout="vertical">
-                                    <Form.Item name="rejection_reason" label="Rejection Reason (if rejecting)">
-                                        <Input.TextArea placeholder="Enter reason if rejecting..." />
-                                    </Form.Item>
-                                    <div className="d-flex gap-2 justify-content-end mt-3">
+                        {!isPersonal ? (
+                            <Form form={statusForm} layout="vertical">
+                                <Form.Item name="rejection_reason" label="Rejection Reason (if rejecting)">
+                                    <Input.TextArea placeholder="Enter reason if rejecting..." />
+                                </Form.Item>
+                                <div className="d-flex gap-2 justify-content-end mt-3">
+                                    {statusAction.record.status !== 'rejected' && (
                                         <button
                                             className="btn btn-danger d-flex align-items-center"
                                             onClick={() => handleStatusUpdate('rejected')}
                                         >
                                             <CloseCircleOutlined className="me-1" /> Reject
                                         </button>
+                                    )}
+                                    {statusAction.record.status !== 'approved' && (
                                         <button
                                             className="btn btn-success d-flex align-items-center"
                                             onClick={() => handleStatusUpdate('approved')}
                                         >
                                             <CheckCircleOutlined className="me-1" /> Approve
                                         </button>
-                                    </div>
-                                </Form>
-                            ) : (
+                                    )}
+                                    {statusAction.record.status !== 'pending' && (
+                                        <button
+                                            className="btn btn-warning d-flex align-items-center"
+                                            onClick={() => handleStatusUpdate('pending')}
+                                        >
+                                            <SyncOutlined className="me-1" /> Reset to Pending
+                                        </button>
+                                    )}
+                                </div>
+                            </Form>
+                        ) : (
+                            statusAction.record.status === 'pending' ? (
                                 <div className="alert alert-info">
                                     <p className="mb-0">This request is currently <strong>Pending</strong>. Please wait for approval.</p>
                                 </div>
+                            ) : (
+                                <div className="mt-3 p-3 border rounded">
+                                    <p className="mb-1"><strong>Final Status:</strong> <Tag color={statusAction.record.status === 'approved' ? 'success' : 'error'}>{statusAction.record.status.toUpperCase()}</Tag></p>
+                                    {statusAction.record.rejection_reason && (
+                                        <p className="mb-1"><strong>Note:</strong> {statusAction.record.rejection_reason}</p>
+                                    )}
+                                    <p className="mb-0 text-muted small">Processed on {dayjs(statusAction.record.approved_at).format('DD MMM YYYY HH:mm')}</p>
+                                </div>
                             )
-                        ) : (
-                            <div className="mt-3 p-3 border rounded">
-                                <p className="mb-1"><strong>Final Status:</strong> <Tag color={statusAction.record.status === 'approved' ? 'success' : 'error'}>{statusAction.record.status.toUpperCase()}</Tag></p>
-                                {statusAction.record.rejection_reason && (
-                                    <p className="mb-1"><strong>Note:</strong> {statusAction.record.rejection_reason}</p>
-                                )}
-                                <p className="mb-0 text-muted small">Processed by {statusAction.record.approved_by?.name || 'System'} on {dayjs(statusAction.record.approved_at).format('DD MMM YYYY HH:mm')}</p>
-                            </div>
                         )}
                     </div>
                 )}

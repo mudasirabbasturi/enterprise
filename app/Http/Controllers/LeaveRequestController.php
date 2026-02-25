@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Models\LeaveBalance;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -78,7 +79,8 @@ class LeaveRequestController extends Controller
         ]);
 
         try {
-            LeaveRequest::create($validated);
+            $leaveRequest = LeaveRequest::create($validated);
+            LeaveBalance::updateBalances($leaveRequest->user_id, $leaveRequest->leave_type_id, $leaveRequest->start_date->year);
             return redirect()->back()->with('message', 'Leave request submitted successfully.');
         } catch (Exception $e) {
             return redirect()->back()->withErrors([
@@ -104,6 +106,7 @@ class LeaveRequestController extends Controller
             ]);
 
             $leaveRequest->update($validated);
+            LeaveBalance::updateBalances($leaveRequest->user_id, $leaveRequest->leave_type_id, $leaveRequest->start_date->year);
 
             return redirect()->back()->with('message', 'Leave request updated successfully.');
         } catch (Exception $e) {
@@ -119,16 +122,18 @@ class LeaveRequestController extends Controller
             $leaveRequest = LeaveRequest::findOrFail($id);
 
             $validated = $request->validate([
-                'status' => 'required|in:approved,rejected,cancelled',
+                'status' => 'required|in:approved,rejected,cancelled,pending',
                 'rejection_reason' => 'nullable|string',
             ]);
 
             $leaveRequest->update([
                 'status' => $validated['status'],
-                'rejection_reason' => $validated['rejection_reason'] ?? null,
+                'rejection_reason' => $validated['status'] === 'pending' ? null : ($validated['rejection_reason'] ?? $leaveRequest->rejection_reason),
                 'approved_at' => in_array($validated['status'], ['approved', 'rejected']) ? now() : null,
                 'approved_by' => in_array($validated['status'], ['approved', 'rejected']) ? auth()->id() : null,
             ]);
+
+            LeaveBalance::updateBalances($leaveRequest->user_id, $leaveRequest->leave_type_id, $leaveRequest->start_date->year);
 
             return redirect()->back()->with('message', 'Leave request status updated successfully.');
         } catch (Exception $e) {
@@ -141,7 +146,15 @@ class LeaveRequestController extends Controller
     public function Destroy($id)
     {
         try {
-            LeaveRequest::findOrFail($id)->delete();
+            $leaveRequest = LeaveRequest::findOrFail($id);
+            $userId = $leaveRequest->user_id;
+            $leaveTypeId = $leaveRequest->leave_type_id;
+            $year = $leaveRequest->start_date->year;
+
+            $leaveRequest->delete();
+
+            LeaveBalance::updateBalances($userId, $leaveTypeId, $year);
+
             return redirect()->back()->with('message', 'Leave request deleted successfully.');
         } catch (Exception $e) {
             return redirect()->back()->withErrors([
@@ -158,7 +171,17 @@ class LeaveRequestController extends Controller
         ]);
 
         try {
-            LeaveRequest::whereIn('id', $validated['ids'])->delete();
+            $requests = LeaveRequest::whereIn('id', $validated['ids'])->get();
+            $tasks = [];
+            foreach ($requests as $r) {
+                $tasks[] = ['u' => $r->user_id, 't' => $r->leave_type_id, 'y' => $r->start_date->year];
+                $r->delete();
+            }
+
+            foreach (array_unique($tasks, SORT_REGULAR) as $task) {
+                LeaveBalance::updateBalances($task['u'], $task['t'], $task['y']);
+            }
+
             return redirect()->back()->with('message', 'Selected leave requests deleted successfully.');
         } catch (Exception $e) {
             return redirect()->back()->withErrors([
