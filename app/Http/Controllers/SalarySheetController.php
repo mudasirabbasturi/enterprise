@@ -11,6 +11,7 @@ use App\Models\PayrollPenalty;
 use App\Models\MonthlyShiftAssignment;
 use App\Models\PayrollAdjustment;
 use App\Models\Shift;
+use App\Models\Holiday;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Carbon\Carbon;
@@ -98,6 +99,10 @@ class SalarySheetController extends Controller
             ->where('year', $year)
             ->get();
 
+        $holidays = Holiday::whereMonth('date', $month)
+            ->whereYear('date', $year)
+            ->get();
+
         return Inertia::render('Pages/Payroll/SalarySheet', [
             'users' => $users,
             'attendances' => $attendances,
@@ -110,7 +115,8 @@ class SalarySheetController extends Controller
             'selectedMonth' => (int)$month,
             'selectedYear' => (int)$year,
             'shifts' => $shifts,
-            'monthlyShiftAssignments' => $monthlyShiftAssignments
+            'monthlyShiftAssignments' => $monthlyShiftAssignments,
+            'holidays' => $holidays
         ]);
     }
 

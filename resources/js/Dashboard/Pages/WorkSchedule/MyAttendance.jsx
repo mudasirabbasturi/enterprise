@@ -20,7 +20,7 @@ import {
 } from "@shared/ui";
 import MainLayout from "@layout";
 
-const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShiftSchedules }) => {
+const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShiftSchedules, holidays }) => {
     const [api, contextHolder] = notification.useNotification();
     const [loading, setLoading] = useState(false);
     const [isAttendanceGridModalOpen, setIsAttendanceGridModalOpen] = useState(false);
@@ -163,7 +163,8 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                     'On Leave': 'blue',
                     'no action': 'default',
                     'Not Marked': 'processing',
-                    'Weekend': 'default'
+                    'Weekend': 'default',
+                    'Holiday': 'magenta'
                 };
                 const label = params.value === 'On Leave' ? 'LEAVE' : params.value;
                 return <Tag color={colors[params.value] || 'default'}>{label.toUpperCase()}</Tag>;
@@ -260,6 +261,9 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                 return currentDate.isSameOrAfter(leaveStart, 'day') && currentDate.isSameOrBefore(leaveEnd, 'day');
             });
 
+            // Check if this date is a holiday
+            const holiday = (holidays || []).find(h => dayjs(h.date).isSame(dayjs(d), 'day'));
+
             if (existing) {
                 return {
                     ...existing,
@@ -267,14 +271,19 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                 };
             }
 
+            let status = 'Not Marked';
+            if (onLeave) status = 'On Leave';
+            else if (holiday) status = 'Holiday';
+            else if (!hasShift) status = 'Weekend';
+
             return {
                 user_id: user.id,
                 date: d,
-                status: onLeave ? 'On Leave' : (hasShift ? 'Not Marked' : 'Weekend'),
+                status: status,
                 isPlaceholder: true
             };
         }).sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix());
-    }, [selectedMonthForAttendance, attendances, filterYear, getDaysInMonth, user.id]);
+    }, [selectedMonthForAttendance, attendances, filterYear, getDaysInMonth, user.id, holidays]);
 
     return (
         <>

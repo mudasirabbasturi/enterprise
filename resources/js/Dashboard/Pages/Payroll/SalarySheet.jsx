@@ -8,7 +8,7 @@ import { calc } from 'antd/es/theme/internal';
 const { Text, Title } = Typography;
 
 const SalarySheet =
-    ({ users, attendances, penalties, payments, config, selectedMonth, selectedYear, leaveRequests, adjustments, projectPoints, shifts, monthlyShiftAssignments }) => {
+    ({ users, attendances, penalties, payments, config, selectedMonth, selectedYear, leaveRequests, adjustments, projectPoints, shifts, monthlyShiftAssignments, holidays }) => {
         const [api, contextHolder] = notification.useNotification();
         const [modal, modalContextHolder] = Modal.useModal();
         const gridRef = useRef();
@@ -109,6 +109,10 @@ const SalarySheet =
                     // Skip weekends entirely for payroll logic (Sat/Sun are off)
                     if (dayName === 'Saturday' || dayName === 'Sunday') continue;
 
+                    // Skip Holidays entirely for payroll logic
+                    const isHoliday = (holidays || []).some(h => dayjs(h.date).isSame(dateObj, 'day'));
+                    if (isHoliday) continue;
+
                     // Check if on approved leave
                     const onLeave = userLeaves.find(leave => {
                         const leaveStart = dayjs(leave.start_date);
@@ -188,6 +192,12 @@ const SalarySheet =
                 const undertimeDeduction = undertimeHours * undertimeRate;
                 const overtimeBonus = overtimeHours * overtimeRate;
 
+                // Late Penalty Calculation
+                const lateGraceCount = parseInt(config?.late_grace_count || 0);
+                const latePenaltyPerDay = parseFloat(config?.late_penalty_per_day || 0);
+                const taxableLateDays = Math.max(0, totalLateDays - lateGraceCount);
+                const latePenaltyDeduction = taxableLateDays * latePenaltyPerDay;
+
                 // Manual Penalties
                 const userPenalties = penalties.filter(p => p.user_id === user.id);
                 const manualPenaltiesBreakdown = userPenalties.map(p => ({
@@ -218,7 +228,7 @@ const SalarySheet =
                 const projectPointsAmount = userProjectPoints * pointRate;
                 const deductionTotal = userAdjustments.filter(a => a.type === 'deduction').reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
 
-                const totalDeductions = absentDeduction + undertimeDeduction + totalManualPenalty + totalTax + deductionTotal;
+                const totalDeductions = absentDeduction + undertimeDeduction + latePenaltyDeduction + totalManualPenalty + totalTax + deductionTotal;
                 const netPay = Math.max(0, grossSalary + overtimeBonus + bonusTotal + manualPointsTotal + projectPointsAmount - totalDeductions);
 
                 const payment = payments.find(p => p.user_id === user.id);
@@ -254,6 +264,7 @@ const SalarySheet =
                         penalties: [
                             { label: 'Absence Penalty', count: absentHours.toFixed(2), rate: absentRate, amount: absentDeduction, unit: 'hrs' },
                             { label: 'Undertime Penalty', count: undertimeHours.toFixed(2), rate: undertimeRate, amount: undertimeDeduction, unit: 'hrs' },
+                            { label: 'Late Arrival Penalty', count: taxableLateDays, rate: latePenaltyPerDay, amount: latePenaltyDeduction, unit: 'days' },
                             ...manualPenaltiesBreakdown.map((p, i) => ({ label: `Manual Penalty: ${p.type}`, reason: p.reason, amount: p.amount, key: `manual-${i}` })),
                             ...userAdjustments.filter(a => a.type === 'deduction').map((a, i) => ({ label: a.label, reason: a.reason, amount: parseFloat(a.amount), key: `adj-d-${i}` }))
                         ].filter(p => p.amount > 0),
@@ -262,6 +273,7 @@ const SalarySheet =
 
                     absent_deduction: absentDeduction,
                     undertime_deduction: undertimeDeduction,
+                    late_penalty_deduction: latePenaltyDeduction,
                     overtime_bonus: overtimeBonus,
                     manual_penalty: totalManualPenalty,
                     bonus_total: bonusTotal,
@@ -277,7 +289,7 @@ const SalarySheet =
                     project_points_amount: projectPointsAmount
                 };
             }).filter(Boolean);
-        }, [users, attendances, penalties, payments, adjustments, config, leaveRequests, month, year, appliedShifts, shifts]);
+        }, [users, attendances, penalties, payments, adjustments, config, leaveRequests, month, year, appliedShifts, shifts, holidays]);
 
         const columnDefs = useMemo(() => [
             { headerName: "Employee", field: "name", pinned: 'left', width: 200 },
@@ -323,7 +335,7 @@ const SalarySheet =
                         <span>{Math.round(params.data.project_points_amount || 0).toLocaleString()}</span>
                     </div>
                 ),
-                width: 110,
+                width: 130,
                 filter: false,
                 sortable: false,
                 cellClass: 'fw-bold'
@@ -331,10 +343,10 @@ const SalarySheet =
             {
                 headerName: "Deductions",
                 children: [
-                    { headerName: "Tax", field: "total_tax", width: 90, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
-                    { headerName: "Undertime", field: "undertime_deduction", width: 100, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
-                    { headerName: "Abs Pen", field: "absent_deduction", width: 100, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
-                    { headerName: "Manual Pen", field: "manual_penalty", width: 110, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
+                    { headerName: "Tax", field: "total_tax", width: 100, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
+                    { headerName: "Undertime", field: "undertime_deduction", width: 110, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
+                    { headerName: "Abs Pen", field: "absent_deduction", width: 110, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
+                    { headerName: "Manual Pen", field: "manual_penalty", width: 120, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
                 ]
             },
             {
@@ -496,7 +508,7 @@ const SalarySheet =
                 year: year,
                 gross_salary: selectedUser.gross_salary,
                 overtime_bonus: selectedUser.overtime_bonus,
-                total_deductions: (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.total_tax + deductionTotal),
+                total_deductions: (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.late_penalty_deduction + selectedUser.total_tax + deductionTotal),
                 net_pay: netPayCalculated,
                 payment_date: values.payment_date.format('YYYY-MM-DD'),
             };
@@ -593,7 +605,16 @@ const SalarySheet =
                                     ref={gridRef}
                                     rowData={rowData}
                                     columnDefs={columnDefs}
-                                    defaultColDef={{ ...defaultColDef, flex: 1, suppressMenu: true, suppressHeaderMenuButton: true, filter: true, floatingFilter: false }}
+                                    defaultColDef={{
+                                        ...defaultColDef,
+                                        flex: 1,
+                                        suppressMenu: true,
+                                        suppressHeaderMenuButton: true,
+                                        filter: true,
+                                        floatingFilter: false,
+                                        wrapHeaderText: true,
+                                        autoHeaderHeight: true,
+                                    }}
                                     theme={gridTheme}
                                     pagination={true}
                                     paginationPageSize={20}
@@ -628,25 +649,28 @@ const SalarySheet =
                                         <div className="row g-3">
                                             <div className="col-3 text-center border-end">
                                                 <Title level={4} className="m-0 text-dark">
-                                                    {selectedUser.required_days}D <span style={{ fontSize: '12px', fontWeight: 'normal' }}>/ {selectedUser.total_required_hours.toFixed(0)}H</span>
+                                                    {selectedUser.required_days}day <span style={{ fontSize: '12px', fontWeight: 'normal' }}> / {selectedUser.total_required_hours.toFixed(0)} hrs</span>
                                                 </Title>
-                                                <Text type="secondary" style={{ fontSize: '10px' }}>Expected(Required)</Text>
+                                                <Text type="secondary" style={{ fontSize: '10px' }}>Expected Required</Text>
                                             </div>
                                             <div className="col-3 text-center border-end">
                                                 <Title level={4} className="m-0 text-primary">
-                                                    {selectedUser.total_worked_hours.toFixed(1)}H
+                                                    {selectedUser.total_worked_hours.toFixed(1)} <span style={{ fontSize: '12px', fontWeight: 'normal' }}>/ {selectedUser.total_required_hours.toFixed(0)} hrs</span>
                                                 </Title>
                                                 <Text type="secondary" style={{ fontSize: '10px' }}>Productive(Worked)</Text>
                                             </div>
                                             <div className="col-3 text-center border-end">
                                                 <div className="d-flex flex-column align-items-center">
-                                                    <Title level={4} className="m-0 text-danger">
-                                                        {selectedUser.absent_days > 0 ? `${selectedUser.absent_days}D` : ''}
-                                                        {selectedUser.undertime_hours > 0 ? ` ${selectedUser.undertime_hours.toFixed(1)}H` : ''}
-                                                        {selectedUser.late_days > 0 ? ` +${selectedUser.late_days}L` : (selectedUser.absent_days === 0 && selectedUser.undertime_hours === 0 ? '0' : '')}
-                                                    </Title>
-                                                    <div style={{ fontSize: '9px', color: '#ff4d4f', marginTop: '2px', fontWeight: 'bold' }}>
-                                                        {selectedUser.absent_days > 0 ? 'ABS' : ''} {selectedUser.undertime_hours > 0 ? 'UT' : ''} {selectedUser.late_days > 0 ? 'LATE' : ''}
+                                                    <div className="d-flex flex-column align-items-start" style={{ width: '100%', paddingLeft: '10px' }}>
+                                                        <Text strong className="text-danger" style={{ fontSize: '12px' }}>
+                                                            Absent: {selectedUser.absent_days} Day
+                                                        </Text>
+                                                        <Text strong className="text-danger" style={{ fontSize: '12px' }}>
+                                                            Undertime: {selectedUser.undertime_hours.toFixed(1)} Hrs
+                                                        </Text>
+                                                        <Text strong className="text-danger" style={{ fontSize: '12px' }}>
+                                                            Late: {selectedUser.late_days} Day
+                                                        </Text>
                                                     </div>
                                                 </div>
                                                 <Text type="secondary" style={{ fontSize: '10px' }}>Missed (Deficit)</Text>
@@ -655,7 +679,7 @@ const SalarySheet =
                                                 <Title level={4} className="m-0 text-success">
                                                     {selectedUser.project_points} <span style={{ fontSize: '12px', fontWeight: 'normal' }}>Pts</span>
                                                 </Title>
-                                                <Text type="secondary" style={{ fontSize: '10px' }}>Incentives(Points)</Text>
+                                                <Text type="secondary" style={{ fontSize: '10px' }}>Project Points</Text>
                                             </div>
                                         </div>
                                         <div className="d-flex justify-content-between mt-3 pt-3 border-top">
@@ -801,7 +825,7 @@ const SalarySheet =
                                                 selectedUser.overtime_bonus +
                                                 selectedUser.project_points_amount +
                                                 (watchedAdjustments?.filter(a => a?.type === 'bonus').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0) -
-                                                (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.manual_penalty + selectedUser.total_tax + (watchedAdjustments?.filter(a => a?.type === 'deduction').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0))
+                                                (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.late_penalty_deduction + selectedUser.manual_penalty + selectedUser.total_tax + (watchedAdjustments?.filter(a => a?.type === 'deduction').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0))
                                             ).toLocaleString()}
                                         </Title>
                                     </div>
@@ -969,6 +993,27 @@ const SalarySheet =
                         >
                             <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 200" />
                         </Form.Item>
+
+                        <div className="row g-2">
+                            <div className="col-6">
+                                <Form.Item
+                                    name="late_grace_count"
+                                    label="Late Grace Count"
+                                    extra="Lates allowed before penalty"
+                                >
+                                    <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 2" />
+                                </Form.Item>
+                            </div>
+                            <div className="col-6">
+                                <Form.Item
+                                    name="late_penalty_per_day"
+                                    label="Late Penalty (per day)"
+                                    extra="PKR per late after grace"
+                                >
+                                    <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 500" />
+                                </Form.Item>
+                            </div>
+                        </div>
 
                         <Form.Item
                             name="overtime_bonus_per_hour"

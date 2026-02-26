@@ -31,7 +31,7 @@ import axios from "axios";
 import MainLayout from "@layout";
 
 const UserAttendance =
-    ({ attendances, users, selectedMonth, selectedYear, leaveRequests }) => {
+    ({ attendances, users, selectedMonth, selectedYear, leaveRequests, holidays }) => {
         const [api, contextHolder] = notification.useNotification();
         const [loading, setLoading] = useState(false);
         const [isModalOpen, setIsModalOpen] = useState(false);
@@ -192,7 +192,8 @@ const UserAttendance =
                         'On Leave': 'blue',
                         'no action': 'default',
                         'Not Marked': 'processing',
-                        'Weekend': 'default'
+                        'Weekend': 'default',
+                        'Holiday': 'magenta'
                     };
                     const label = params.value === 'On Leave' ? 'LEAVE' : params.value;
                     const color = colors[params.value] || 'default';
@@ -332,6 +333,9 @@ const UserAttendance =
                     return currentDate.isSameOrAfter(leaveStart, 'day') && currentDate.isSameOrBefore(leaveEnd, 'day');
                 });
 
+                // Check if this date is a holiday
+                const holiday = (holidays || []).find(h => dayjs(h.date).isSame(dayjs(d), 'day'));
+
                 if (existing) {
                     return {
                         ...existing,
@@ -340,15 +344,20 @@ const UserAttendance =
                     };
                 }
 
+                let status = 'Not Marked';
+                if (onLeave) status = 'On Leave';
+                else if (holiday) status = 'Holiday';
+                else if (!hasShift) status = 'Weekend';
+
                 return {
                     user_id: selectedUserForAttendance.id,
                     date: d,
-                    status: onLeave ? 'On Leave' : (hasShift ? 'Not Marked' : 'Weekend'),
-                    leave_status: onLeave ? onLeave.leave_type?.name || 'On Leave' : null,
+                    status: status,
+                    leave_status: onLeave ? onLeave.leave_type?.name || 'On Leave' : (holiday ? holiday.title : null),
                     isPlaceholder: true
                 };
             }).sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix());
-        }, [selectedUserForAttendance, attendances, filterDate, getDaysInMonth, leaveRequests]);
+        }, [selectedUserForAttendance, attendances, filterDate, getDaysInMonth, leaveRequests, holidays]);
 
         const handleValuesChange = (changedValues, allValues) => {
             // Logic for automatic calculation can be added here if needed in the future

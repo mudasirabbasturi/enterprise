@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\UserAttendance;
 use App\Models\User;
+use App\Models\Holiday;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -32,11 +33,14 @@ class UserAttendanceController extends Controller
             })
             ->get();
 
+        $holidays = Holiday::whereYear('date', $year)->get();
+
         return Inertia::render('Pages/WorkSchedule/MyAttendance', [
             'attendances' => $attendances,
             'leaveRequests' => $leaveRequests,
             'userShiftSchedules' => $user->userShiftSchedules,
             'selectedYear' => (int)$year,
+            'holidays' => $holidays,
         ]);
     }
 
@@ -71,12 +75,17 @@ class UserAttendanceController extends Controller
             })
             ->get();
 
+        $holidays = Holiday::whereYear('date', $year)
+            ->whereMonth('date', $month)
+            ->get();
+
         return Inertia::render('Pages/WorkSchedule/UserAttendance', [
             'attendances' => $attendances,
             'users' => $users,
             'leaveRequests' => $leaveRequests,
             'selectedMonth' => (int)$month,
             'selectedYear' => (int)$year,
+            'holidays' => $holidays,
         ]);
     }
 
