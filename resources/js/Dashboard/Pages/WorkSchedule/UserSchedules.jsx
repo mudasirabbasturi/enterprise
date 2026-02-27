@@ -76,7 +76,7 @@ const UserSchedules = ({ schedules, users, shifts }) => {
             headerCheckboxSelection: true,
             checkboxSelection: true,
             width: 50,
-            pinned: "left",
+
             filter: false,
             sortable: false,
         },

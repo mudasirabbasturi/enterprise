@@ -234,6 +234,7 @@ Route::prefix('api/test')->group(function () {
     Route::post('/payroll/salary-sheets/pay', [SalarySheetController::class, 'processPayment'])->name('salary-sheets.pay');
     Route::post('/payroll/salary-sheets/unpay', [SalarySheetController::class, 'unpayPayment'])->name('salary-sheets.unpay');
     Route::post('/payroll/salary-sheets/shifts', [SalarySheetController::class, 'saveMonthlyShifts'])->name('salary-sheets.shifts.save');
+    Route::get('/payroll/my-payroll', [SalarySheetController::class, 'myPayroll'])->name('my-payroll.index');
     Route::post('/payroll/config/update', [PayrollConfigController::class, 'update'])->name('payroll.config.update');
 
     // Tax Management

@@ -40,7 +40,9 @@ export {
   Form,
   Switch,
   TimePicker,
-  Table
+  Table,
+  Space,
+
 } from "antd";
 
 export {
@@ -102,7 +104,6 @@ export {
   ScheduleOutlined,
   CreditCardOutlined,
   CloseCircleOutlined,
-  WalletOutlined,
   UnorderedListOutlined,
   CheckCircleFilled,
   PrinterOutlined,
@@ -110,7 +111,8 @@ export {
   DeleteTwoTone,
   ExclamationCircleOutlined,
   InfoCircleOutlined,
-  CalendarOutlined
+  CalendarOutlined,
+  WalletOutlined,
 
 } from "@ant-design/icons";
 

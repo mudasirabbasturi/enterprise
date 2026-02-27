@@ -22,6 +22,10 @@ const UsersTable = ({ users, showDrawer }) => {
   const [rowData, setRowData] = useState([]);
   const [colDefs, setColDefs] = useState([
     {
+      headerName: "ID",
+      field: "id",
+    },
+    {
       headerName: "User Status",
       headerTooltip: "Employee Status",
       field: "status",

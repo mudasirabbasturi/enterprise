@@ -98,6 +98,11 @@ const DashboardLayout = ({ children }) => {
       label: <Link href={route("my-leave-requests.index")}>Request Leave</Link>,
     },
     {
+      key: "my-payroll",
+      icon: <WalletOutlined />,
+      label: <Link href={route("my-payroll.index")}>My Payroll</Link>,
+    },
+    {
       type: "divider",
     },
     {

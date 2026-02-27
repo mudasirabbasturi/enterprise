@@ -53,7 +53,9 @@ class SalarySheetController extends Controller
         $month = $request->input('month', Carbon::now()->month);
         $year = $request->input('year', Carbon::now()->year);
 
-        $users = User::with(['salary.package.allowances', 'salary.package.taxRules', 'userShiftSchedules.shift'])->get();
+        $users = User::with(['salary.package.allowances', 'salary.package.taxRules', 'userShiftSchedules.shift'])
+            ->where('status', 'active')
+            ->get();
         
         $attendances = UserAttendance::whereMonth('date', $month)
             ->whereYear('date', $year)
@@ -181,5 +183,74 @@ class SalarySheetController extends Controller
         }
 
         return redirect()->back()->with('message', 'Payment cancelled successfully.');
+    }
+
+    public function myPayroll(Request $request)
+    {
+        $year = $request->input('year', Carbon::now()->year);
+        $user = auth()->user();
+
+        $users = User::with(['salary.package.allowances', 'salary.package.taxRules', 'userShiftSchedules.shift'])
+            ->where('id', $user->id)
+            ->get();
+
+        $attendances = UserAttendance::where('user_id', $user->id)
+            ->whereYear('date', $year)
+            ->get();
+
+        $penalties = PayrollPenalty::where('user_id', $user->id)
+            ->whereYear('date', $year)
+            ->get();
+
+        $payments = PayrollPayment::with('adjustments')
+            ->where('user_id', $user->id)
+            ->where('year', $year)
+            ->get();
+
+        $adjustments = PayrollAdjustment::where('user_id', $user->id)
+            ->where('year', $year)
+            ->get();
+
+        $config = PayrollConfig::pluck('value', 'key')->all();
+
+        $projectPoints = \App\Models\ProjectTeamMember::where('user_id', $user->id)
+            ->whereYear('created_at', $year)
+            ->select(\Illuminate\Support\Facades\DB::raw('MONTH(created_at) as month'), \Illuminate\Support\Facades\DB::raw('SUM(points_gain) as total_points'))
+            ->groupBy('month')
+            ->pluck('total_points', 'month');
+
+        $leaveRequests = \App\Models\LeaveRequest::with('leaveType')
+            ->where('user_id', $user->id)
+            ->where('status', 'approved')
+            ->whereYear('start_date', $year)
+            ->orWhere(function ($query) use ($year, $user) {
+                $query->where('user_id', $user->id)
+                    ->where('status', 'approved')
+                    ->whereYear('end_date', $year);
+            })
+            ->get();
+
+        $shifts = Shift::where('is_active', true)->get();
+
+        $monthlyShiftAssignments = MonthlyShiftAssignment::where('year', $year)
+            ->get();
+
+        $holidays = Holiday::whereYear('date', $year)
+            ->get();
+
+        return Inertia::render('Pages/Payroll/MyPayroll', [
+            'users' => $users,
+            'attendances' => $attendances,
+            'penalties' => $penalties,
+            'payments' => $payments,
+            'adjustments' => $adjustments,
+            'config' => $config,
+            'leaveRequests' => $leaveRequests,
+            'projectPoints' => $projectPoints,
+            'selectedYear' => (int)$year,
+            'shifts' => $shifts,
+            'monthlyShiftAssignments' => $monthlyShiftAssignments,
+            'holidays' => $holidays
+        ]);
     }
 }

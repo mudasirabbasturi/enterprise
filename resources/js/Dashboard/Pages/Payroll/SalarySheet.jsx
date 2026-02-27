@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Head, Link, Breadcrumb, EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, DownloadOutlined, DollarOutlined, SettingOutlined, CheckCircleFilled, router, notification, PlusCircleOutlined, PrinterOutlined, CalendarOutlined, dayjs } from "@shared/ui";
+import { Head, Link, Breadcrumb, EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, DownloadOutlined, DollarOutlined, SettingOutlined, CheckCircleFilled, router, notification, PlusCircleOutlined, PrinterOutlined, CalendarOutlined, dayjs, WalletOutlined } from "@shared/ui";
 import { AgGridReact, gridTheme, defaultColDef } from "@agConfig/AgGridConfig";
-import { Select, Button, Modal, Form, Input, InputNumber, DatePicker, Card, Typography, Divider, Tag, Tooltip, Dropdown, Menu } from 'antd';
+import { Select, Space, Button, Modal, Form, Input, InputNumber, DatePicker, Card, Typography, Divider, Tag, Tooltip, Dropdown, Menu } from 'antd';
 import MainLayout from "@layout";
 import { calc } from 'antd/es/theme/internal';
 
@@ -93,6 +93,7 @@ const SalarySheet =
                 let totalRequiredMinutes = 0;
                 let totalActualWorkedMinutes = 0;
                 let totalLateDays = 0;
+                let totalMissingAttendanceDays = 0;
                 let presentDays = 0;
                 let absentHours = 0;
                 let undertimeHours = 0;
@@ -143,6 +144,12 @@ const SalarySheet =
                         const att = userAttendances.find(a => a.date === dateStr);
                         if (att && att.status === 'present') {
                             presentDays++;
+
+                            // Missing Attendance Detection (Present but missing check-in or out)
+                            if (!att.check_in || !att.check_out) {
+                                totalMissingAttendanceDays++;
+                            }
+
                             const workedDur = getDuration(att.check_in, att.check_out);
                             const breakDur = getDuration(att.break_start, att.break_end);
                             const actualBreak = (breakDur > 0) ? breakDur : (shift.total_break_minutes || 0);
@@ -198,6 +205,12 @@ const SalarySheet =
                 const taxableLateDays = Math.max(0, totalLateDays - lateGraceCount);
                 const latePenaltyDeduction = taxableLateDays * latePenaltyPerDay;
 
+                // Missing Attendance Penalty Calculation
+                const missingAttendanceGraceCount = parseInt(config?.missing_attendance_grace_count || 0);
+                const missingAttendancePenaltyPerDay = parseFloat(config?.missing_attendance_penalty_per_day || 0);
+                const taxableMissingAttendanceDays = Math.max(0, totalMissingAttendanceDays - missingAttendanceGraceCount);
+                const missingAttendancePenaltyDeduction = taxableMissingAttendanceDays * missingAttendancePenaltyPerDay;
+
                 // Manual Penalties
                 const userPenalties = penalties.filter(p => p.user_id === user.id);
                 const manualPenaltiesBreakdown = userPenalties.map(p => ({
@@ -228,7 +241,7 @@ const SalarySheet =
                 const projectPointsAmount = userProjectPoints * pointRate;
                 const deductionTotal = userAdjustments.filter(a => a.type === 'deduction').reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
 
-                const totalDeductions = absentDeduction + undertimeDeduction + latePenaltyDeduction + totalManualPenalty + totalTax + deductionTotal;
+                const totalDeductions = absentDeduction + undertimeDeduction + latePenaltyDeduction + missingAttendancePenaltyDeduction + totalManualPenalty + totalTax + deductionTotal;
                 const netPay = Math.max(0, grossSalary + overtimeBonus + bonusTotal + manualPointsTotal + projectPointsAmount - totalDeductions);
 
                 const payment = payments.find(p => p.user_id === user.id);
@@ -243,6 +256,7 @@ const SalarySheet =
                     absent_hours: absentHours,
                     undertime_hours: undertimeHours,
                     late_days: totalLateDays,
+                    missing_attendance_days: totalMissingAttendanceDays,
                     total_required_hours: totalRequiredHours,
                     total_worked_hours: totalWorkedHours,
 
@@ -265,6 +279,7 @@ const SalarySheet =
                             { label: 'Absence Penalty', count: absentHours.toFixed(2), rate: absentRate, amount: absentDeduction, unit: 'hrs' },
                             { label: 'Undertime Penalty', count: undertimeHours.toFixed(2), rate: undertimeRate, amount: undertimeDeduction, unit: 'hrs' },
                             { label: 'Late Arrival Penalty', count: taxableLateDays, rate: latePenaltyPerDay, amount: latePenaltyDeduction, unit: 'days' },
+                            { label: 'Missing Check-in/out Penalty', count: taxableMissingAttendanceDays, rate: missingAttendancePenaltyPerDay, amount: missingAttendancePenaltyDeduction, unit: 'days' },
                             ...manualPenaltiesBreakdown.map((p, i) => ({ label: `Manual Penalty: ${p.type}`, reason: p.reason, amount: p.amount, key: `manual-${i}` })),
                             ...userAdjustments.filter(a => a.type === 'deduction').map((a, i) => ({ label: a.label, reason: a.reason, amount: parseFloat(a.amount), key: `adj-d-${i}` }))
                         ].filter(p => p.amount > 0),
@@ -274,6 +289,7 @@ const SalarySheet =
                     absent_deduction: absentDeduction,
                     undertime_deduction: undertimeDeduction,
                     late_penalty_deduction: latePenaltyDeduction,
+                    missing_attendance_penalty_deduction: missingAttendancePenaltyDeduction,
                     overtime_bonus: overtimeBonus,
                     manual_penalty: totalManualPenalty,
                     bonus_total: bonusTotal,
@@ -498,7 +514,15 @@ const SalarySheet =
             // manual_penalty here might already include existing deduction adjustments if we aren't careful.
             // Let's use the raw values if possible, or just be consistent.
 
-            const netPayCalculated = selectedUser.gross_salary + selectedUser.overtime_bonus + selectedUser.project_points_amount + bonusTotal - (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.total_tax + deductionTotal);
+            const netPayCalculated = selectedUser.gross_salary + selectedUser.overtime_bonus + selectedUser.project_points_amount + bonusTotal - (
+                selectedUser.absent_deduction +
+                selectedUser.undertime_deduction +
+                selectedUser.total_tax +
+                deductionTotal +
+                selectedUser.late_penalty_deduction +
+                selectedUser.missing_attendance_penalty_deduction +
+                selectedUser.manual_penalty
+            );
 
             const payload = {
                 ...values,
@@ -508,7 +532,7 @@ const SalarySheet =
                 year: year,
                 gross_salary: selectedUser.gross_salary,
                 overtime_bonus: selectedUser.overtime_bonus,
-                total_deductions: (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.late_penalty_deduction + selectedUser.total_tax + deductionTotal),
+                total_deductions: (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.late_penalty_deduction + selectedUser.missing_attendance_penalty_deduction + selectedUser.total_tax + deductionTotal + selectedUser.manual_penalty),
                 net_pay: netPayCalculated,
                 payment_date: values.payment_date.format('YYYY-MM-DD'),
             };
@@ -625,15 +649,16 @@ const SalarySheet =
                 </div>
 
                 <Modal
-                    title={`Release Payment: ${selectedUser?.name}`}
+                    title={<Space><WalletOutlined /> Release Payment: {selectedUser?.name}</Space>}
                     open={isPayModalOpen}
                     onCancel={() => setIsPayModalOpen(false)}
                     footer={null}
-                    width="80%"
+                    width={850}
+                    centered
                 >
                     <Form form={form} layout="vertical" onFinish={submitPayment}>
                         {selectedUser && (
-                            <div className="mb-4">
+                            <div className="payment-modal-content">
                                 <div className="print-only mb-4 text-center" style={{ display: 'none' }}>
                                     <Title level={2} style={{ margin: 0 }}>Payment Slip: {selectedUser?.name}</Title>
                                     <Text type="secondary" style={{ fontSize: '18px', fontWeight: 'bold' }}>
@@ -641,321 +666,247 @@ const SalarySheet =
                                     </Text>
                                     <Divider style={{ margin: '15px 0' }} />
                                 </div>
-                                <Card className="bg-light border-0 shadow-sm" bodyStyle={{ padding: '20px' }}>
-                                    <div className="bg-white p-3 rounded mb-4 shadow-sm border">
-                                        <Text type="secondary" strong className="d-block mb-3 text-uppercase" style={{ fontSize: '11px', letterSpacing: '1px' }}>
-                                            Attendance & Productivity Summary
-                                        </Text>
-                                        <div className="row g-3">
-                                            <div className="col-3 text-center border-end">
-                                                <Title level={4} className="m-0 text-dark">
-                                                    {selectedUser.required_days}day <span style={{ fontSize: '12px', fontWeight: 'normal' }}> / {selectedUser.total_required_hours.toFixed(0)} hrs</span>
-                                                </Title>
-                                                <Text type="secondary" style={{ fontSize: '10px' }}>Expected Required</Text>
-                                            </div>
-                                            <div className="col-3 text-center border-end">
-                                                <Title level={4} className="m-0 text-primary">
-                                                    {selectedUser.total_worked_hours.toFixed(1)} <span style={{ fontSize: '12px', fontWeight: 'normal' }}>/ {selectedUser.total_required_hours.toFixed(0)} hrs</span>
-                                                </Title>
-                                                <Text type="secondary" style={{ fontSize: '10px' }}>Productive(Worked)</Text>
-                                            </div>
-                                            <div className="col-3 text-center border-end">
-                                                <div className="d-flex flex-column align-items-center">
-                                                    <div className="d-flex flex-column align-items-start" style={{ width: '100%', paddingLeft: '10px' }}>
-                                                        <Text strong className="text-danger" style={{ fontSize: '12px' }}>
-                                                            Absent: {selectedUser.absent_days} Day
-                                                        </Text>
-                                                        <Text strong className="text-danger" style={{ fontSize: '12px' }}>
-                                                            Undertime: {selectedUser.undertime_hours.toFixed(1)} Hrs
-                                                        </Text>
-                                                        <Text strong className="text-danger" style={{ fontSize: '12px' }}>
-                                                            Late: {selectedUser.late_days} Day
-                                                        </Text>
-                                                    </div>
-                                                </div>
-                                                <Text type="secondary" style={{ fontSize: '10px' }}>Missed (Deficit)</Text>
-                                            </div>
-                                            <div className="col-3 text-center">
-                                                <Title level={4} className="m-0 text-success">
-                                                    {selectedUser.project_points} <span style={{ fontSize: '12px', fontWeight: 'normal' }}>Pts</span>
-                                                </Title>
-                                                <Text type="secondary" style={{ fontSize: '10px' }}>Project Points</Text>
+
+                                <Card className="border-0 bg-light mb-4" bodyStyle={{ padding: '15px' }}>
+                                    <Divider orientation="left" style={{ margin: '0 0 15px 0' }}>
+                                        <Text type="secondary" strong style={{ fontSize: '11px', textTransform: 'uppercase' }}>Attendance Summary</Text>
+                                    </Divider>
+                                    <div className="row g-3 text-center">
+                                        <div className="col-md-3 border-end">
+                                            <div className="bg-white p-2 rounded shadow-sm border">
+                                                <Title level={5} className="m-0 text-secondary">{selectedUser.required_days} Days</Title>
+                                                <Text type="secondary" style={{ fontSize: '10px' }}>Schedule Required</Text>
                                             </div>
                                         </div>
-                                        <div className="d-flex justify-content-between mt-3 pt-3 border-top">
-                                            <div className="w-100" style={{ fontSize: '11px' }}>
-                                                <div className="row g-2">
-                                                    <div className="col-6">
-                                                        <div className="d-flex justify-content-between px-2">
-                                                            <Text type="secondary">Scheduled / Required:</Text>
-                                                            <Text strong>{selectedUser.required_days} Work Days / {selectedUser.total_required_hours.toFixed(0)} Hrs</Text>
-                                                        </div>
-                                                        <div className="d-flex justify-content-between px-2">
-                                                            <Text type="secondary">Actual Presence:</Text>
-                                                            <Text strong>{selectedUser.present_days} Days / {selectedUser.late_days} Late</Text>
-                                                        </div>
-                                                    </div>
-                                                    <div className="col-6 border-start">
-                                                        <div className="d-flex justify-content-between px-2">
-                                                            <Text type="secondary">Total Abs / Leaves:</Text>
-                                                            <Text strong>{selectedUser.absent_days} Abs / {selectedUser.leave_days} L</Text>
-                                                        </div>
-                                                        <div className="d-flex justify-content-between px-2">
-                                                            <Text type="secondary">Undertime Hours:</Text>
-                                                            <Text strong className="text-danger">-{selectedUser.undertime_hours.toFixed(1)} Hrs</Text>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                        <div className="col-md-3 border-end">
+                                            <div className="bg-white p-2 rounded shadow-sm border">
+                                                <Title level={5} className="m-0 text-primary">{selectedUser.present_days} Days</Title>
+                                                <Text type="secondary" style={{ fontSize: '10px' }}>Actual Presence</Text>
                                             </div>
                                         </div>
-                                        <div className="d-flex justify-content-between mt-2 pt-2 border-top" style={{ fontSize: '9px', color: '#8c8c8c' }}>
-                                            <span>Month Calendar: <b>{dayjs(`${year}-${month}-01`).endOf('month').date()} Days (excluding Sat/Sun for Required)</b></span>
-                                            <span>System Default: <b>{parseFloat(config?.working_days_override) || calculatedWorkingDays} Days</b></span>
+                                        <div className="col-md-3 border-end">
+                                            <div className="bg-white p-2 rounded shadow-sm border">
+                                                <Title level={5} className="m-0 text-danger">{selectedUser.absent_days} Abs / {selectedUser.late_days} L</Title>
+                                                <Text type="secondary" style={{ fontSize: '10px' }}>Deficits & Lates</Text>
+                                            </div>
+                                        </div>
+                                        <div className="col-md-3">
+                                            <div className="bg-white p-2 rounded shadow-sm border">
+                                                <Title level={5} className="m-0 text-success">{selectedUser.project_points} Pts</Title>
+                                                <Text type="secondary" style={{ fontSize: '10px' }}>Points Earned</Text>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div className="d-flex justify-content-between align-items-center mb-3">
-                                        <Text strong style={{ fontSize: '16px' }}>Gross Salary Breakdown</Text>
-                                        <Text strong style={{ fontSize: '16px' }}>Rs. {selectedUser.gross_salary.toLocaleString()}</Text>
-                                    </div>
-
-                                    <Divider style={{ margin: '12px 0' }} />
-
-                                    {selectedUser.existing_payment && (
-                                        <div className="bg-white border rounded p-2 mb-3" style={{ fontSize: '12px', borderStyle: 'dashed !important' }}>
-                                            <Text strong className="d-block mb-1 text-primary">Payment Record Info:</Text>
-                                            <div className="row g-2">
-                                                <div className="col-6">
-                                                    <b>Method:</b> {selectedUser.existing_payment.payment_method.replace('_', ' ')}
+                                    <div className="mt-3 bg-white p-3 rounded border shadow-sm" style={{ fontSize: '12px' }}>
+                                        <div className="row">
+                                            <div className="col-6 border-end">
+                                                <div className="d-flex justify-content-between mb-1">
+                                                    <Text type="secondary">Productive Hours:</Text>
+                                                    <Text strong>{selectedUser.total_worked_hours.toFixed(1)} / {selectedUser.total_required_hours.toFixed(0)} Hrs</Text>
                                                 </div>
-                                                <div className="col-6">
-                                                    <b>Date:</b> {dayjs(selectedUser.existing_payment.payment_date).format('DD MMM')}
+                                                <div className="d-flex justify-content-between">
+                                                    <Text type="secondary">Undertime:</Text>
+                                                    <Text strong className="text-danger">-{selectedUser.undertime_hours.toFixed(1)} Hrs</Text>
                                                 </div>
-                                                <div className="col-12">
-                                                    <b>Ref:</b> {selectedUser.existing_payment.reference || 'N/A'}
+                                            </div>
+                                            <div className="col-6 ps-3">
+                                                <div className="d-flex justify-content-between mb-1">
+                                                    <Text type="secondary">Approved Leaves:</Text>
+                                                    <Text strong>{selectedUser.leave_days} Days</Text>
+                                                </div>
+                                                <div className="d-flex justify-content-between">
+                                                    <Text type="secondary">Missing In/Out:</Text>
+                                                    <Text strong className="text-danger">{selectedUser.missing_attendance_days} Days</Text>
                                                 </div>
                                             </div>
                                         </div>
-                                    )}
-
-                                    {/* Benefits/Leaves Section */}
-                                    {selectedUser.breakdown.benefits.length > 0 && (
-                                        <div className="mb-3">
-                                            <Text type="secondary" strong className="d-block mb-2">Benefits & Approved Leaves</Text>
-                                            {selectedUser.breakdown.benefits.map((b, idx) => (
-                                                <div key={`benefit-${idx}`} className="d-flex justify-content-between mb-1">
-                                                    <Text style={{ fontSize: '13px' }}>
-                                                        <CheckCircleFilled style={{ color: '#52c41a', marginRight: '8px' }} />
-                                                        {b.label}
-                                                        {b.count > 0 && <small className="text-muted ms-1">({b.count}{b.unit || 'd'})</small>}
-                                                    </Text>
-                                                    <Text className="text-success" style={{ fontSize: '13px' }}>
-                                                        {b.label === 'Approved Leaves' ? (
-                                                            <span style={{ textDecoration: 'line-through', color: '#ff4d4f', opacity: 0.6 }}>Rs. {b.amount.toLocaleString()}</span>
-                                                        ) : (
-                                                            <span>Rs. {b.amount.toLocaleString()}</span>
-                                                        )}
-                                                        <span className="ms-2">Covered</span>
-                                                    </Text>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {/* Penalties Section */}
-                                    <div className="mb-3">
-                                        <Text type="secondary" strong className="d-block mb-2">Penalties & Deductions</Text>
-                                        {selectedUser.breakdown.penalties.map((p, idx) => (
-                                            <div key={`penalty-${idx}`} className="d-flex justify-content-between mb-1">
-                                                <Text style={{ fontSize: '13px' }}>
-                                                    <CheckCircleFilled style={{ color: p.amount > 0 ? '#ff4d4f' : '#52c41a', marginRight: '8px' }} />
-                                                    {p.label}
-                                                    {p.count > 0 && <small className="text-muted ms-1">({p.count}{p.unit || 'd'} × {p.rate.toLocaleString()})</small>}
-                                                    {p.reason && <small className="text-muted ms-1">- {p.reason}</small>}
-                                                </Text>
-                                                <Text type="danger" style={{ fontSize: '13px' }}>- Rs. {p.amount.toLocaleString()}</Text>
-                                            </div>
-                                        ))}
-                                        {selectedUser.breakdown.penalties.length === 0 && <Text type="secondary" italic style={{ fontSize: '12px' }}>No penalties recorded.</Text>}
-                                    </div>
-
-                                    {/* Taxes Section */}
-                                    <div className="mb-3">
-                                        <Text type="secondary" strong className="d-block mb-2">Tax Deductions</Text>
-                                        {selectedUser.breakdown.taxes.map((t, idx) => (
-                                            <div key={`tax-${idx}`} className="d-flex justify-content-between mb-1">
-                                                <Text style={{ fontSize: '13px' }}>
-                                                    <CheckCircleFilled style={{ color: '#ff4d4f', marginRight: '8px' }} />
-                                                    {t.name} <small className="text-muted">({t.rate})</small>
-                                                </Text>
-                                                <Text type="danger" style={{ fontSize: '13px' }}>- Rs. {t.amount.toLocaleString()}</Text>
-                                            </div>
-                                        ))}
-                                        {selectedUser.breakdown.taxes.length === 0 && <Text type="secondary" italic style={{ fontSize: '12px' }}>No taxes applicable.</Text>}
-                                    </div>
-
-                                    {/* Manual Adjustments Display */}
-                                    {((watchedAdjustments?.length || 0) > 0) && (
-                                        <div className="mb-3">
-                                            <Text type="secondary" strong className="d-block mb-2">Manual Adjustments</Text>
-                                            {watchedAdjustments.map((a, idx) => a && (
-                                                <div key={`watch-adj-${idx}`} className="d-flex justify-content-between mb-1">
-                                                    <Text style={{ fontSize: '13px' }}>
-                                                        <CheckCircleFilled style={{ color: a.type === 'bonus' || a.type === 'points' ? '#52c41a' : '#ff4d4f', marginRight: '8px' }} />
-                                                        {a.label || (a.type === 'points' ? 'Project Points' : 'Adjustment')}
-                                                        {a.type === 'points' && <small className="text-muted ms-1">({a.amount} pts)</small>}
-                                                    </Text>
-                                                    <Text className={a.type === 'bonus' || a.type === 'points' ? "text-success" : "text-danger"} style={{ fontSize: '13px' }}>
-                                                        {a.type === 'bonus' || a.type === 'points' ? '+' : '-'} Rs. {(a.type === 'points' ? (parseFloat(a.amount) * selectedUser.point_rate) : (parseFloat(a.amount) || 0)).toLocaleString()}
-                                                    </Text>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    <Divider style={{ margin: '15px 0' }} />
-                                    <div className="d-flex justify-content-between align-items-center bg-white p-3 rounded" style={{ border: '1px solid #f0f0f0' }}>
-                                        <div>
-                                            <Text strong style={{ fontSize: '14px' }}>Final Net Payable</Text>
-                                            <div className="text-muted" style={{ fontSize: '11px' }}>{monthOptions.find(m => m.value === month).label} {year}</div>
-                                        </div>
-                                        <Title level={3} className="m-0 text-success">
-                                            Rs. {Math.round(
-                                                selectedUser.gross_salary +
-                                                selectedUser.overtime_bonus +
-                                                selectedUser.project_points_amount +
-                                                (watchedAdjustments?.filter(a => a?.type === 'bonus').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0) -
-                                                (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.late_penalty_deduction + selectedUser.manual_penalty + selectedUser.total_tax + (watchedAdjustments?.filter(a => a?.type === 'deduction').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0))
-                                            ).toLocaleString()}
-                                        </Title>
                                     </div>
                                 </Card>
+
+                                <div className="row g-4">
+                                    <div className="col-md-7">
+                                        <div className="breakdown-sections">
+                                            {/* Earnings */}
+                                            <Divider orientation="left" style={{ marginTop: 0 }}>Earnings & Bonuses</Divider>
+                                            <div className="mb-3">
+                                                <div className="d-flex justify-content-between align-items-center mb-2 px-2">
+                                                    <Text>Basic Gross Salary</Text>
+                                                    <Text strong>Rs. {selectedUser.gross_salary.toLocaleString()}</Text>
+                                                </div>
+                                                {selectedUser.breakdown.benefits.map((b, idx) => (
+                                                    <div key={`benefit-${idx}`} className="d-flex justify-content-between align-items-center mb-1 px-2">
+                                                        <Text style={{ fontSize: '13px' }}>
+                                                            <CheckCircleFilled className="text-success me-2" />
+                                                            {b.label}
+                                                            {b.count > 0 && <small className="text-muted ms-1">({b.count}{b.unit})</small>}
+                                                        </Text>
+                                                        <Text strong className="text-success">
+                                                            {b.label === 'Approved Leaves' ? 'Covered' : `+ Rs. ${b.amount.toLocaleString()}`}
+                                                        </Text>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Deductions */}
+                                            <Divider orientation="left">Penalties & Deductions</Divider>
+                                            <div className="mb-3">
+                                                {selectedUser.breakdown.penalties.map((p, idx) => (
+                                                    <div key={`penalty-${idx}`} className="d-flex justify-content-between align-items-center mb-1 px-2">
+                                                        <Text style={{ fontSize: '13px' }}>
+                                                            <CheckCircleFilled className="text-danger me-2" />
+                                                            {p.label}
+                                                            {p.count > 0 && <small className="text-muted ms-1">({p.count}{p.unit} × {p.rate.toLocaleString()})</small>}
+                                                        </Text>
+                                                        <Text strong className="text-danger">- Rs. {p.amount.toLocaleString()}</Text>
+                                                    </div>
+                                                ))}
+                                                {selectedUser.breakdown.taxes.map((t, idx) => (
+                                                    <div key={`tax-${idx}`} className="d-flex justify-content-between align-items-center mb-1 px-2">
+                                                        <Text style={{ fontSize: '13px' }}>
+                                                            <CheckCircleFilled className="text-danger me-2" />
+                                                            {t.name} <small className="text-muted">({t.rate})</small>
+                                                        </Text>
+                                                        <Text strong className="text-danger">- Rs. {t.amount.toLocaleString()}</Text>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Manual Adjustment Display */}
+                                            {((watchedAdjustments?.length || 0) > 0) && (
+                                                <>
+                                                    <Divider orientation="left">Manual Adjustments</Divider>
+                                                    <div className="mb-3">
+                                                        {watchedAdjustments.map((a, idx) => a && (
+                                                            <div key={`watch-adj-${idx}`} className="d-flex justify-content-between align-items-center mb-1 px-2">
+                                                                <Text style={{ fontSize: '13px' }}>
+                                                                    <CheckCircleFilled className={a.type === 'bonus' ? 'text-success' : 'text-danger'} style={{ marginRight: '8px' }} />
+                                                                    {a.label || 'Adjustment'}
+                                                                </Text>
+                                                                <Text strong className={a.type === 'bonus' ? "text-success" : "text-danger"}>
+                                                                    {a.type === 'bonus' ? '+' : '-'} Rs. {(parseFloat(a.amount) || 0).toLocaleString()}
+                                                                </Text>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="col-md-5">
+                                        <Card className="shadow-sm border-primary" headStyle={{ borderBottom: '1px solid #e6f7ff', background: '#e6f7ff' }} title={<Text strong>Summary & Payment</Text>}>
+                                            <div className="mb-4 text-center py-3 bg-light rounded border">
+                                                <Text type="secondary" className="text-uppercase" style={{ fontSize: '10px', letterSpacing: '1px' }}>Net Payable Amount</Text>
+                                                <Title level={2} className="m-0 text-success">
+                                                    Rs. {Math.round(
+                                                        selectedUser.gross_salary +
+                                                        selectedUser.overtime_bonus +
+                                                        selectedUser.project_points_amount +
+                                                        (watchedAdjustments?.filter(a => a?.type === 'bonus').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0) -
+                                                        (
+                                                            selectedUser.absent_deduction +
+                                                            selectedUser.undertime_deduction +
+                                                            selectedUser.late_penalty_deduction +
+                                                            selectedUser.missing_attendance_penalty_deduction +
+                                                            selectedUser.manual_penalty +
+                                                            selectedUser.total_tax +
+                                                            (watchedAdjustments?.filter(a => a?.type === 'deduction').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0)
+                                                        )
+                                                    ).toLocaleString()}
+                                                </Title>
+                                                <Text type="secondary" style={{ fontSize: '12px' }}>{monthOptions.find(m => m.value === month).label} {year}</Text>
+                                            </div>
+
+                                            <div className="payment-fields">
+                                                <Form.Item name="payment_method" label="Payment Method" rules={[{ required: true }]}>
+                                                    <Select placeholder="Select Method">
+                                                        <Select.Option value="bank_transfer">Bank Transfer</Select.Option>
+                                                        <Select.Option value="cash">Cash</Select.Option>
+                                                        <Select.Option value="cheque">Cheque</Select.Option>
+                                                        <Select.Option value="digital_wallet">Digital Wallet</Select.Option>
+                                                    </Select>
+                                                </Form.Item>
+                                                <Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]}>
+                                                    <DatePicker style={{ width: '100%' }} />
+                                                </Form.Item>
+                                                <Form.Item name="reference" label="Ref / Transaction ID">
+                                                    <Input placeholder="Optional reference code" />
+                                                </Form.Item>
+                                            </div>
+                                        </Card>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
-                        <Divider orientation="left" style={{ fontSize: '13px', color: '#8c8c8c' }}>Manual Adjustments (Bonuses, Penalties, etc.)</Divider>
+                        <Divider orientation="left" style={{ marginTop: '30px' }}>
+                            <Button type="link" size="small" icon={<PlusCircleOutlined />} onClick={() => form.setFieldsValue({ manual_adjustments: [...(form.getFieldValue('manual_adjustments') || []), {}] })}>
+                                Add Manual Adjustment Items
+                            </Button>
+                        </Divider>
+
                         <Form.List name="manual_adjustments">
                             {(fields, { add, remove }) => (
-                                <>
+                                <div className="mb-4">
                                     {fields.map(({ key, name, ...restField }) => (
-                                        <div key={key} className="row g-2 mb-2 align-items-top bg-light p-2 rounded mx-0">
-                                            <div className="col-md-4">
-                                                <Form.Item
-                                                    {...restField}
-                                                    name={[name, 'label']}
-                                                    rules={[{ required: true, message: 'Label required' }]}
-                                                >
-                                                    <Input placeholder="e.g. Performance Bonus" />
-                                                </Form.Item>
-                                            </div>
-                                            <div className="col-md-3">
-                                                <Form.Item
-                                                    {...restField}
-                                                    name={[name, 'type']}
-                                                    initialValue="bonus"
-                                                >
-                                                    <Select>
-                                                        <Select.Option value="bonus">Bonus (+)</Select.Option>
-                                                        <Select.Option value="deduction">Deduction (-)</Select.Option>
-                                                    </Select>
-                                                </Form.Item>
-                                            </div>
-                                            <div className="col-md-3">
-                                                <Form.Item
-                                                    {...restField}
-                                                    name={[name, 'amount']}
-                                                    rules={[{ required: true, message: 'Amount required' }]}
-                                                >
-                                                    <InputNumber style={{ width: '100%' }} min={0} placeholder="Amount" />
-                                                </Form.Item>
-                                            </div>
-                                            <div className="col-md-2 text-end">
-                                                <Button
-                                                    type="text"
-                                                    danger
-                                                    icon={<DeleteOutlined />}
-                                                    onClick={() => remove(name)}
-                                                />
-                                            </div>
-                                            <div className="col-12 mt-0">
-                                                <Form.Item
-                                                    {...restField}
-                                                    name={[name, 'reason']}
-                                                    style={{ marginBottom: 0 }}
-                                                >
-                                                    <Input placeholder="Optional reason/memo..." size="small" />
-                                                </Form.Item>
+                                        <div key={key} className="bg-light p-3 rounded mb-2 border shadow-sm">
+                                            <div className="row g-2 align-items-center">
+                                                <div className="col-md-5">
+                                                    <Form.Item {...restField} name={[name, 'label']} rules={[{ required: true, message: 'Label required' }]} style={{ marginBottom: 0 }}>
+                                                        <Input placeholder="Reason (e.g. Performance Bonus)" />
+                                                    </Form.Item>
+                                                </div>
+                                                <div className="col-md-3">
+                                                    <Form.Item {...restField} name={[name, 'type']} initialValue="bonus" style={{ marginBottom: 0 }}>
+                                                        <Select>
+                                                            <Select.Option value="bonus">Bonus (+)</Select.Option>
+                                                            <Select.Option value="deduction">Deduction (-)</Select.Option>
+                                                        </Select>
+                                                    </Form.Item>
+                                                </div>
+                                                <div className="col-md-3">
+                                                    <Form.Item {...restField} name={[name, 'amount']} rules={[{ required: true, message: 'Amount required' }]} style={{ marginBottom: 0 }}>
+                                                        <InputNumber style={{ width: '100%' }} min={0} placeholder="Amount" />
+                                                    </Form.Item>
+                                                </div>
+                                                <div className="col-md-1 text-end">
+                                                    <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(name)} />
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
-                                    <Form.Item>
-                                        <Button type="dashed" onClick={() => add()} block icon={<PlusCircleOutlined />}>
-                                            Add Manual Adjustment
-                                        </Button>
-                                    </Form.Item>
-                                </>
+                                </div>
                             )}
                         </Form.List>
 
-                        <div className="row">
-                            <div className="col-md-6">
-                                <Form.Item name="payment_method" label="Payment Method" rules={[{ required: true }]}>
-                                    <Select>
-                                        <Select.Option value="bank_transfer">Bank Transfer</Select.Option>
-                                        <Select.Option value="cash">Cash</Select.Option>
-                                        <Select.Option value="cheque">Cheque</Select.Option>
-                                        <Select.Option value="digital_wallet">Digital Wallet</Select.Option>
-                                    </Select>
-                                </Form.Item>
-                            </div>
-                            <div className="col-md-6">
-                                <Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]}>
-                                    <DatePicker style={{ width: '100%' }} />
-                                </Form.Item>
-                            </div>
-                        </div>
-
-                        <Form.Item name="reference" label="Reference / Transaction ID">
-                            <Input placeholder="e.g. TXN-123456" />
-                        </Form.Item>
-
                         <Form.Item name="notes" label="Notes">
-                            <Input.TextArea placeholder="Internal memo..." rows={2} />
+                            <Input.TextArea rows={2} placeholder="Internal payment notes..." />
                         </Form.Item>
 
-                        <div className="d-flex justify-content-between gap-2 mt-4 no-print">
-                            <div className="d-flex gap-2">
+                        <div className="text-end border-top pt-3 d-flex justify-content-end gap-2 no-print">
+                            <Button size="large" icon={<PrinterOutlined />} onClick={handlePrint}>Print Slip</Button>
+                            {selectedUser?.existing_payment && (
                                 <Button
-                                    icon={<PrinterOutlined />}
-                                    onClick={handlePrint}
-                                    type="default"
+                                    danger
+                                    size="large"
+                                    type="primary"
+                                    icon={<DeleteOutlined />}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleUnpay(selectedUser);
+                                    }}
                                 >
-                                    Print Salary Slip
+                                    Unpay / Cancel
                                 </Button>
-                                {selectedUser?.existing_payment && (
-                                    <Button
-                                        danger
-                                        type="primary"
-                                        htmlType="button"
-                                        icon={<DeleteOutlined />}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleUnpay(selectedUser);
-                                        }}
-                                    >
-                                        Unpay / Cancel
-                                    </Button>
-                                )}
-                            </div>
-                            <div className="d-flex gap-2">
-                                <Button onClick={() => setIsPayModalOpen(false)}>Cancel</Button>
-                                <Button type="primary" htmlType="submit" loading={loading} icon={<DollarOutlined />}>
-                                    {selectedUser?.existing_payment ? 'Update Payment' : 'Release Salary'}
-                                </Button>
-                            </div>
+                            )}
+                            <Button size="large" onClick={() => setIsPayModalOpen(false)}>Cancel</Button>
+                            <Button size="large" type="primary" htmlType="submit" loading={loading} icon={<DollarOutlined />}>
+                                {selectedUser?.existing_payment ? 'Update Payment' : 'Process & Release Payment'}
+                            </Button>
                         </div>
                     </Form>
-                </Modal >
+                </Modal>
 
                 <Modal
                     title="Payroll Global Settings"
@@ -1009,6 +960,27 @@ const SalarySheet =
                                     name="late_penalty_per_day"
                                     label="Late Penalty (per day)"
                                     extra="PKR per late after grace"
+                                >
+                                    <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 500" />
+                                </Form.Item>
+                            </div>
+                        </div>
+
+                        <div className="row g-2">
+                            <div className="col-6">
+                                <Form.Item
+                                    name="missing_attendance_grace_count"
+                                    label="Missing Attendance Grace"
+                                    extra="Days allowed with missing in/out"
+                                >
+                                    <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 1" />
+                                </Form.Item>
+                            </div>
+                            <div className="col-6">
+                                <Form.Item
+                                    name="missing_attendance_penalty_per_day"
+                                    label="Missing Penalty (per day)"
+                                    extra="PKR per day after grace"
                                 >
                                     <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 500" />
                                 </Form.Item>
