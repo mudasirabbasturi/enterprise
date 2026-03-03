@@ -40,6 +40,7 @@ const UserTracking = ({ users: initialUsers }) => {
 
     // Global Settings
     const [intervalMinutes, setIntervalMinutes] = useState(5);
+    const [syncInterval, setSyncInterval] = useState(30);
     const [adminPassword, setAdminPassword] = useState("bidwinners#12");
     const [isSavingSettings, setIsSavingSettings] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -69,6 +70,7 @@ const UserTracking = ({ users: initialUsers }) => {
         try {
             const resp = await axios.get("/api/track/settings");
             setIntervalMinutes(Math.round(resp.data.screenshot_interval / 60));
+            setSyncInterval(resp.data.tracker_sync_interval || 30);
             setAdminPassword(resp.data.tracker_admin_password);
             setAllowedIPs(resp.data.tracker_allowed_ips || []);
         } catch (error) {
@@ -81,6 +83,7 @@ const UserTracking = ({ users: initialUsers }) => {
         try {
             await axios.post("/api/track/settings/update", {
                 screenshot_interval: intervalMinutes * 60,
+                tracker_sync_interval: syncInterval,
                 tracker_admin_password: adminPassword,
                 tracker_allowed_ips: allowedIPs
             });
@@ -573,6 +576,22 @@ const UserTracking = ({ users: initialUsers }) => {
                             <option value={30}>Every 30 Mins</option>
                         </select>
                         <div className="form-text mt-1 small">Frequency of automated screen captures</div>
+                    </div>
+                    
+                    <div className="mb-4">
+                        <label className="form-label text-muted small fw-bold mb-2">SETTINGS SYNC FREQUENCY</label>
+                        <select
+                            className="form-select border shadow-sm"
+                            value={syncInterval}
+                            onChange={(e) => setSyncInterval(parseInt(e.target.value))}
+                        >
+                            <option value={10}>Every 10 Seconds</option>
+                            <option value={30}>Every 30 Seconds</option>
+                            <option value={60}>Every 1 Minute</option>
+                            <option value={120}>Every 2 Minutes</option>
+                            <option value={300}>Every 5 Minutes</option>
+                        </select>
+                        <div className="form-text mt-1 small">How often the tracker app checks for settings updates</div>
                     </div>
 
                     <div className="mb-4">

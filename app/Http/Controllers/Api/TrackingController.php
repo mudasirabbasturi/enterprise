@@ -222,11 +222,13 @@ class TrackingController extends Controller
     public function getTrackerSettings()
     {
         $interval = \App\Models\PayrollConfig::where('key', 'tracker_screenshot_interval')->first();
+        $syncInterval = \App\Models\PayrollConfig::where('key', 'tracker_sync_interval')->first();
         $password = \App\Models\PayrollConfig::where('key', 'tracker_admin_password')->first();
         $allowedIps = \App\Models\PayrollConfig::where('key', 'tracker_allowed_ips')->first();
         
         return response()->json([
             'screenshot_interval' => $interval ? (int)$interval->value : 300,
+            'tracker_sync_interval' => $syncInterval ? (int)$syncInterval->value : 30,
             'tracker_admin_password' => $password ? $password->value : 'bidwinners#12',
             'tracker_allowed_ips' => $allowedIps ? json_decode($allowedIps->value, true) : []
         ]);
@@ -236,6 +238,7 @@ class TrackingController extends Controller
     {
         $request->validate([
             'screenshot_interval' => 'required|integer|min:60',
+            'tracker_sync_interval' => 'required|integer|min:10',
             'tracker_admin_password' => 'required|string|min:4',
             'tracker_allowed_ips' => 'nullable|array'
         ]);
@@ -243,6 +246,11 @@ class TrackingController extends Controller
         \App\Models\PayrollConfig::updateOrCreate(
             ['key' => 'tracker_screenshot_interval'],
             ['value' => $request->screenshot_interval]
+        );
+
+        \App\Models\PayrollConfig::updateOrCreate(
+            ['key' => 'tracker_sync_interval'],
+            ['value' => $request->tracker_sync_interval]
         );
 
         \App\Models\PayrollConfig::updateOrCreate(
