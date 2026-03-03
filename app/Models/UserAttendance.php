@@ -16,8 +16,14 @@ class UserAttendance extends Model
         'check_out_ip',
         'break_start',
         'break_end',
+        'total_regular_hours',
+        'total_outside_hours',
         'status',
         'notes',
+    ];
+
+    protected $casts = [
+        'total_outside_hours' => 'json',
     ];
 
     public function user()

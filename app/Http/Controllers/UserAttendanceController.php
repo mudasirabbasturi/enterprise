@@ -99,6 +99,10 @@ class UserAttendanceController extends Controller
             'worked_from' => 'required|in:home,office',
             'check_in_ip' => 'nullable|ip',
             'check_out_ip' => 'nullable|ip',
+            'break_start' => 'nullable',
+            'break_end' => 'nullable',
+            'total_regular_hours' => 'nullable',
+            'total_outside_hours' => 'nullable|array',
             'status' => 'required|string',
             'notes' => 'nullable|string',
         ]);
@@ -130,13 +134,20 @@ class UserAttendanceController extends Controller
             $validated['check_in_ip'] = $request->ip();
         }
 
-        UserAttendance::create($validated);
+        UserAttendance::updateOrCreate(
+            ['user_id' => $validated['user_id'], 'date' => $validated['date']],
+            $validated
+        );
 
-        if ($request->wantsJson()) {
-            return response()->json(['message' => 'Attendance record created successfully.']);
+        if ($request->header('X-Inertia')) {
+            return redirect()->back()->with('message', 'Attendance record saved successfully.');
         }
 
-        return redirect()->back()->with('message', 'Attendance record created successfully.');
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json(['message' => 'Attendance record saved successfully.']);
+        }
+
+        return redirect()->back()->with('message', 'Attendance record saved successfully.');
     }
 
     public function Update(Request $request, $id)
@@ -150,6 +161,10 @@ class UserAttendanceController extends Controller
             'worked_from' => 'required|in:home,office',
             'check_in_ip' => 'nullable|ip',
             'check_out_ip' => 'nullable|ip',
+            'break_start' => 'nullable',
+            'break_end' => 'nullable',
+            'total_regular_hours' => 'nullable',
+            'total_outside_hours' => 'nullable|array',
             'status' => 'required|string',
             'notes' => 'nullable|string',
         ]);
@@ -195,7 +210,7 @@ class UserAttendanceController extends Controller
         $attendance = UserAttendance::findOrFail($id);
         $attendance->delete();
 
-        if ($request->wantsJson()) {
+        if ($request->ajax() || $request->wantsJson()) {
             return response()->json(['message' => 'Attendance record deleted successfully.']);
         }
 

@@ -17,10 +17,14 @@ return new class extends Migration
             $table->date('date');
             $table->time('check_in')->nullable();
             $table->time('check_out')->nullable();
-            $table->decimal('overtime_hours', 3, 2)->nullable();
             $table->ipAddress('check_in_ip')->nullable();
             $table->ipAddress('check_out_ip')->nullable();
-            $table->string('status')->default('no action'); // present, late, absent, no action
+            $table->enum('worked_from', ['home', 'office'])->default('office');
+            $table->time('break_start')->nullable();
+            $table->time('break_end')->nullable();
+            $table->time('total_regular_hours')->nullable();
+            $table->json('total_outside_hours')->nullable();
+            $table->string('status')->default('no action'); // present, late, absent, manual, no action
             $table->text('notes')->nullable(); // Any notes or extra info
             $table->timestamps();
         });

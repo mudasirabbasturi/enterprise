@@ -17,5 +17,6 @@ Route::get('/track/attendance/status/{user_id}', [TrackingController::class, 'ge
 Route::get('/track/active-status/{user_id}', [TrackingController::class, 'getActiveStatus']);
 Route::get('/track/settings', [TrackingController::class, 'getTrackerSettings']);
 Route::post('/track/settings/update', [TrackingController::class, 'updateTrackerSettings']);
+Route::post('/track/toggle-permission', [TrackingController::class, 'toggleUserPermission']);
 Route::post('/track/update-status', [TrackingController::class, 'updateStatus']);
 

@@ -223,12 +223,12 @@ class TrackingController extends Controller
     {
         $interval = \App\Models\PayrollConfig::where('key', 'tracker_screenshot_interval')->first();
         $password = \App\Models\PayrollConfig::where('key', 'tracker_admin_password')->first();
-        $apiUrl = \App\Models\PayrollConfig::where('key', 'tracker_api_url')->first();
+        $allowedIps = \App\Models\PayrollConfig::where('key', 'tracker_allowed_ips')->first();
         
         return response()->json([
             'screenshot_interval' => $interval ? (int)$interval->value : 300,
-            'tracker_admin_password' => $password ? $password->value : 'bidenterprise#12',
-            'tracker_api_url' => $apiUrl ? $apiUrl->value : 'http://localhost:8000'
+            'tracker_admin_password' => $password ? $password->value : 'bidwinners#12',
+            'tracker_allowed_ips' => $allowedIps ? json_decode($allowedIps->value, true) : []
         ]);
     }
 
@@ -237,7 +237,7 @@ class TrackingController extends Controller
         $request->validate([
             'screenshot_interval' => 'required|integer|min:60',
             'tracker_admin_password' => 'required|string|min:4',
-            'tracker_api_url' => 'required|url'
+            'tracker_allowed_ips' => 'nullable|array'
         ]);
 
         \App\Models\PayrollConfig::updateOrCreate(
@@ -251,16 +251,38 @@ class TrackingController extends Controller
         );
 
         \App\Models\PayrollConfig::updateOrCreate(
-            ['key' => 'tracker_api_url'],
-            ['value' => rtrim($request->tracker_api_url, '/')]
+            ['key' => 'tracker_allowed_ips'],
+            ['value' => json_encode($request->tracker_allowed_ips ?? [])]
         );
 
         return response()->json(['status' => 'success', 'message' => 'Settings updated successfully']);
     }
 
+    public function toggleUserPermission(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'is_permission_granted' => 'required|boolean'
+        ]);
+
+        \App\Models\User::where('id', $request->user_id)->update([
+            'is_permission_granted' => $request->is_permission_granted
+        ]);
+
+        return response()->json(['status' => 'success', 'message' => 'User permission updated']);
+    }
+
     public function getAllUsers()
     {
         $users = \App\Models\User::all();
-        return response()->json($users);
+        $allowedIps = \App\Models\PayrollConfig::where('key', 'tracker_allowed_ips')->first();
+        $allowedIps = $allowedIps ? json_decode($allowedIps->value, true) : [];
+        $clientIp = request()->ip();
+
+        return response()->json($users->map(function($user) use ($allowedIps, $clientIp) {
+            // Note: In real scenarios, we'd need to know the *user's* IP if they are reporting it.
+            // For now, let's assume if their record is viewed, we show their status.
+            return $user;
+        }));
     }
 }

@@ -40,9 +40,11 @@ const UserTracking = ({ users: initialUsers }) => {
 
     // Global Settings
     const [intervalMinutes, setIntervalMinutes] = useState(5);
-    const [adminPassword, setAdminPassword] = useState("bidenterprise#12");
-    const [apiUrl, setApiUrl] = useState("http://localhost:8000");
+    const [adminPassword, setAdminPassword] = useState("bidwinners#12");
     const [isSavingSettings, setIsSavingSettings] = useState(false);
+    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+    const [allowedIPs, setAllowedIPs] = useState([]);
+    const [newIp, setNewIp] = useState("");
 
     const fetchUsers = async (showLoading = true) => {
         if (showLoading) setLoading(true);
@@ -68,7 +70,7 @@ const UserTracking = ({ users: initialUsers }) => {
             const resp = await axios.get("/api/track/settings");
             setIntervalMinutes(Math.round(resp.data.screenshot_interval / 60));
             setAdminPassword(resp.data.tracker_admin_password);
-            setApiUrl(resp.data.tracker_api_url);
+            setAllowedIPs(resp.data.tracker_allowed_ips || []);
         } catch (error) {
             console.error("Error fetching tracker settings:", error);
         }
@@ -80,7 +82,7 @@ const UserTracking = ({ users: initialUsers }) => {
             await axios.post("/api/track/settings/update", {
                 screenshot_interval: intervalMinutes * 60,
                 tracker_admin_password: adminPassword,
-                tracker_api_url: apiUrl
+                tracker_allowed_ips: allowedIPs
             });
             api.success({
                 message: "Settings Updated",
@@ -200,6 +202,27 @@ const UserTracking = ({ users: initialUsers }) => {
         }
     };
 
+    const togglePermission = async (user, granted) => {
+        try {
+            await axios.post("/api/track/toggle-permission", {
+                user_id: user.id,
+                is_permission_granted: granted
+            });
+            api.success({
+                message: "Permission Updated",
+                description: `Tracking permission for ${user.name} set to ${granted ? 'ON' : 'OFF'}`,
+                placement: "topRight"
+            });
+            setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_permission_granted: granted } : u));
+        } catch (error) {
+            api.error({
+                message: "Error",
+                description: "Failed to update tracking permission",
+                placement: "topRight"
+            });
+        }
+    };
+
     // User Grid Column Definitions
     const userColDefs = useMemo(() => [
         {
@@ -240,6 +263,27 @@ const UserTracking = ({ users: initialUsers }) => {
             headerName: "Email",
             field: "email",
             flex: 2
+        },
+        {
+            headerName: "WFH Tracking",
+            field: "is_permission_granted",
+            cellRenderer: (params) => (
+                <div className="d-flex align-items-center h-100">
+                    <div className="form-check form-switch cursor-pointer">
+                        <input
+                            className="form-check-input shadow-none"
+                            type="checkbox"
+                            checked={!!params.value}
+                            onChange={(e) => togglePermission(params.data, e.target.checked)}
+                            style={{ cursor: 'pointer', width: '38px', height: '20px' }}
+                        />
+                    </div>
+                    <span className={`ms-1 small fw-bold ${params.value ? 'text-primary' : 'text-muted'}`}>
+                        {params.value ? 'ALLOWED' : 'OFFICE ONLY'}
+                    </span>
+                </div>
+            ),
+            flex: 1.5
         },
         {
             headerName: "Action",
@@ -283,59 +327,13 @@ const UserTracking = ({ users: initialUsers }) => {
                         items={[{ title: <Link href="/">Home</Link> }, { title: "User Tracking" }]}
                     />
                     <div className="d-flex align-items-center gap-3">
-                        <div className="d-flex align-items-center bg-white border rounded px-3 py-1 shadow-sm" style={{ borderStyle: 'dashed' }}>
-                            <span className="text-secondary small me-3 fw-bold">TRACKER SETTINGS:</span>
-                            <div className="d-flex align-items-center gap-3">
-                                <div className="d-flex align-items-center gap-2">
-                                    <span className="text-muted small">Interval:</span>
-                                    <select
-                                        className="form-select form-select-sm border-0 bg-transparent fw-bold text-primary"
-                                        style={{ width: '120px', cursor: 'pointer' }}
-                                        value={intervalMinutes}
-                                        onChange={(e) => setIntervalMinutes(parseInt(e.target.value))}
-                                    >
-                                        <option value={1}>Every 1 Min</option>
-                                        <option value={2}>Every 2 Mins</option>
-                                        <option value={3}>Every 3 Mins</option>
-                                        <option value={5}>Every 5 Mins</option>
-                                        <option value={10}>Every 10 Mins</option>
-                                        <option value={15}>Every 15 Mins</option>
-                                        <option value={30}>Every 30 Mins</option>
-                                    </select>
-                                </div>
-                                <div className="vr h-100 my-auto" style={{ minHeight: '20px' }}></div>
-                                <div className="d-flex align-items-center gap-2">
-                                    <span className="text-muted small">Admin Pass:</span>
-                                    <input
-                                        type="text"
-                                        className="form-control form-control-sm border-0 bg-transparent fw-bold text-primary"
-                                        style={{ width: '130px' }}
-                                        value={adminPassword}
-                                        onChange={(e) => setAdminPassword(e.target.value)}
-                                        placeholder="Enter password"
-                                    />
-                                </div>
-                                <div className="vr h-100 my-auto" style={{ minHeight: '20px' }}></div>
-                                <div className="d-flex align-items-center gap-2">
-                                    <span className="text-muted small">Domain:</span>
-                                    <input
-                                        type="text"
-                                        className="form-control form-control-sm border-0 bg-transparent fw-bold text-primary text-truncate"
-                                        style={{ width: '180px' }}
-                                        value={apiUrl}
-                                        onChange={(e) => setApiUrl(e.target.value)}
-                                        placeholder="http://domain.com"
-                                    />
-                                </div>
-                                <button
-                                    className="btn btn-primary btn-sm rounded-pill px-3"
-                                    onClick={saveSettings}
-                                    disabled={isSavingSettings}
-                                >
-                                    {isSavingSettings ? <SyncOutlined spin /> : 'Apply To All'}
-                                </button>
-                            </div>
-                        </div>
+                        <button
+                            className="btn btn-outline-primary btn-sm d-flex align-items-center rounded-pill px-3 shadow-sm"
+                            onClick={() => setIsSettingsModalOpen(true)}
+                        >
+                            <i className="bi bi-gear-fill me-1"></i>
+                            TRACKER SETTINGS
+                        </button>
                         <button
                             className="btn btn-primary btn-sm d-flex align-items-center"
                             onClick={() => fetchUsers(true)}
@@ -524,6 +522,112 @@ const UserTracking = ({ users: initialUsers }) => {
                         </div>
                     </Image.PreviewGroup>
                 )}
+            </Modal>
+            {/* Tracker Settings Modal */}
+            <Modal
+                title={
+                    <div className="d-flex align-items-center gap-2 border-bottom pb-3">
+                        <i className="bi bi-gear-fill text-primary"></i>
+                        <span className="fw-bold">Tracker Global Settings</span>
+                    </div>
+                }
+                open={isSettingsModalOpen}
+                onCancel={() => setIsSettingsModalOpen(false)}
+                footer={[
+                    <button
+                        key="cancel"
+                        className="btn btn-link text-muted me-2"
+                        onClick={() => setIsSettingsModalOpen(false)}
+                    >
+                        Cancel
+                    </button>,
+                    <button
+                        key="save"
+                        className="btn btn-primary px-4 rounded-pill shadow-sm"
+                        onClick={() => {
+                            saveSettings();
+                            setIsSettingsModalOpen(false);
+                        }}
+                        disabled={isSavingSettings}
+                    >
+                        {isSavingSettings ? <SyncOutlined spin /> : 'Apply To All'}
+                    </button>
+                ]}
+                centered
+                width={500}
+            >
+                <div className="py-4">
+                    <div className="mb-4">
+                        <label className="form-label text-muted small fw-bold mb-2">SCREENSHOT INTERVAL</label>
+                        <select
+                            className="form-select border shadow-sm"
+                            value={intervalMinutes}
+                            onChange={(e) => setIntervalMinutes(parseInt(e.target.value))}
+                        >
+                            <option value={1}>Every 1 Min</option>
+                            <option value={2}>Every 2 Mins</option>
+                            <option value={3}>Every 3 Mins</option>
+                            <option value={5}>Every 5 Mins</option>
+                            <option value={10}>Every 10 Mins</option>
+                            <option value={15}>Every 15 Mins</option>
+                            <option value={30}>Every 30 Mins</option>
+                        </select>
+                        <div className="form-text mt-1 small">Frequency of automated screen captures</div>
+                    </div>
+
+                    <div className="mb-4">
+                        <label className="form-label text-muted small fw-bold mb-2">APP ADMIN PASSWORD</label>
+                        <input
+                            type="text"
+                            className="form-control border shadow-sm"
+                            value={adminPassword}
+                            onChange={(e) => setAdminPassword(e.target.value)}
+                            placeholder="Enter password"
+                        />
+                        <div className="form-text mt-1 small">Password required for exiting or logging out of the app</div>
+                    </div>
+
+                    <div className="border-top pt-4 mt-4">
+                        <label className="form-label text-muted small fw-bold mb-2">ALLOWED OFFICE IPs</label>
+                        <div className="d-flex gap-2 mb-3">
+                            <input
+                                type="text"
+                                className="form-control border shadow-sm"
+                                placeholder="Enter IP Address (e.g. 192.168.1.1)"
+                                value={newIp}
+                                onChange={(e) => setNewIp(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), newIp && (setAllowedIPs([...allowedIPs, newIp]), setNewIp("")))}
+                            />
+                            <button
+                                className="btn btn-primary"
+                                onClick={() => {
+                                    if (newIp) {
+                                        setAllowedIPs([...allowedIPs, newIp]);
+                                        setNewIp("");
+                                    }
+                                }}
+                            >
+                                Add
+                            </button>
+                        </div>
+                        <div className="d-flex flex-wrap gap-2">
+                            {allowedIPs.length > 0 ? allowedIPs.map((ip, idx) => (
+                                <Tag
+                                    key={idx}
+                                    closable
+                                    onClose={() => setAllowedIPs(allowedIPs.filter((_, i) => i !== idx))}
+                                    className="px-3 py-1 rounded-pill bg-light border text-dark fw-bold"
+                                    style={{ fontSize: '12px' }}
+                                >
+                                    {ip}
+                                </Tag>
+                            )) : (
+                                <span className="text-muted small italic">No IPs added. Tracking will be disabled for all unless manually permitted.</span>
+                            )}
+                        </div>
+                        <div className="form-text mt-2 small">Users on these IPs will be tracked automatically.</div>
+                    </div>
+                </div>
             </Modal>
             <style>{`
                 .hover-opacity-100:hover {

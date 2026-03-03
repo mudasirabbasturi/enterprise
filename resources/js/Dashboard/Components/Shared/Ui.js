@@ -113,7 +113,9 @@ export {
   InfoCircleOutlined,
   CalendarOutlined,
   WalletOutlined,
-
+  ClockCircleOutlined,
+  HomeOutlined,
+  ApartmentOutlined
 } from "@ant-design/icons";
 
 export { PhoneInput } from "react-international-phone";

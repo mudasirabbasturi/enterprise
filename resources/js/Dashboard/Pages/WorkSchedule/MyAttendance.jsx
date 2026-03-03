@@ -14,9 +14,11 @@ import {
     Tag,
     dayjs,
     Card,
-    Select,
-    LoginOutlined,
-    LogoutOutlined
+    ClockCircleOutlined, PlusCircleOutlined,
+    DeleteOutlined,
+    HomeOutlined,
+    ApartmentOutlined,
+    Select, EditOutlined, LoginOutlined, LogoutOutlined
 } from "@shared/ui";
 import MainLayout from "@layout";
 
@@ -25,6 +27,10 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
     const [loading, setLoading] = useState(false);
     const [isAttendanceGridModalOpen, setIsAttendanceGridModalOpen] = useState(false);
     const [selectedMonthForAttendance, setSelectedMonthForAttendance] = useState(null);
+    const [workedFrom, setWorkedFrom] = useState('office');
+    const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+    const [currentActionRecord, setCurrentActionRecord] = useState(null);
+    const [newOutsideEntry, setNewOutsideEntry] = useState({ hh: '01', mm: '00', work_from: 'office' });
 
     const user = auth.user;
     const [filterYear, setFilterYear] = useState(selectedYear);
@@ -51,31 +57,120 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         return dates;
     }, []);
 
+    const getHoursMins = (record) => {
+        const { check_in, check_out, break_start, break_end } = record;
+        if (!check_in || !check_out) return 0;
+
+        const start = dayjs(`2000-01-01 ${check_in}`);
+        const end = dayjs(`2000-01-01 ${check_out}`);
+
+        let workMins = end.diff(start, 'minute');
+        if (workMins < 0) workMins += 1440;
+
+        if (break_start && break_end) {
+            const bStart = dayjs(`2000-01-01 ${break_start}`);
+            const bEnd = dayjs(`2000-01-01 ${break_end}`);
+            let breakMins = bEnd.diff(bStart, 'minute');
+            if (breakMins < 0) breakMins += 1440;
+            workMins -= breakMins;
+        }
+        return workMins > 0 ? workMins : 0;
+    };
+
+    const calculateHours = (record) => {
+        const workMins = getHoursMins(record);
+        if (workMins <= 0) return "0h 0m";
+        const hrs = Math.floor(workMins / 60);
+        const mins = Math.round(workMins % 60);
+        return `${hrs}h ${mins}m`;
+    };
+
+    const formatManualTime = (timeStr) => {
+        if (!timeStr) return null;
+        const [h, m] = timeStr.split(':').map(Number);
+        return `${h}h ${m}m`;
+    };
+
+    const sumOutsideHoursMins = (entries) => {
+        if (!entries || !Array.isArray(entries)) return 0;
+        let totalMins = 0;
+        entries.forEach(entry => {
+            if (entry.manual_hours) {
+                const [h, m] = entry.manual_hours.split(':').map(Number);
+                totalMins += (h * 60) + m;
+            }
+        });
+        return totalMins;
+    };
+
+    const formatMinsToHrs = (totalMins) => {
+        const hrs = Math.floor(totalMins / 60);
+        const mins = totalMins % 60;
+        return `${hrs}h ${mins}m`;
+    };
+
+    const sumOutsideHours = (entries) => {
+        const totalMins = sumOutsideHoursMins(entries);
+        return formatMinsToHrs(totalMins);
+    };
+
     const handleCheckIn = (date) => {
         setLoading(true);
-        router.post(route('users-attendance.store'), {
+        axios.post(route('users-attendance.store'), {
             user_id: user.id,
             date: date,
             status: 'present',
             check_in: dayjs().format('HH:mm:ss'),
-            worked_from: 'office' // Default to office for quick check-in
-        }, {
-            onSuccess: () => api.success({ message: "Checked In Successfully" }),
-            onError: (err) => api.error({ message: "Check In Failed", description: Object.values(err)[0] }),
-            onFinish: () => setLoading(false)
-        });
+            worked_from: workedFrom,
+        }).then(() => {
+            api.success({ message: "Checked In Successfully" });
+            setIsActionModalOpen(false);
+            router.reload({ only: ['attendances'] });
+        }).catch(err => {
+            api.error({ message: "Check In Failed", description: err.response?.data?.message || "Internal Error" });
+        }).finally(() => setLoading(false));
     };
 
     const handleCheckOut = (record) => {
         setLoading(true);
-        router.put(route('users-attendance.update', record.id), {
+        axios.put(route('users-attendance.update', record.id), {
             ...record,
             check_out: dayjs().format('HH:mm:ss')
-        }, {
-            onSuccess: () => api.success({ message: "Checked Out Successfully" }),
-            onError: (err) => api.error({ message: "Check Out Failed", description: Object.values(err)[0] }),
-            onFinish: () => setLoading(false)
-        });
+        }).then(() => {
+            api.success({ message: "Checked Out Successfully" });
+            setIsActionModalOpen(false);
+            router.reload({ only: ['attendances'] });
+        }).catch(err => {
+            api.error({ message: "Check Out Failed", description: err.response?.data?.message || "Internal Error" });
+        }).finally(() => setLoading(false));
+    };
+
+    const handleBreakStart = (record) => {
+        setLoading(true);
+        axios.put(route('users-attendance.update', record.id), {
+            ...record,
+            break_start: dayjs().format('HH:mm:ss')
+        }).then(() => {
+            api.success({ message: "Break Started" });
+            setIsActionModalOpen(false);
+            router.reload({ only: ['attendances'] });
+        }).catch(err => {
+            api.error({ message: "Failed", description: err.response?.data?.message });
+        }).finally(() => setLoading(false));
+    };
+
+    const handleBreakEnd = (record) => {
+        setLoading(true);
+        axios.put(route('users-attendance.update', record.id), {
+            ...record,
+            break_end: dayjs().format('HH:mm:ss')
+        }).then(() => {
+            api.success({ message: "Break Ended" });
+            setIsActionModalOpen(false);
+            router.reload({ only: ['attendances'] });
+        }).catch(err => {
+            api.error({ message: "Failed", description: err.response?.data?.message });
+        }).finally(() => setLoading(false));
     };
 
     // Main Grid Columns (Months)
@@ -83,20 +178,29 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         {
             headerName: "Month",
             field: "monthName",
-            flex: 1,
-            cellClass: "fw-bold text-primary"
+            cellClass: "fw-bold text-primary text-nowrap"
         },
         {
             headerName: "Present",
             field: "present",
-            flex: 1,
-            cellClass: "text-success fw-bold text-center",
+            cellClass: "text-success fw-bold text-center text-nowrap",
         },
         {
             headerName: "Absent",
             field: "absent",
-            flex: 1,
-            cellClass: "text-danger fw-bold text-center",
+            cellClass: "text-danger fw-bold text-center text-nowrap",
+        },
+        {
+            headerName: "Total Regular Hours",
+            field: "totalRegularMinutes",
+            cellRenderer: (params) => <Tag color="geekblue">{formatMinsToHrs(params.value)}</Tag>,
+            cellClass: "text-center text-nowrap"
+        },
+        {
+            headerName: "Total Outside Hours",
+            field: "totalOutsideMinutes",
+            cellRenderer: (params) => <Tag color="magenta">{formatMinsToHrs(params.value)}</Tag>,
+            cellClass: "text-center text-nowrap"
         },
         {
             headerName: "Actions",
@@ -138,7 +242,20 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
             );
             const present = monthAttendances.filter(a => ['present', 'late'].includes(a.status)).length;
             const absent = monthAttendances.filter(a => a.status === 'absent').length;
-            return { monthName: m, monthIndex: i, present, absent };
+
+            const totalRegularMinutes = monthAttendances.reduce((acc, curr) => {
+                if (curr.total_regular_hours) {
+                    const [h, m] = curr.total_regular_hours.split(':').map(Number);
+                    return acc + (h * 60) + m;
+                }
+                return acc + getHoursMins(curr);
+            }, 0);
+
+            const totalOutsideMinutes = monthAttendances.reduce((acc, curr) => {
+                return acc + sumOutsideHoursMins(curr.total_outside_hours);
+            }, 0);
+
+            return { monthName: m, monthIndex: i, present, absent, totalRegularMinutes, totalOutsideMinutes };
         });
     }, [attendances, filterYear]);
 
@@ -147,13 +264,13 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         {
             headerName: "Date",
             field: "date",
-            flex: 1,
+            minWidth: 120,
             cellClass: "fw-medium"
         },
         {
             headerName: "Status",
             field: "status",
-            flex: 1,
+            minWidth: 120,
             cellRenderer: (params) => {
                 const colors = {
                     'present': 'success',
@@ -173,19 +290,65 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         {
             headerName: "Check In",
             field: "check_in",
-            flex: 1,
+            minWidth: 100,
             cellRenderer: (params) => params.value ? <Tag color="cyan">{params.value}</Tag> : "-"
+        },
+        {
+            headerName: "Break Start",
+            field: "break_start",
+            minWidth: 110,
+            cellRenderer: (params) => params.value ? <Tag color="orange">{params.value}</Tag> : "-"
+        },
+        {
+            headerName: "Break End",
+            field: "break_end",
+            minWidth: 110,
+            cellRenderer: (params) => params.value ? <Tag color="orange">{params.value}</Tag> : "-"
+        },
+        {
+            headerName: "Regular Hours",
+            field: "total_regular_hours",
+            minWidth: 120,
+            cellRenderer: (params) => {
+                const manual = params.value;
+                const calculated = calculateHours(params.data);
+                const display = (manual ? formatManualTime(manual) : null) || calculated || "-";
+                return <Tag color="geekblue">{display}</Tag>;
+            }
+        },
+        {
+            headerName: "Outside Hours",
+            field: "total_outside_hours",
+            minWidth: 150,
+            cellRenderer: (params) => {
+                const entries = params.value;
+                if (!Array.isArray(entries) || entries.length === 0) return "-";
+
+                return (
+                    <div className="d-flex align-items-center gap-1">
+                        {entries.map((entry, idx) => (
+                            <span key={idx} className="d-flex align-items-center gap-1">
+                                <Tag color={entry.work_from === 'home' ? 'blue' : 'orange'} style={{ margin: 0 }} className="d-flex align-items-center gap-1">
+                                    {entry.work_from === 'home' ? <HomeOutlined style={{ fontSize: '12px' }} /> : <ApartmentOutlined style={{ fontSize: '12px' }} />}
+                                    {entry.manual_hours}
+                                </Tag>
+                                {idx < entries.length - 1 && <span className="text-muted">/</span>}
+                            </span>
+                        ))}
+                    </div>
+                );
+            }
         },
         {
             headerName: "Check Out",
             field: "check_out",
-            flex: 1,
+            minWidth: 100,
             cellRenderer: (params) => params.value ? <Tag color="blue">{params.value}</Tag> : "-"
         },
         {
             headerName: "Worked From",
             field: "worked_from",
-            flex: 1,
+            minWidth: 120,
             cellRenderer: (params) => (
                 <Tag color={params.value === 'home' ? 'blue' : 'orange'}>
                     {params.value ? params.value.toUpperCase() : 'OFFICE'}
@@ -195,49 +358,63 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         {
             headerName: "Check In IP",
             field: "check_in_ip",
-            flex: 1,
+            minWidth: 100,
             cellRenderer: (params) => params.value ? <small className="font-monospace text-muted" style={{ fontSize: '10px' }}>{params.value}</small> : "-"
         },
         {
             headerName: "Check Out IP",
             field: "check_out_ip",
-            flex: 1,
             cellRenderer: (params) => params.value ? <small className="font-monospace text-muted" style={{ fontSize: '10px' }}>{params.value}</small> : "-"
         },
         {
             headerName: "Actions",
-            width: 250,
+            width: 150,
             sortable: false,
             filter: false,
             pinned: "right",
             cellRenderer: (params) => {
-                if (params.data.status === 'On Leave') return <Tag color="blue">ON LEAVE</Tag>;
-                if (params.data.status === 'Weekend') return <Tag>WEEKEND</Tag>;
+                const { status, date, isPlaceholder } = params.data;
+                if (status === 'On Leave') return <Tag color="blue">ON LEAVE</Tag>;
+                if (status === 'Holiday') return <Tag color="magenta">HOLIDAY</Tag>;
 
-                const isToday = params.data.date === dayjs().format('YYYY-MM-DD');
-                const hasCheckIn = !!params.data.check_in;
-                const hasCheckOut = !!params.data.check_out;
+                const today = dayjs().format('YYYY-MM-DD');
+                const isToday = date === today;
+                const isPast = dayjs(date).isBefore(today, 'day');
+                const isFuture = dayjs(date).isAfter(today, 'day');
+                const isMarked = !isPlaceholder && status !== 'Not Marked';
+                const isWeekend = status === 'Weekend';
 
-                if (!isToday) return <small className="text-muted italic">Only current day allowed</small>;
-
-                return (
-                    <div className="d-flex gap-2 align-items-center h-100">
+                if (isMarked) {
+                    return (
                         <button
-                            className="btn btn-success btn-sm d-flex align-items-center"
-                            disabled={hasCheckIn || loading}
-                            onClick={() => handleCheckIn(params.data.date)}
+                            className="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center w-100"
+                            onClick={() => {
+                                setCurrentActionRecord(params.data);
+                                setIsActionModalOpen(true);
+                            }}
                         >
-                            <LoginOutlined className="me-1" /> Check In
+                            <EditOutlined className="me-1" /> Edit
                         </button>
+                    );
+                }
+
+                if (isFuture) return <small className="text-muted italic">Upcoming</small>;
+
+                if (isToday) {
+                    return (
                         <button
-                            className="btn btn-danger btn-sm d-flex align-items-center"
-                            disabled={!hasCheckIn || hasCheckOut || loading}
-                            onClick={() => handleCheckOut(params.data)}
+                            className="btn btn-sm btn-success d-flex align-items-center justify-content-center w-100"
+                            onClick={() => {
+                                setCurrentActionRecord(params.data);
+                                setIsActionModalOpen(true);
+                            }}
                         >
-                            <LogoutOutlined className="me-1" /> Check Out
+                            <PlusCircleOutlined className="me-1" /> Mark
                         </button>
-                    </div>
-                );
+                    );
+                }
+
+                return <small className="text-muted italic">Closed</small>;
             }
         }
     ], [loading]);
@@ -313,7 +490,15 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                         <AgGridReact
                             rowData={rowData}
                             columnDefs={columnDefs}
-                            defaultColDef={defaultColDef}
+                            defaultColDef={{
+                                ...defaultColDef,
+                                suppressMovable: true,
+                                cellClass: 'text-nowrap'
+                            }}
+                            autoSizeStrategy={{
+                                type: "fitCellContents",
+                                skipHeader: false,
+                            }}
                             theme={gridTheme}
                             pagination={false}
                         />
@@ -334,9 +519,18 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                     <AgGridReact
                         rowData={userAttendanceRowData}
                         columnDefs={detailColumnDefs}
-                        defaultColDef={defaultColDef}
+                        defaultColDef={{
+                            ...defaultColDef,
+                            suppressMovable: true,
+                            cellClass: 'text-nowrap',
+                        }}
+                        autoSizeStrategy={{
+                            type: "fitCellContents",
+                            skipHeader: false,
+                        }}
                         theme={gridTheme}
-                        pagination={false}
+                        pagination={true}
+                        paginationPageSize={20}
                         onFirstDataRendered={(params) => {
                             const today = dayjs().format('YYYY-MM-DD');
                             const rowIndex = userAttendanceRowData.findIndex(row => row.date === today);
@@ -348,6 +542,267 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                         }}
                     />
                 </div>
+            </Modal>
+
+            <Modal
+                title={`Manage Attendance - ${currentActionRecord?.date}`}
+                open={isActionModalOpen}
+                onCancel={() => setIsActionModalOpen(false)}
+                footer={null}
+                centered
+                width={400}
+            >
+                {currentActionRecord && (
+                    <div className="p-2">
+                        <div className="mb-4 text-center">
+                            <Tag color="blue" className="px-3 py-1 mb-2" style={{ fontSize: '14px' }}>
+                                Status: {currentActionRecord.status.toUpperCase()}
+                            </Tag>
+                        </div>
+
+                        <div className="d-grid gap-3">
+                            <div className="row g-2">
+                                <div className="col-12 mb-2">
+                                    <label className="fw-bold small text-muted">Worked From</label>
+                                    <Select
+                                        defaultValue="office"
+                                        style={{ width: '100%' }}
+                                        value={workedFrom}
+                                        onChange={(val) => setWorkedFrom(val)}
+                                        options={[
+                                            { label: 'Office', value: 'office' },
+                                            { label: 'Home', value: 'home' }
+                                        ]}
+                                        disabled={currentActionRecord.status === 'Weekend' && !currentActionRecord.check_in}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Regular Attendance Section */}
+                            <div className={`border rounded p-3 ${currentActionRecord.status === 'Weekend' ? 'bg-secondary-subtle opacity-75' : 'bg-light'}`}>
+                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                    <label className="fw-bold small text-muted">Regular Attendance (Shift)</label>
+                                    {currentActionRecord.status === 'Weekend' && <Tag color="error">Disabled on Weekends</Tag>}
+                                </div>
+                                {currentActionRecord.status === 'Weekend' ? (
+                                    <div className="text-center text-muted small py-2 italic">
+                                        Regular shift tracking is not available on weekends. Please use manual outside hours below.
+                                    </div>
+                                ) : !currentActionRecord.check_in ? (
+                                    <button
+                                        className="btn btn-success w-100 py-2 d-flex align-items-center justify-content-center"
+                                        disabled={loading}
+                                        onClick={() => {
+                                            handleCheckIn(currentActionRecord.date);
+                                        }}
+                                    >
+                                        <LoginOutlined className="me-2" /> Check In
+                                    </button>
+                                ) : !currentActionRecord.check_out ? (
+                                    <>
+                                        <div className="row g-2 mb-2">
+                                            <div className="col-6">
+                                                <button
+                                                    className="btn btn-warning w-100 py-2"
+                                                    disabled={!!currentActionRecord.break_start || loading}
+                                                    onClick={() => {
+                                                        handleBreakStart(currentActionRecord);
+                                                    }}
+                                                >
+                                                    Break Start
+                                                </button>
+                                            </div>
+                                            <div className="col-6">
+                                                <button
+                                                    className="btn btn-warning w-100 py-2"
+                                                    disabled={!currentActionRecord.break_start || !!currentActionRecord.break_end || loading}
+                                                    onClick={() => {
+                                                        handleBreakEnd(currentActionRecord);
+                                                    }}
+                                                >
+                                                    Break End
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <button
+                                            className="btn btn-danger w-100 py-2 d-flex align-items-center justify-content-center"
+                                            disabled={loading}
+                                            onClick={() => {
+                                                handleCheckOut(currentActionRecord);
+                                            }}
+                                        >
+                                            <LogoutOutlined className="me-2" /> Check Out
+                                        </button>
+                                    </>
+                                ) : (
+                                    <div className="text-center py-1">
+                                        <Tag color="blue">Regular Shift Completed</Tag>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Outside Hours Section */}
+                            <div className="border rounded p-3">
+                                <label className="fw-bold small text-muted d-block mb-2">Manual Outside Hours</label>
+
+                                {Array.isArray(currentActionRecord.total_outside_hours) && currentActionRecord.total_outside_hours.map((entry, idx) => (
+                                    <div key={idx} className="bg-light p-2 rounded mb-3 border">
+                                        <div className="d-flex align-items-center gap-2 mb-2">
+                                            <Select
+                                                showSearch
+                                                placeholder="HH"
+                                                style={{ width: '70px' }}
+                                                value={entry.manual_hours?.split(':')[0] || '00'}
+                                                onChange={(val) => {
+                                                    const updated = [...currentActionRecord.total_outside_hours];
+                                                    const mm = entry.manual_hours?.split(':')[1] || '00';
+                                                    updated[idx] = { ...entry, manual_hours: `${val}:${mm}` };
+                                                    setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: updated });
+                                                }}
+                                                options={Array.from({ length: 24 }, (_, i) => ({
+                                                    label: i.toString().padStart(2, '0'),
+                                                    value: i.toString().padStart(2, '0')
+                                                }))}
+                                            />
+                                            <span className="fw-bold">:</span>
+                                            <Select
+                                                showSearch
+                                                placeholder="mm"
+                                                style={{ width: '70px' }}
+                                                value={entry.manual_hours?.split(':')[1] || '00'}
+                                                onChange={(val) => {
+                                                    const updated = [...currentActionRecord.total_outside_hours];
+                                                    const hh = entry.manual_hours?.split(':')[0] || '00';
+                                                    updated[idx] = { ...entry, manual_hours: `${hh}:${val}` };
+                                                    setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: updated });
+                                                }}
+                                                options={Array.from({ length: 60 }, (_, i) => ({
+                                                    label: i.toString().padStart(2, '0'),
+                                                    value: i.toString().padStart(2, '0')
+                                                }))}
+                                            />
+                                            <Select
+                                                style={{ flex: 1 }}
+                                                value={entry.work_from || 'office'}
+                                                onChange={(val) => {
+                                                    const updated = [...currentActionRecord.total_outside_hours];
+                                                    updated[idx] = { ...entry, work_from: val };
+                                                    setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: updated });
+                                                }}
+                                                options={[
+                                                    { label: 'Office', value: 'office' },
+                                                    { label: 'Home', value: 'home' }
+                                                ]}
+                                            />
+                                            <button
+                                                className="btn btn-outline-danger btn-sm p-1 border-0"
+                                                onClick={() => {
+                                                    const updated = currentActionRecord.total_outside_hours.filter((_, i) => i !== idx);
+                                                    setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: updated });
+                                                }}
+                                            >
+                                                <DeleteOutlined />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                <div className="text-center mb-3">
+                                    <button
+                                        className="btn btn-outline-primary btn-sm w-100"
+                                        onClick={() => {
+                                            const entry = {
+                                                manual_hours: "00:00",
+                                                work_from: "office"
+                                            };
+                                            const existing = Array.isArray(currentActionRecord.total_outside_hours) ? currentActionRecord.total_outside_hours : [];
+                                            setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: [...existing, entry] });
+                                        }}
+                                    >
+                                        <PlusCircleOutlined className="me-1" /> Add Manual Session
+                                    </button>
+                                </div>
+
+                                <button
+                                    className="btn btn-success w-100 py-2"
+                                    disabled={loading || !Array.isArray(currentActionRecord.total_outside_hours) || currentActionRecord.total_outside_hours.length === 0}
+                                    onClick={() => {
+                                        setLoading(true);
+                                        const url = currentActionRecord.isPlaceholder ? route('users-attendance.store') : route('users-attendance.update', currentActionRecord.id);
+                                        const method = currentActionRecord.isPlaceholder ? 'post' : 'put';
+
+                                        let finalStatus = currentActionRecord.status;
+                                        if (currentActionRecord.status === 'Not Marked' || currentActionRecord.status === 'Weekend') {
+                                            finalStatus = 'present';
+                                        }
+
+                                        axios[method](url, {
+                                            ...currentActionRecord,
+                                            user_id: user.id,
+                                            status: finalStatus,
+                                            worked_from: workedFrom,
+                                        }).then(response => {
+                                            api.success({ message: "Outside Hours Saved" });
+                                            setIsActionModalOpen(false);
+                                            router.reload({ only: ['attendances'] });
+                                        }).catch(err => {
+                                            api.error({ message: "Failed", description: err.response?.data?.message || "Failed to save hours" });
+                                        }).finally(() => setLoading(false));
+                                    }}
+                                >
+                                    Save All Outside Hours
+                                </button>
+                            </div>
+
+                            {/* Status Override for Edit Mode */}
+                            {(currentActionRecord.check_out || !dayjs(currentActionRecord.date).isSame(dayjs(), 'day')) && (
+                                <div className="border-top pt-3 mt-2">
+                                    <div className="mb-3">
+                                        <div className="mb-3">
+                                            <label className="fw-bold small text-muted d-block mb-1">Total Regular Hours (Read-only)</label>
+                                            <div className="bg-light border rounded px-3 py-2 fw-bold text-primary">
+                                                {currentActionRecord.total_regular_hours
+                                                    ? formatManualTime(currentActionRecord.total_regular_hours)
+                                                    : (calculateHours(currentActionRecord) || "-")}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mb-3">
+                                        <label className="fw-bold small text-muted d-block mb-1">Status (Read-only)</label>
+                                        <Tag color={
+                                            currentActionRecord.status === 'present' ? 'success' :
+                                                currentActionRecord.status === 'absent' ? 'error' :
+                                                    currentActionRecord.status === 'late' ? 'warning' : 'default'
+                                        } className="px-3 py-1 fw-bold">
+                                            {currentActionRecord.status.toUpperCase()}
+                                        </Tag>
+                                    </div>
+
+                                    <button
+                                        className="btn btn-primary w-100 mt-2"
+                                        disabled={loading}
+                                        onClick={() => {
+                                            setLoading(true);
+                                            axios.put(route('users-attendance.update', currentActionRecord.id), currentActionRecord)
+                                                .then(response => {
+                                                    api.success({ message: "Attendance Updated Successfully" });
+                                                    setIsActionModalOpen(false);
+                                                    router.reload({ only: ['attendances'] });
+                                                })
+                                                .catch(err => {
+                                                    api.error({ message: "Update Failed", description: err.response?.data?.message });
+                                                })
+                                                .finally(() => setLoading(false));
+                                        }}
+                                    >
+                                        Save All Changes
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </Modal>
         </>
     );
