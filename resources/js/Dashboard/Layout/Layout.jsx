@@ -29,6 +29,7 @@ import {
   BarChartOutlined,
   WalletOutlined,
   ScheduleOutlined,
+  CloudDownloadOutlined,
   /**
    * Ziggy
    */
@@ -104,6 +105,19 @@ const DashboardLayout = ({ children }) => {
     },
     {
       type: "divider",
+    },
+    {
+      key: "download",
+      icon: <CloudDownloadOutlined />,
+      label: "Download Tracker",
+      onClick: () => {
+        const link = document.createElement("a");
+        link.href = "/uploads/documents/BidwinnersTracker_Setup_v1.0.0.exe";
+        link.download = "BidwinnersTracker_Setup_v1.0.0.exe";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      },
     },
     {
       key: "logout",

@@ -215,13 +215,15 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
 
                 let buttonText = "View & Mark Attendance";
                 if (!isCurrentMonth) {
-                    buttonText = isPast ? "Closed" : "Upcoming";
+                    buttonText = isPast ? "View Historical" : "Upcoming";
                 }
+
+                const canOpen = isCurrentMonth || isPast;
 
                 return (
                     <button
-                        className={`btn btn-sm w-100 d-flex align-items-center justify-content-center ${isCurrentMonth ? 'btn-primary' : 'btn-outline-secondary'}`}
-                        disabled={!isCurrentMonth}
+                        className={`btn btn-sm w-100 d-flex align-items-center justify-content-center ${canOpen ? 'btn-primary' : 'btn-outline-secondary'}`}
+                        disabled={!canOpen}
                         onClick={() => {
                             setSelectedMonthForAttendance(params.data.monthIndex);
                             setIsAttendanceGridModalOpen(true);
@@ -385,17 +387,20 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                 const isWeekend = status === 'Weekend';
 
                 if (isMarked) {
-                    return (
-                        <button
-                            className="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center w-100"
-                            onClick={() => {
-                                setCurrentActionRecord(params.data);
-                                setIsActionModalOpen(true);
-                            }}
-                        >
-                            <EditOutlined className="me-1" /> Edit
-                        </button>
-                    );
+                    if (isToday) {
+                        return (
+                            <button
+                                className="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center w-100"
+                                onClick={() => {
+                                    setCurrentActionRecord(params.data);
+                                    setIsActionModalOpen(true);
+                                }}
+                            >
+                                <EditOutlined className="me-1" /> Edit
+                            </button>
+                        );
+                    }
+                    return <Tag color="success">MARKED</Tag>;
                 }
 
                 if (isFuture) return <small className="text-muted italic">Upcoming</small>;
@@ -403,13 +408,13 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                 if (isToday) {
                     return (
                         <button
-                            className="btn btn-sm btn-success d-flex align-items-center justify-content-center w-100"
+                            className={`btn btn-sm d-flex align-items-center justify-content-center w-100 ${isWeekend ? 'btn-outline-warning' : 'btn-success'}`}
                             onClick={() => {
                                 setCurrentActionRecord(params.data);
                                 setIsActionModalOpen(true);
                             }}
                         >
-                            <PlusCircleOutlined className="me-1" /> Mark
+                            <PlusCircleOutlined className="me-1" /> {isWeekend ? 'Log Hours' : 'Mark'}
                         </button>
                     );
                 }
@@ -582,11 +587,28 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                             <div className={`border rounded p-3 ${currentActionRecord.status === 'Weekend' ? 'bg-secondary-subtle opacity-75' : 'bg-light'}`}>
                                 <div className="d-flex justify-content-between align-items-center mb-2">
                                     <label className="fw-bold small text-muted">Regular Attendance (Shift)</label>
-                                    {currentActionRecord.status === 'Weekend' && <Tag color="error">Disabled on Weekends</Tag>}
+                                    {currentActionRecord.status === 'Weekend' && <Tag color="warning">Weekend – Read Only</Tag>}
                                 </div>
                                 {currentActionRecord.status === 'Weekend' ? (
-                                    <div className="text-center text-muted small py-2 italic">
-                                        Regular shift tracking is not available on weekends. Please use manual outside hours below.
+                                    <div className="d-flex flex-wrap gap-2">
+                                        <div className="d-flex align-items-center gap-1">
+                                            <small className="text-muted">Check In:</small>
+                                            {currentActionRecord.check_in
+                                                ? <Tag color="cyan">{currentActionRecord.check_in}</Tag>
+                                                : <small className="text-muted fst-italic">—</small>}
+                                        </div>
+                                        <div className="d-flex align-items-center gap-1">
+                                            <small className="text-muted">Break:</small>
+                                            {currentActionRecord.break_start
+                                                ? <Tag color="orange">{currentActionRecord.break_start} → {currentActionRecord.break_end || '…'}</Tag>
+                                                : <small className="text-muted fst-italic">—</small>}
+                                        </div>
+                                        <div className="d-flex align-items-center gap-1">
+                                            <small className="text-muted">Check Out:</small>
+                                            {currentActionRecord.check_out
+                                                ? <Tag color="blue">{currentActionRecord.check_out}</Tag>
+                                                : <small className="text-muted fst-italic">—</small>}
+                                        </div>
                                     </div>
                                 ) : !currentActionRecord.check_in ? (
                                     <button
