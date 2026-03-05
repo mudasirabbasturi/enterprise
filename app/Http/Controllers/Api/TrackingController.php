@@ -8,18 +8,21 @@ use Illuminate\Support\Facades\Log;
 
 class TrackingController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $status = $request->query('status', 'active');
         $recentCutoff = \Carbon\Carbon::now()->subMinutes(15);
-        $users = \App\Models\User::all()->map(function($user) use ($recentCutoff) {
+        
+        $users = \App\Models\User::where('status', $status)->get()->map(function($user) use ($recentCutoff) {
             $user->is_online = \App\Models\UserScreenshot::where('user_id', $user->id)
                 ->where('screenshot_time', '>=', $recentCutoff)
                 ->exists();
             return $user;
         });
-
+        
         return inertia('Pages/UserTracking', [
             'users' => $users,
+            'selectedStatus' => $status,
             'trackingData' => []
         ]);
     }
@@ -280,9 +283,10 @@ class TrackingController extends Controller
         return response()->json(['status' => 'success', 'message' => 'User permission updated']);
     }
 
-    public function getAllUsers()
+    public function getAllUsers(Request $request)
     {
-        $users = \App\Models\User::all();
+        $status = $request->query('status', 'active');
+        $users = \App\Models\User::where('status', $status)->get();
         $allowedIps = \App\Models\PayrollConfig::where('key', 'tracker_allowed_ips')->first();
         $allowedIps = $allowedIps ? json_decode($allowedIps->value, true) : [];
         $clientIp = request()->ip();

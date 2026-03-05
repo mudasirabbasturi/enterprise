@@ -18,12 +18,19 @@ import {
 } from "@shared/ui";
 import MainLayout from "@layout";
 import axios from "axios";
-import { notification, Modal, Tag, Image } from "antd";
+import { notification, Modal, Tag, Image, Select } from "antd";
+import { router } from "@inertiajs/react";
 
-const UserTracking = ({ users: initialUsers }) => {
+const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) => {
     const [api, contextHolder] = notification.useNotification();
     const [users, setUsers] = useState(initialUsers || []);
+    const [selectedStatus, setSelectedStatus] = useState(initialStatus || 'active');
     const [loading, setLoading] = useState(false);
+
+    // Sync users state when initialUsers props change (e.g., after filter)
+    useEffect(() => {
+        setUsers(initialUsers || []);
+    }, [initialUsers]);
 
     // Screenshot Modal state
     const [isScreenshotModalOpen, setIsScreenshotModalOpen] = useState(false);
@@ -50,7 +57,9 @@ const UserTracking = ({ users: initialUsers }) => {
     const fetchUsers = async (showLoading = true) => {
         if (showLoading) setLoading(true);
         try {
-            const response = await axios.get("/api/track/users");
+            const response = await axios.get("/api/track/users", {
+                params: { status: selectedStatus }
+            });
             setUsers(response.data);
         } catch (error) {
             console.error("Error fetching users:", error);
@@ -110,7 +119,16 @@ const UserTracking = ({ users: initialUsers }) => {
             fetchUsers(false);
         }, 30000);
         return () => clearInterval(interval);
-    }, []);
+    }, [selectedStatus]);
+
+    const handleStatusChange = (value) => {
+        setSelectedStatus(value);
+        router.get(route('user.tracking'), { status: value }, {
+            preserveState: true,
+            onSuccess: () => {
+            }
+        });
+    };
 
     const fetchScreenshots = useCallback(async (userId, d, m, y) => {
         setScreenshotLoading(true);
@@ -330,6 +348,22 @@ const UserTracking = ({ users: initialUsers }) => {
                         items={[{ title: <Link href="/">Home</Link> }, { title: "User Tracking" }]}
                     />
                     <div className="d-flex align-items-center gap-3">
+                        <Select
+                            value={selectedStatus}
+                            onChange={handleStatusChange}
+                            style={{ width: 150 }}
+                            placeholder="Select Status"
+                            showSearch
+                            options={[
+                                { value: "active", label: "Active" },
+                                { value: "inactive", label: "In Active" },
+                                { value: "suspended", label: "Suspended" },
+                                { value: "hold", label: "Hold" },
+                                { value: "pending", label: "Pending" },
+                            ]}
+                            optionFilterProp="label"
+                            className="status-select"
+                        />
                         <button
                             className="btn btn-outline-primary btn-sm d-flex align-items-center rounded-pill px-3 shadow-sm"
                             onClick={() => setIsSettingsModalOpen(true)}
@@ -577,7 +611,7 @@ const UserTracking = ({ users: initialUsers }) => {
                         </select>
                         <div className="form-text mt-1 small">Frequency of automated screen captures</div>
                     </div>
-                    
+
                     <div className="mb-4">
                         <label className="form-label text-muted small fw-bold mb-2">SETTINGS SYNC FREQUENCY</label>
                         <select

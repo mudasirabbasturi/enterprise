@@ -111,4 +111,17 @@ class UserShiftScheduleController extends Controller
 
         return redirect()->back()->with('message', 'Selected schedules deleted successfully.');
     }
+
+    public function MySchedule()
+    {
+        $user = auth()->user();
+        $schedules = UserShiftSchedule::with(['shift'])
+            ->where('user_id', $user->id)
+            ->get();
+
+        return Inertia::render('Pages/WorkSchedule/MySchedule', [
+            'schedules' => $schedules,
+            'user' => $user
+        ]);
+    }
 }

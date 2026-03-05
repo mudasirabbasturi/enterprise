@@ -79,6 +79,8 @@ class UserAttendanceController extends Controller
             ->whereMonth('date', $month)
             ->get();
 
+        $config = \App\Models\PayrollConfig::pluck('value', 'key')->all();
+
         return Inertia::render('Pages/WorkSchedule/UserAttendance', [
             'attendances' => $attendances,
             'users' => $users,
@@ -86,6 +88,7 @@ class UserAttendanceController extends Controller
             'selectedMonth' => (int)$month,
             'selectedYear' => (int)$year,
             'holidays' => $holidays,
+            'config' => $config,
         ]);
     }
 
@@ -108,24 +111,59 @@ class UserAttendanceController extends Controller
         ]);
 
         // Shift Restriction Logic
-        $user = User::with(['userAllowedIp', 'userShiftSchedules'])->findOrFail($validated['user_id']);
+        $user = User::with(['userAllowedIp', 'userShiftSchedules.shift'])->findOrFail($validated['user_id']);
         $dayName = \Carbon\Carbon::parse($validated['date'])->format('l');
-        $hasShift = $user->userShiftSchedules->contains('day', $dayName);
+        $shiftSchedule = $user->userShiftSchedules->where('day', $dayName)->first();
 
-        if (!$hasShift) {
-            return redirect()->back()->withErrors([
-                'date' => "User {$user->name} is not scheduled to work on $dayName ($validated[date])."
-            ]);
-        }
+        if ($shiftSchedule && $shiftSchedule->shift) {
+            $shift = $shiftSchedule->shift;
+            $config = \App\Models\PayrollConfig::pluck('value', 'key')->all();
+            $earlyBuffer = floatval($config['attendance_early_checkin_max_hours'] ?? 2);
+            $lateBuffer = floatval($config['attendance_late_checkout_max_hours'] ?? 4);
 
-        $allowedIps = $user->userAllowedIp->pluck('ip_address')->toArray();
+            $allowedIps = $user->userAllowedIp->pluck('ip_address')->toArray();
 
-        if (count($allowedIps) > 0) {
-            $currentIp = $request->ip();
-            if (!in_array($currentIp, $allowedIps)) {
-                 return redirect()->back()->withErrors([
-                    'user_id' => "Access Denied: Your IP ($currentIp) is not authorized for this user's attendance."
-                ]);
+            if (count($allowedIps) > 0) {
+                $currentIp = $request->ip();
+                if (!in_array($currentIp, $allowedIps)) {
+                     return redirect()->back()->withErrors([
+                        'user_id' => "Access Denied: Your IP ($currentIp) is not authorized for this user's attendance."
+                    ]);
+                }
+            }
+
+            // Validate Check-in time against buffer
+            if (!empty($validated['check_in'])) {
+                $checkInTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $validated['check_in']);
+                $shiftStartTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $shift->start_time);
+                
+                // If check-in is too early
+                if ($checkInTime->lt($shiftStartTime->copy()->subHours($earlyBuffer))) {
+                    return redirect()->back()->withErrors([
+                        'check_in' => "Too early! You can only check in up to {$earlyBuffer} hours before your shift starts (" . $shift->start_time . ")."
+                    ]);
+                }
+            }
+
+            // Validate Check-out time against buffer
+            if (!empty($validated['check_out'])) {
+                $checkOutTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $validated['check_out']);
+                $shiftEndTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $shift->end_time);
+                
+                // Handle overnight shift end time
+                if ($shift->end_time < $shift->start_time) {
+                    $shiftEndTime->addDay();
+                    // If check_out is early (e.g. 11 PM) on the same day as check_in (10 PM), it might be before end_time (2 AM next day)
+                    if ($checkOutTime->lt(\Carbon\Carbon::parse($validated['date'] . ' ' . $shift->start_time))) {
+                        $checkOutTime->addDay();
+                    }
+                }
+
+                if ($checkOutTime->gt($shiftEndTime->copy()->addHours($lateBuffer))) {
+                    return redirect()->back()->withErrors([
+                        'check_out' => "Too late! You cannot check out more than {$lateBuffer} hours after your shift ends (" . $shift->end_time . ")."
+                    ]);
+                }
             }
         }
 
@@ -170,24 +208,56 @@ class UserAttendanceController extends Controller
         ]);
 
         // Shift Restriction Logic
-        $user = User::with(['userAllowedIp', 'userShiftSchedules'])->findOrFail($validated['user_id']);
+        $user = User::with(['userAllowedIp', 'userShiftSchedules.shift'])->findOrFail($validated['user_id']);
         $dayName = \Carbon\Carbon::parse($validated['date'])->format('l');
-        $hasShift = $user->userShiftSchedules->contains('day', $dayName);
+        $shiftSchedule = $user->userShiftSchedules->where('day', $dayName)->first();
 
-        if (!$hasShift) {
-            return redirect()->back()->withErrors([
-                'date' => "User {$user->name} is not scheduled to work on $dayName ($validated[date])."
-            ]);
-        }
+        if ($shiftSchedule && $shiftSchedule->shift) {
+            $shift = $shiftSchedule->shift;
+            $config = \App\Models\PayrollConfig::pluck('value', 'key')->all();
+            $earlyBuffer = floatval($config['attendance_early_checkin_max_hours'] ?? 2);
+            $lateBuffer = floatval($config['attendance_late_checkout_max_hours'] ?? 4);
 
-        $allowedIps = $user->userAllowedIp->pluck('ip_address')->toArray();
+            $allowedIps = $user->userAllowedIp->pluck('ip_address')->toArray();
 
-        if (count($allowedIps) > 0) {
-            $currentIp = $request->ip();
-            if (!in_array($currentIp, $allowedIps)) {
-                 return redirect()->back()->withErrors([
-                    'user_id' => "Access Denied: Your IP ($currentIp) is not authorized for this user's attendance."
-                ]);
+            if (count($allowedIps) > 0) {
+                $currentIp = $request->ip();
+                if (!in_array($currentIp, $allowedIps)) {
+                     return redirect()->back()->withErrors([
+                        'user_id' => "Access Denied: Your IP ($currentIp) is not authorized for this user's attendance."
+                    ]);
+                }
+            }
+
+            // Validate Check-in time against buffer
+            if (!empty($validated['check_in'])) {
+                $checkInTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $validated['check_in']);
+                $shiftStartTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $shift->start_time);
+                
+                if ($checkInTime->lt($shiftStartTime->copy()->subHours($earlyBuffer))) {
+                    return redirect()->back()->withErrors([
+                        'check_in' => "Too early! You can only check in up to {$earlyBuffer} hours before your shift starts (" . $shift->start_time . ")."
+                    ]);
+                }
+            }
+
+            // Validate Check-out time against buffer
+            if (!empty($validated['check_out'])) {
+                $checkOutTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $validated['check_out']);
+                $shiftEndTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $shift->end_time);
+                
+                if ($shift->end_time < $shift->start_time) {
+                    $shiftEndTime->addDay();
+                    if ($checkOutTime->lt(\Carbon\Carbon::parse($validated['date'] . ' ' . $shift->start_time))) {
+                        $checkOutTime->addDay();
+                    }
+                }
+
+                if ($checkOutTime->gt($shiftEndTime->copy()->addHours($lateBuffer))) {
+                    return redirect()->back()->withErrors([
+                        'check_out' => "Too late! You cannot check out more than {$lateBuffer} hours after your shift ends (" . $shift->end_time . ")."
+                    ]);
+                }
             }
         }
 

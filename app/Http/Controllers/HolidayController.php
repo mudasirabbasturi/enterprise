@@ -13,8 +13,7 @@ class HolidayController extends Controller
     public function Index()
     {
         return Inertia::render('Pages/LeaveManagement/Holidays', [
-            'holidays' => Holiday::with('branch')->get(),
-            'branches' => Branch::all(),
+            'holidays' => Holiday::all(),
         ]);
     }
 
@@ -23,7 +22,6 @@ class HolidayController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'date' => 'required|date',
-            'branch_id' => 'nullable|exists:branches,id',
         ]);
 
         try {
@@ -44,7 +42,6 @@ class HolidayController extends Controller
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
                 'date' => 'required|date',
-                'branch_id' => 'nullable|exists:branches,id',
             ]);
 
             $holiday->update($validated);

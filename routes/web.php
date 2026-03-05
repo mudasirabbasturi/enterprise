@@ -160,6 +160,7 @@ Route::prefix('api/test')->group(function () {
 
     // User Schedules
     Route::get('/schedule/users-schedules', [UserShiftScheduleController::class, 'Index'])->name('users-schedules.index');
+    Route::get('/schedule/my-schedule', [UserShiftScheduleController::class, 'MySchedule'])->name('my-schedule.index');
     Route::post('/schedule/users-schedules/store', [UserShiftScheduleController::class, 'Store'])->name('users-schedules.store');
     Route::post('/schedule/users-schedules/bulk-store', [UserShiftScheduleController::class, 'BulkStore'])->name('users-schedules.bulk-store');
     Route::get('/schedule/users-schedules/available-users', [UserShiftScheduleController::class, 'getAvailableUsers'])->name('users-schedules.available');

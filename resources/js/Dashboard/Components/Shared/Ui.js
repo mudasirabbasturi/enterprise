@@ -42,7 +42,10 @@ export {
   TimePicker,
   Table,
   Space,
-
+  Badge,
+  Calendar,
+  Alert,
+  Empty
 } from "antd";
 
 export {
@@ -116,7 +119,10 @@ export {
   ClockCircleOutlined,
   HomeOutlined,
   ApartmentOutlined,
-  CloudDownloadOutlined
+  CloudDownloadOutlined,
+  CheckOutlined,
+  CloseCircleFilled,
+
 } from "@ant-design/icons";
 
 export { PhoneInput } from "react-international-phone";

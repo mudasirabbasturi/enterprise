@@ -30,6 +30,7 @@ import {
   WalletOutlined,
   ScheduleOutlined,
   CloudDownloadOutlined,
+  FieldTimeOutlined,
   /**
    * Ziggy
    */
@@ -82,6 +83,11 @@ const DashboardLayout = ({ children }) => {
       key: "profile",
       icon: <UserOutlined />,
       label: <Link href={route("user.profile", user.id)}>Profile</Link>,
+    },
+    {
+      key: "my-shedule",
+      icon: <FieldTimeOutlined />,
+      label: <Link href={route("my-schedule.index")}>My Shedule</Link>,
     },
     {
       key: "my-attendance",

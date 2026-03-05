@@ -1,9 +1,4 @@
-import { useState, useMemo, useRef } from "react";
-import {
-    AgGridReact,
-    gridTheme,
-    defaultColDef,
-} from "@agConfig/AgGridConfig";
+import { useState, useRef } from "react";
 import {
     Link,
     Head,
@@ -15,117 +10,25 @@ import {
     Popconfirm,
     EditOutlined,
     DeleteOutlined,
-    Tag,
-    dayjs
+    dayjs,
+    Calendar,
+    Badge
 } from "@shared/ui";
 import MainLayout from "@layout";
 import HolidayForm from "@/Dashboard/Components/LeaveManagement/HolidayForm";
 
-const Holidays = ({ holidays, branches }) => {
+const Holidays = ({ holidays }) => {
     const [api, contextHolder] = notification.useNotification();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingHoliday, setEditingHoliday] = useState(null);
+    const [selectedDate, setSelectedDate] = useState(dayjs());
     const formRef = useRef();
-
-    const [selectedRows, setSelectedRows] = useState([]);
-
-    const onSelectionChanged = (params) => {
-        setSelectedRows(params.api.getSelectedRows());
-    };
-
-    const handleBulkDelete = () => {
-        const ids = selectedRows.map(row => row.id);
-        router.delete(route('holidays.bulk-destroy'), {
-            data: { ids },
-            onSuccess: () => {
-                api.success({ message: "Selected holidays deleted successfully" });
-                setSelectedRows([]);
-            },
-            onError: (errors) => {
-                if (errors.error) {
-                    api.error({ message: errors.error });
-                }
-            }
-        });
-    };
-
-    const columnDefs = useMemo(() => [
-        {
-            headerCheckboxSelection: true,
-            checkboxSelection: true,
-            width: 50,
-            pinned: "left",
-            lockPosition: true,
-            filter: false,
-        },
-        {
-            headerName: "Title",
-            field: "title",
-            flex: 2,
-            cellClass: "fw-bold"
-        },
-        {
-            headerName: "Date",
-            field: "date",
-            flex: 1,
-            valueFormatter: (params) => dayjs(params.value).format('DD MMM YYYY'),
-            cellClass: "font-monospace"
-        },
-        {
-            headerName: "Day",
-            flex: 1,
-            valueGetter: (params) => dayjs(params.data.date).format('dddd'),
-            cellClass: "text-muted"
-        },
-        {
-            headerName: "Branch",
-            field: "branch.name",
-            flex: 1,
-            valueFormatter: (params) => params.value || "All Branches"
-        },
-        {
-            headerName: "Actions",
-            width: 120,
-            pinned: "right",
-            cellRenderer: (params) => (
-                <div className="d-flex gap-2 align-items-center h-100">
-                    <Tooltip title="Edit">
-                        <button
-                            className="btn btn-outline-warning btn-sm rounded-circle d-flex align-items-center justify-content-center"
-                            style={{ width: '28px', height: '28px' }}
-                            onClick={() => {
-                                setEditingHoliday(params.data);
-                                setIsModalOpen(true);
-                            }}
-                        >
-                            <EditOutlined />
-                        </button>
-                    </Tooltip>
-                    <Tooltip title="Delete">
-                        <Popconfirm
-                            title="Delete this holiday?"
-                            onConfirm={() => handleDelete(params.data.id)}
-                            okText="Yes"
-                            cancelText="No"
-                            okButtonProps={{ danger: true }}
-                        >
-                            <button
-                                className="btn btn-outline-danger btn-sm rounded-circle d-flex align-items-center justify-content-center"
-                                style={{ width: '28px', height: '28px' }}
-                            >
-                                <DeleteOutlined />
-                            </button>
-                        </Popconfirm>
-                    </Tooltip>
-                </div>
-            )
-        }
-    ], []);
 
     const handleDelete = (id) => {
         router.delete(route('holidays.destroy', id), {
             onSuccess: () => {
                 api.success({ message: "Holiday deleted successfully" });
+                setIsModalOpen(false);
             },
             onError: (errors) => {
                 if (errors.error) {
@@ -135,10 +38,37 @@ const Holidays = ({ holidays, branches }) => {
         });
     };
 
+    const dateCellRender = (value) => {
+        const dateStr = value.format('YYYY-MM-DD');
+        const dayHolidays = holidays.filter(h => dayjs(h.date).format('YYYY-MM-DD') === dateStr);
+
+        return (
+            <ul className="list-unstyled m-0 p-0">
+                {dayHolidays.map(item => (
+                    <li key={item.id} onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingHoliday(item);
+                        setIsModalOpen(true);
+                    }}>
+                        <Badge status="warning" text={item.title} className="small-badge" />
+                    </li>
+                ))}
+            </ul>
+        );
+    };
+
+    const onSelectDay = (newValue) => {
+        setSelectedDate(newValue);
+        // Only open modal if it's not a change in month/year panel
+        // But for simplicity, we can let user click any date
+        setEditingHoliday(null);
+        setIsModalOpen(true);
+    };
+
     return (
         <>
             {contextHolder}
-            <Head title="Holidays" />
+            <Head title="Holidays Calendar" />
             <div className="container-fluid p-3">
                 <div className="d-flex justify-content-between align-items-center mb-4">
                     <Breadcrumb
@@ -148,42 +78,28 @@ const Holidays = ({ holidays, branches }) => {
                             { title: "Holidays" }
                         ]}
                     />
-                    <div className="d-flex gap-2">
-                        {selectedRows.length > 0 && (
-                            <Popconfirm
-                                title={`Delete ${selectedRows.length} selected holidays?`}
-                                description="This action cannot be undone."
-                                onConfirm={handleBulkDelete}
-                                okText="Yes"
-                                cancelText="No"
-                                okButtonProps={{ danger: true }}
-                            >
-                                <button className="btn btn-danger btn-sm d-flex align-items-center">
-                                    <DeleteOutlined className="me-1" /> Delete Selected ({selectedRows.length})
-                                </button>
-                            </Popconfirm>
-                        )}
-                        <button
-                            className="btn btn-primary btn-sm d-flex align-items-center"
-                            onClick={() => {
-                                setEditingHoliday(null);
-                                setIsModalOpen(true);
-                            }}
-                        >
-                            Add Holiday
-                        </button>
-                    </div>
+                    <button
+                        className="btn btn-primary btn-sm d-flex align-items-center"
+                        onClick={() => {
+                            setEditingHoliday(null);
+                            setSelectedDate(dayjs());
+                            setIsModalOpen(true);
+                        }}
+                    >
+                        Add Holiday
+                    </button>
                 </div>
 
-                <div className="ag-grid-wrapper" style={{ height: '70vh' }}>
-                    <AgGridReact
-                        rowData={holidays}
-                        columnDefs={columnDefs}
-                        defaultColDef={defaultColDef}
-                        theme={gridTheme}
-                        pagination={true}
-                        rowSelection="multiple"
-                        onSelectionChanged={onSelectionChanged}
+                <div className="bg-white p-4 rounded shadow-sm border">
+                    <Calendar
+                        cellRender={dateCellRender}
+                        onSelect={(date, { source }) => {
+                            if (source === 'date') {
+                                setEditingHoliday(null);
+                                setSelectedDate(date);
+                                setIsModalOpen(true);
+                            }
+                        }}
                     />
                 </div>
             </div>
@@ -193,20 +109,60 @@ const Holidays = ({ holidays, branches }) => {
                 open={isModalOpen}
                 onOk={() => formRef.current?.submitForm()}
                 onCancel={() => setIsModalOpen(false)}
-                width={600}
+                width={500}
                 centered
+                footer={[
+                    editingHoliday && (
+                        <Popconfirm
+                            key="delete"
+                            title="Delete this holiday?"
+                            onConfirm={() => handleDelete(editingHoliday.id)}
+                            okText="Yes"
+                            cancelText="No"
+                            okButtonProps={{ danger: true }}
+                        >
+                            <button className="btn btn-danger btn-sm float-start">Delete</button>
+                        </Popconfirm>
+                    ),
+                    <button key="back" className="btn btn-light btn-sm me-2" onClick={() => setIsModalOpen(false)}>Cancel</button>,
+                    <button key="submit" className="btn btn-primary btn-sm" onClick={() => formRef.current?.submitForm()}>
+                        {editingHoliday ? "Update" : "Save"}
+                    </button>
+                ]}
             >
                 <div className="mt-3">
                     <HolidayForm
                         ref={formRef}
-                        initialValues={editingHoliday}
+                        initialValues={editingHoliday || { date: selectedDate }}
                         mode={editingHoliday ? "edit" : "add"}
                         onClose={() => setIsModalOpen(false)}
-                        branches={branches}
                         notificationApi={api}
                     />
                 </div>
             </Modal>
+
+            <style>{`
+                .small-badge .ant-badge-status-text {
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: #d46b08;
+                }
+                .ant-picker-calendar-date-content {
+                    height: 80px !important;
+                    overflow-y: auto;
+                }
+                .ant-picker-calendar-date-content li {
+                    background: #fffbe6;
+                    border: 1px solid #ffe58f;
+                    border-radius: 4px;
+                    padding: 2px 4px;
+                    margin-bottom: 2px;
+                    cursor: pointer;
+                }
+                .ant-picker-calendar-date-content li:hover {
+                    background: #fff1b8;
+                }
+            `}</style>
         </>
     );
 };

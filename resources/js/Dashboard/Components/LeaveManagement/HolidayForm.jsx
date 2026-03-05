@@ -2,7 +2,7 @@ import { Form, Input, DatePicker, Select, notification } from "antd";
 import { useEffect, forwardRef, useImperativeHandle } from "react";
 import { router, dayjs } from "@shared/ui";
 
-const HolidayForm = forwardRef(({ initialValues, mode, onClose, branches, notificationApi }, ref) => {
+const HolidayForm = forwardRef(({ initialValues, mode, onClose, notificationApi }, ref) => {
     const [form] = Form.useForm();
 
     useImperativeHandle(ref, () => ({
@@ -16,7 +16,6 @@ const HolidayForm = forwardRef(({ initialValues, mode, onClose, branches, notifi
             form.setFieldsValue({
                 ...initialValues,
                 date: dayjs(initialValues.date),
-                branch_id: initialValues.branch_id,
             });
         } else {
             form.resetFields();
@@ -77,22 +76,13 @@ const HolidayForm = forwardRef(({ initialValues, mode, onClose, branches, notifi
             </div>
 
             <div className="row">
-                <div className="col-md-6">
+                <div className="col-md-12">
                     <Form.Item
                         name="date"
                         label="Date"
                         rules={[{ required: true, message: "Please select date" }]}
                     >
                         <DatePicker className="w-100" />
-                    </Form.Item>
-                </div>
-                <div className="col-md-6">
-                    <Form.Item name="branch_id" label="Branch (Optional)">
-                        <Select
-                            allowClear
-                            placeholder="All Branches"
-                            options={branches.map(b => ({ label: b.name, value: b.id }))}
-                        />
                     </Form.Item>
                 </div>
             </div>
