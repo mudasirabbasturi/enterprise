@@ -127,16 +127,22 @@ class ProjectController extends Controller
 
     public function Status(Request $request, $status)
     {
-        $projects = Project::with([
+        $query = Project::with([
             'projectTeamMembers.user.media' => function($query) {
                 $query->where('category', 'profile')->latest()->limit(1);
             },
             'client'
         ])
         ->where('project_status', $status)
-        ->latest()
-        ->get();
+        ->latest();
+
+        if ($status === 'Deliver') {
+            $query->take(1000);
+        }
+
+        $projects = $query->get();
         $clients = Client::get();
+
         return Inertia('Pages/Project/Index', [
             'projects' => $projects,
             'status' => $status,
