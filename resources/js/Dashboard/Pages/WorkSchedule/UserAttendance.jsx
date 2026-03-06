@@ -29,7 +29,7 @@ import {
     PlusCircleOutlined,
     HomeOutlined,
     ApartmentOutlined,
-    SettingOutlined, Button, Space
+    SettingOutlined, Button, Space, CheckOutlined, CloseCircleFilled
 } from "@shared/ui";
 import axios from "axios";
 import MainLayout from "@layout";
@@ -44,6 +44,15 @@ const UserAttendance =
         const [editingAttendance, setEditingAttendance] = useState(null);
         const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
         const detailGridRef = useRef(null);
+        const [allowedIPs, setAllowedIPs] = useState([]);
+        const [newIp, setNewIp] = useState("");
+
+        useEffect(() => {
+            if (config && config.user_attendace_allowed_ips) {
+                const ips = config.user_attendace_allowed_ips;
+                setAllowedIPs(Array.isArray(ips) ? ips : (typeof ips === 'string' ? JSON.parse(ips) : []));
+            }
+        }, [config]);
 
         useEffect(() => {
             if (detailGridRef.current && isAttendanceGridModalOpen) {
@@ -160,6 +169,27 @@ const UserAttendance =
                         <span className="fw-bold">{params.value}</span>
                     </div>
                 )
+            },
+            {
+                headerName: "IP Restriction",
+                field: "ip_restriction",
+                minWidth: 150,
+                cellRenderer: (params) => (
+                    <div className="d-flex align-items-center h-100">
+                        <div className="form-check form-switch cursor-pointer">
+                            <input
+                                className="form-check-input shadow-none"
+                                type="checkbox"
+                                checked={!!params.value}
+                                onChange={(e) => handleToggleIpRestriction(params.data, e.target.checked)}
+                                style={{ cursor: 'pointer', width: '28px', height: '15px' }}
+                            />
+                        </div>
+                        <span className={`ms-1 small fw-bold ${params.value ? 'text-danger' : 'text-muted'}`}>
+                            {params.value ? 'RESTRICTED' : 'NONE'}
+                        </span>
+                    </div>
+                ),
             },
             {
                 headerName: "Present",
@@ -300,25 +330,62 @@ const UserAttendance =
                 cellClass: "fw-medium text-nowrap"
             },
             {
+                headerName: "Day",
+                field: "day",
+                minWidth: 100,
+                cellClass: "text-nowrap",
+                cellRenderer: (params) => <span className="text-muted small">{params.value}</span>
+            },
+            {
+                headerName: "Office Status",
+                field: "office_status",
+                minWidth: 130,
+                cellRenderer: (params) => {
+                    const isClosed = params.value === 'Closed';
+                    return <Tag color={isClosed ? 'default' : 'success'} className="fw-bold">
+                        {isClosed ? 'Office Closed' : 'Office Open'}
+                    </Tag>;
+                }
+            },
+            {
                 headerName: "Status",
                 field: "status",
-                minWidth: 120,
+                minWidth: 200,
                 cellClass: "text-nowrap",
                 cellRenderer: (params) => {
-                    const colors = {
-                        'present': 'success',
-                        'late': 'warning',
-                        'absent': 'error',
-                        'leave': 'blue',
-                        'On Leave': 'blue',
-                        'no action': 'default',
-                        'Not Marked': 'processing',
-                        'Weekend': 'default',
-                        'Holiday': 'magenta'
-                    };
-                    const label = params.value === 'On Leave' ? 'LEAVE' : params.value;
-                    const color = colors[params.value] || 'default';
-                    return <Tag color={color}>{label.toUpperCase()}</Tag>;
+                    const { status, check_in, total_outside_hours } = params.data;
+
+                    const isMarked = status === 'present' || status === 'late' || status === 'absent';
+                    const isClosed = status === 'Weekend' || status === 'Holiday';
+                    const isLeave = status === 'On Leave' || status === 'leave';
+
+                    if (isMarked) {
+                        const hasRegular = !!check_in;
+                        const hasManual = Array.isArray(total_outside_hours) && total_outside_hours.length > 0;
+
+                        return (
+                            <div className="d-flex align-items-center gap-2">
+                                <Tag color="success" className="m-0">MARKED</Tag>
+                                <div className="d-flex align-items-center gap-1 border-start ps-2" style={{ fontSize: '11px' }}>
+                                    <span className="d-flex align-items-center gap-1">
+                                        {hasRegular ? <CheckOutlined style={{ color: '#52c41a' }} /> : <CloseCircleFilled style={{ color: '#ff4d4f' }} />}
+                                        <span className="text-muted">Reg</span>
+                                    </span>
+                                    <span className="text-muted mx-1">/</span>
+                                    <span className="d-flex align-items-center gap-1">
+                                        {hasManual ? <CheckOutlined style={{ color: '#52c41a' }} /> : <CloseCircleFilled style={{ color: '#ff4d4f' }} />}
+                                        <span className="text-muted">Man</span>
+                                    </span>
+                                </div>
+                            </div>
+                        );
+                    }
+
+                    if (isLeave) return <Tag color="blue">LEAVE</Tag>;
+                    if (isClosed) return <Tag color="default">{status.toUpperCase()}</Tag>;
+                    if (status === 'Not Marked') return <Tag color="processing">NOT MARKED</Tag>;
+
+                    return <Tag>{status?.toUpperCase() || '-'}</Tag>;
                 }
             },
             {
@@ -395,6 +462,13 @@ const UserAttendance =
                         </div>
                     );
                 }
+            },
+            {
+                headerName: "Check Out",
+                field: "check_out",
+                minWidth: 100,
+                cellClass: "text-nowrap",
+                cellRenderer: (params) => params.value ? <Tag color="blue">{params.value}</Tag> : "-"
             },
             {
                 headerName: "Worked From",
@@ -508,25 +582,24 @@ const UserAttendance =
                 // Check if this date is a holiday
                 const holiday = (holidays || []).find(h => dayjs(h.date).isSame(dayjs(d), 'day'));
 
-                if (existing) {
-                    return {
-                        ...existing,
-                        status: onLeave ? 'On Leave' : existing.status,
-                        leave_status: onLeave ? onLeave.leave_type?.name || 'On Leave' : null
-                    };
-                }
-
-                let status = 'Not Marked';
+                let status = existing ? existing.status : 'Not Marked';
                 if (onLeave) status = 'On Leave';
                 else if (holiday) status = 'Holiday';
-                else if (!hasShift) status = 'Weekend';
+                else if (!hasShift && !existing) status = 'Weekend';
+                else if (!hasShift && existing) {
+                    // if it's weekend BUT user has record, it should show 'present' or whatever the record has
+                    status = existing.status;
+                }
 
                 return {
+                    ...(existing || {}),
                     user_id: selectedUserForAttendance.id,
                     date: d,
+                    day: dayName,
+                    office_status: (holiday || !hasShift) ? 'Closed' : 'Open',
                     status: status,
                     leave_status: onLeave ? onLeave.leave_type?.name || 'On Leave' : (holiday ? holiday.title : null),
-                    isPlaceholder: true
+                    isPlaceholder: !existing
                 };
             }).sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix());
         }, [selectedUserForAttendance, attendances, filterDate, getDaysInMonth, leaveRequests, holidays]);
@@ -568,7 +641,7 @@ const UserAttendance =
                 check_out: rec.check_out ? dayjs(rec.check_out, 'HH:mm:ss') : null,
                 break_start: rec.break_start ? dayjs(rec.break_start, 'HH:mm:ss') : null,
                 break_end: rec.break_end ? dayjs(rec.break_end, 'HH:mm:ss') : null,
-                status: rec.isPlaceholder ? 'present' : rec.status,
+                status: rec.status === 'Not Marked' || rec.status === 'Weekend' || rec.status === 'Holiday' ? 'present' : rec.status,
                 worked_from: rec.worked_from || 'office',
                 total_regular_hours: rec.total_regular_hours,
                 total_outside_hours: Array.isArray(rec.total_outside_hours) ? rec.total_outside_hours.map(h => ({
@@ -606,8 +679,14 @@ const UserAttendance =
             form.validateFields().then(async values => {
 
                 setLoading(true);
+                let finalStatus = values.status || (editingAttendance?.status || 'present');
+                if (finalStatus === 'Not Marked' || finalStatus === 'Weekend' || finalStatus === 'Holiday') {
+                    finalStatus = 'present';
+                }
+
                 const submissionData = {
                     ...values,
+                    status: finalStatus,
                     date: values.date.format('YYYY-MM-DD'),
                     check_in: values.check_in ? values.check_in.format('HH:mm:ss') : null,
                     check_out: values.check_out ? values.check_out.format('HH:mm:ss') : null,
@@ -642,9 +721,34 @@ const UserAttendance =
             });
         };
 
+        const handleToggleIpRestriction = async (user, restricted) => {
+            try {
+                await axios.post(route('users-attendance.toggle-ip-restriction'), {
+                    user_id: user.id,
+                    ip_restriction: restricted
+                });
+                api.success({
+                    message: "Permission Updated",
+                    description: `IP restriction for ${user.name} set to ${restricted ? 'ON' : 'OFF'}`,
+                    placement: "topRight"
+                });
+                router.reload({ only: ['users'] });
+            } catch (error) {
+                api.error({
+                    message: "Error",
+                    description: "Failed to update IP restriction",
+                    placement: "topRight"
+                });
+            }
+        };
+
         const handleConfigSubmit = (values) => {
             setLoading(true);
-            router.post(route('payroll.config.update'), { settings: values }, {
+            const submissionData = {
+                ...values,
+                user_attendace_allowed_ips: allowedIPs
+            };
+            router.post(route('payroll.config.update'), { settings: submissionData }, {
                 onSuccess: () => {
                     setIsConfigModalOpen(false);
                     api.success({ message: 'Success', description: 'Attendance settings updated successfully' });
@@ -952,14 +1056,18 @@ const UserAttendance =
                             </div>
                         </div>
 
-                        <Form.Item name="status" label="Status" rules={[{ required: true }]}>
-                            <Select options={[
-                                { label: 'Present', value: 'present' },
-                                { label: 'Absent', value: 'absent' },
-                                { label: 'Leave', value: 'leave' },
-                                { label: 'No Action', value: 'no action' }
-                            ]} />
-                        </Form.Item>
+                        <div className="mb-3">
+                            <label className="fw-bold small text-muted d-block mb-1">Status</label>
+                            <Tag color={
+                                editingAttendance?.status === 'present' || editingAttendance?.status === 'late' || editingAttendance?.status === 'absent' ? 'success' :
+                                    editingAttendance?.status === 'On Leave' || editingAttendance?.status === 'leave' ? 'blue' :
+                                        editingAttendance?.status === 'Weekend' || editingAttendance?.status === 'Holiday' ? 'default' :
+                                            editingAttendance?.status === 'Not Marked' ? 'processing' : 'default'
+                            } className="px-3 py-1 fw-bold">
+                                {(editingAttendance?.status || 'Not Marked').toUpperCase()}
+                            </Tag>
+                        </div>
+                        <Form.Item name="status" noStyle><Input type="hidden" /></Form.Item>
                         <Form.Item name="notes" label="Notes"><Input.TextArea rows={3} /></Form.Item>
                     </Form>
                 </Modal>
@@ -972,6 +1080,7 @@ const UserAttendance =
                     confirmLoading={loading}
                     width={500}
                     centered
+                    okText="Apply To All"
                 >
                     <Form
                         form={configForm}
@@ -997,10 +1106,53 @@ const UserAttendance =
                             >
                                 <InputNumber style={{ width: '100%' }} min={0} max={24} precision={1} placeholder="System default: 4 hours" />
                             </Form.Item>
+
+                            <div className="border-top pt-3 mt-3">
+                                <label className="form-label text-muted small fw-bold mb-2">ALLOWED OFFICE IPs</label>
+                                <div className="d-flex gap-2 mb-3">
+                                    <Input
+                                        placeholder="Enter IP Address"
+                                        value={newIp}
+                                        onChange={(e) => setNewIp(e.target.value)}
+                                        onPressEnter={(e) => {
+                                            e.preventDefault();
+                                            if (newIp && !allowedIPs.includes(newIp)) {
+                                                setAllowedIPs([...allowedIPs, newIp]);
+                                                setNewIp("");
+                                            }
+                                        }}
+                                    />
+                                    <Button
+                                        type="primary"
+                                        onClick={() => {
+                                            if (newIp && !allowedIPs.includes(newIp)) {
+                                                setAllowedIPs([...allowedIPs, newIp]);
+                                                setNewIp("");
+                                            }
+                                        }}
+                                    >
+                                        Add
+                                    </Button>
+                                </div>
+                                <div className="d-flex flex-wrap gap-2">
+                                    {allowedIPs.length > 0 ? allowedIPs.map((ip, idx) => (
+                                        <Tag
+                                            key={idx}
+                                            closable
+                                            onClose={() => setAllowedIPs(allowedIPs.filter((_, i) => i !== idx))}
+                                            className="px-2 py-1"
+                                        >
+                                            {ip}
+                                        </Tag>
+                                    )) : (
+                                        <span className="text-muted small">No IPs added. IP restriction will block all if enabled for user.</span>
+                                    )}
+                                </div>
+                            </div>
                         </Card>
 
-                        <div className="mt-3 text-muted" style={{ fontSize: '12px' }}>
-                            <p className="mb-1"><strong>Note:</strong> These settings control the time window during which attendance buttons are active.</p>
+                        <div className="mt-3 text-muted" style={{ fontSize: '11px' }}>
+                            <p className="mb-1"><strong>Note:</strong> Buffers control the check-in/out window. Allowed IPs restrict attendance marking to specific locations for users with IP restriction enabled.</p>
                         </div>
                     </Form>
                 </Modal>

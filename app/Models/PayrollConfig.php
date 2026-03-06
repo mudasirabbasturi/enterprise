@@ -10,4 +10,8 @@ class PayrollConfig extends Model
     use HasFactory;
 
     protected $fillable = ['key', 'value'];
+
+    protected $casts = [
+        'value' => 'json'
+    ];
 }

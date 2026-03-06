@@ -43,6 +43,7 @@ class User extends Authenticatable
         'designation_id',
         'role_id',
         'is_permission_granted',
+        'ip_restriction',
     ];
 
     protected $guarded = ['employee_id'];
@@ -58,6 +59,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_permission_granted' => 'boolean',
+            'ip_restriction' => 'boolean',
         ];
     }
 

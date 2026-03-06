@@ -329,17 +329,17 @@ export const getSidebarItems = ({
                 },
               ]
               : []),
-            ...(can("View User Allowed IP")
-              ? [
-                {
-                  key: "allowed-ips",
-                  label: (
-                    <Link href={route("allowed-ips.index")}>Allowed IPs</Link>
-                  ),
-                  icon: <CheckCircleOutlined />,
-                },
-              ]
-              : []),
+            // ...(can("View User Allowed IP")
+            //   ? [
+            //     {
+            //       key: "allowed-ips",
+            //       label: (
+            //         <Link href={route("allowed-ips.index")}>Allowed IPs</Link>
+            //       ),
+            //       icon: <CheckCircleOutlined />,
+            //     },
+            //   ]
+            //   : []),
             ...(can("View User Attendance")
               ? [
                 {

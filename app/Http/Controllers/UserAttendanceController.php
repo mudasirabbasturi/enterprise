@@ -41,6 +41,7 @@ class UserAttendanceController extends Controller
             'userShiftSchedules' => $user->userShiftSchedules,
             'selectedYear' => (int)$year,
             'holidays' => $holidays,
+            'config' => \App\Models\PayrollConfig::all()->pluck('value', 'key')->all(),
         ]);
     }
 
@@ -49,20 +50,18 @@ class UserAttendanceController extends Controller
         $month = $request->input('month', now()->month);
         $year = $request->input('year', now()->year);
 
-        // Fetch attendances for specific month/year if needed, 
-        // or just return all and filter on frontend for now to match the reference logic.
-        // However, for performance and "full functionality", we should filter in backend.
+        // Fetch attendances for specific month/year
         $attendances = UserAttendance::with('user')
             ->whereYear('date', $year)
             ->whereMonth('date', $month)
             ->get();
 
-        // Fetch users with branch, allowed IPs, and shift schedules (with shift details) for the master grid
-        $users = User::with(['branch', 'userAllowedIp' => function($query) {
-            $query->select('user_id', 'ip_address', 'notes');
-        }, 'userShiftSchedules.shift'])->select('id', 'name', 'email', 'branch_id')->get();
+        // Fetch users with branch and shift schedules for the master grid
+        $users = User::with(['branch', 'userShiftSchedules.shift'])
+            ->select('id', 'name', 'email', 'branch_id', 'is_permission_granted', 'ip_restriction')
+            ->get();
 
-        // Fetch approved leave requests for the month to show in attendance
+        // Fetch approved leave requests for the month
         $leaveRequests = \App\Models\LeaveRequest::with('leaveType')
             ->where('status', 'approved')
             ->where(function($query) use ($year, $month) {
@@ -79,7 +78,7 @@ class UserAttendanceController extends Controller
             ->whereMonth('date', $month)
             ->get();
 
-        $config = \App\Models\PayrollConfig::pluck('value', 'key')->all();
+        $config = \App\Models\PayrollConfig::all()->pluck('value', 'key')->all();
 
         return Inertia::render('Pages/WorkSchedule/UserAttendance', [
             'attendances' => $attendances,
@@ -111,24 +110,47 @@ class UserAttendanceController extends Controller
         ]);
 
         // Shift Restriction Logic
-        $user = User::with(['userAllowedIp', 'userShiftSchedules.shift'])->findOrFail($validated['user_id']);
+        $user = User::with(['userShiftSchedules.shift'])->findOrFail($validated['user_id']);
         $dayName = \Carbon\Carbon::parse($validated['date'])->format('l');
         $shiftSchedule = $user->userShiftSchedules->where('day', $dayName)->first();
 
         if ($shiftSchedule && $shiftSchedule->shift) {
             $shift = $shiftSchedule->shift;
-            $config = \App\Models\PayrollConfig::pluck('value', 'key')->all();
+            $config = \App\Models\PayrollConfig::all()->pluck('value', 'key')->all();
             $earlyBuffer = floatval($config['attendance_early_checkin_max_hours'] ?? 2);
             $lateBuffer = floatval($config['attendance_late_checkout_max_hours'] ?? 4);
+            $needsIpCheck = false;
+            if ($user->ip_restriction) {
+                if ($request->input('manual_hours_save')) {
+                    $outsideHours = $request->input('total_outside_hours', []);
+                    if (is_array($outsideHours)) {
+                        foreach ($outsideHours as $entry) {
+                            if (($entry['work_from'] ?? 'office') === 'office') {
+                                $needsIpCheck = true;
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    if (($validated['worked_from'] ?? 'office') === 'office') {
+                        $needsIpCheck = true;
+                    }
+                }
+            }
 
-            $allowedIps = $user->userAllowedIp->pluck('ip_address')->toArray();
+            if ($needsIpCheck) {
+                $allowedIps = $config['user_attendace_allowed_ips'] ?? [];
+                if (!is_array($allowedIps)) {
+                    $allowedIps = json_decode($allowedIps, true) ?: [];
+                }
 
-            if (count($allowedIps) > 0) {
-                $currentIp = $request->ip();
+                $currentIp = $this->getClientIp($request);
                 if (!in_array($currentIp, $allowedIps)) {
-                     return redirect()->back()->withErrors([
-                        'user_id' => "Access Denied: Your IP ($currentIp) is not authorized for this user's attendance."
-                    ]);
+                    $errorMessage = "Access Denied: Your IP ($currentIp) is not authorized for office attendance.";
+                    if ($request->ajax() || $request->wantsJson()) {
+                        return response()->json(['message' => $errorMessage], 403);
+                    }
+                    return redirect()->back()->withErrors(['user_id' => $errorMessage]);
                 }
             }
 
@@ -137,10 +159,13 @@ class UserAttendanceController extends Controller
                 $checkInTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $validated['check_in']);
                 $shiftStartTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $shift->start_time);
                 
-                // If check-in is too early
                 if ($checkInTime->lt($shiftStartTime->copy()->subHours($earlyBuffer))) {
+                    $errorMessage = "Too early! You can only check in up to {$earlyBuffer} hours before your shift starts (" . $shift->start_time . ").";
+                    if ($request->ajax() || $request->wantsJson()) {
+                        return response()->json(['message' => $errorMessage], 422);
+                    }
                     return redirect()->back()->withErrors([
-                        'check_in' => "Too early! You can only check in up to {$earlyBuffer} hours before your shift starts (" . $shift->start_time . ")."
+                        'check_in' => $errorMessage
                     ]);
                 }
             }
@@ -150,18 +175,20 @@ class UserAttendanceController extends Controller
                 $checkOutTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $validated['check_out']);
                 $shiftEndTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $shift->end_time);
                 
-                // Handle overnight shift end time
                 if ($shift->end_time < $shift->start_time) {
                     $shiftEndTime->addDay();
-                    // If check_out is early (e.g. 11 PM) on the same day as check_in (10 PM), it might be before end_time (2 AM next day)
                     if ($checkOutTime->lt(\Carbon\Carbon::parse($validated['date'] . ' ' . $shift->start_time))) {
                         $checkOutTime->addDay();
                     }
                 }
 
                 if ($checkOutTime->gt($shiftEndTime->copy()->addHours($lateBuffer))) {
+                    $errorMessage = "Too late! You cannot check out more than {$lateBuffer} hours after your shift ends (" . $shift->end_time . ").";
+                    if ($request->ajax() || $request->wantsJson()) {
+                        return response()->json(['message' => $errorMessage], 422);
+                    }
                     return redirect()->back()->withErrors([
-                        'check_out' => "Too late! You cannot check out more than {$lateBuffer} hours after your shift ends (" . $shift->end_time . ")."
+                        'check_out' => $errorMessage
                     ]);
                 }
             }
@@ -208,24 +235,47 @@ class UserAttendanceController extends Controller
         ]);
 
         // Shift Restriction Logic
-        $user = User::with(['userAllowedIp', 'userShiftSchedules.shift'])->findOrFail($validated['user_id']);
+        $user = User::with(['userShiftSchedules.shift'])->findOrFail($validated['user_id']);
         $dayName = \Carbon\Carbon::parse($validated['date'])->format('l');
         $shiftSchedule = $user->userShiftSchedules->where('day', $dayName)->first();
 
         if ($shiftSchedule && $shiftSchedule->shift) {
             $shift = $shiftSchedule->shift;
-            $config = \App\Models\PayrollConfig::pluck('value', 'key')->all();
+            $config = \App\Models\PayrollConfig::all()->pluck('value', 'key')->all();
             $earlyBuffer = floatval($config['attendance_early_checkin_max_hours'] ?? 2);
             $lateBuffer = floatval($config['attendance_late_checkout_max_hours'] ?? 4);
+            $needsIpCheck = false;
+            if ($user->ip_restriction) {
+                if ($request->input('manual_hours_save')) {
+                    $outsideHours = $request->input('total_outside_hours', []);
+                    if (is_array($outsideHours)) {
+                        foreach ($outsideHours as $entry) {
+                            if (($entry['work_from'] ?? 'office') === 'office') {
+                                $needsIpCheck = true;
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    if (($validated['worked_from'] ?? 'office') === 'office') {
+                        $needsIpCheck = true;
+                    }
+                }
+            }
 
-            $allowedIps = $user->userAllowedIp->pluck('ip_address')->toArray();
+            if ($needsIpCheck) {
+                $allowedIps = $config['user_attendace_allowed_ips'] ?? [];
+                if (!is_array($allowedIps)) {
+                    $allowedIps = json_decode($allowedIps, true) ?: [];
+                }
 
-            if (count($allowedIps) > 0) {
-                $currentIp = $request->ip();
+                $currentIp = $this->getClientIp($request);
                 if (!in_array($currentIp, $allowedIps)) {
-                     return redirect()->back()->withErrors([
-                        'user_id' => "Access Denied: Your IP ($currentIp) is not authorized for this user's attendance."
-                    ]);
+                    $errorMessage = "Access Denied: Your IP ($currentIp) is not authorized for office attendance.";
+                    if ($request->ajax() || $request->wantsJson()) {
+                        return response()->json(['message' => $errorMessage], 403);
+                    }
+                    return redirect()->back()->withErrors(['user_id' => $errorMessage]);
                 }
             }
 
@@ -235,8 +285,12 @@ class UserAttendanceController extends Controller
                 $shiftStartTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $shift->start_time);
                 
                 if ($checkInTime->lt($shiftStartTime->copy()->subHours($earlyBuffer))) {
+                    $errorMessage = "Too early! You can only check in up to {$earlyBuffer} hours before your shift starts (" . $shift->start_time . ").";
+                    if ($request->ajax() || $request->wantsJson()) {
+                        return response()->json(['message' => $errorMessage], 422);
+                    }
                     return redirect()->back()->withErrors([
-                        'check_in' => "Too early! You can only check in up to {$earlyBuffer} hours before your shift starts (" . $shift->start_time . ")."
+                        'check_in' => $errorMessage
                     ]);
                 }
             }
@@ -254,8 +308,12 @@ class UserAttendanceController extends Controller
                 }
 
                 if ($checkOutTime->gt($shiftEndTime->copy()->addHours($lateBuffer))) {
+                    $errorMessage = "Too late! You cannot check out more than {$lateBuffer} hours after your shift ends (" . $shift->end_time . ").";
+                    if ($request->ajax() || $request->wantsJson()) {
+                        return response()->json(['message' => $errorMessage], 422);
+                    }
                     return redirect()->back()->withErrors([
-                        'check_out' => "Too late! You cannot check out more than {$lateBuffer} hours after your shift ends (" . $shift->end_time . ")."
+                        'check_out' => $errorMessage
                     ]);
                 }
             }
@@ -275,6 +333,20 @@ class UserAttendanceController extends Controller
         return redirect()->back()->with('message', 'Attendance record updated successfully.');
     }
 
+    public function ToggleIpRestriction(Request $request)
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'ip_restriction' => 'required|boolean',
+        ]);
+
+        $user = User::findOrFail($validated['user_id']);
+        $user->ip_restriction = $validated['ip_restriction'];
+        $user->save();
+
+        return response()->json(['message' => 'IP restriction updated successfully.']);
+    }
+
     public function Destroy(Request $request, $id)
     {
         $attendance = UserAttendance::findOrFail($id);
@@ -285,5 +357,27 @@ class UserAttendanceController extends Controller
         }
 
         return redirect()->back()->with('message', 'Attendance record deleted successfully.');
+    }
+
+    public function GetCurrentIp(Request $request)
+    {
+        return response()->json(['ip' => $this->getClientIp($request)]);
+    }
+
+    protected function getClientIp(Request $request)
+    {
+        $ip = $request->ip();
+
+        // If running locally (localhost), try to fetch the actual public IP for testing
+        if ($ip === '127.0.0.1' || $ip === '::1') {
+            try {
+                $ctx = stream_context_create(['http' => ['timeout' => 3]]);
+                $externalIp = @file_get_contents('https://api.ipify.org', false, $ctx);
+                if ($externalIp && filter_var($externalIp, FILTER_VALIDATE_IP)) {
+                    return $externalIp;
+                }
+            } catch (\Exception $e) {}
+        }
+        return $ip;
     }
 }

@@ -149,7 +149,6 @@ Route::prefix('api/test')->group(function () {
     Route::get('/user-tracking', [TrackingController::class, 'index'])->name('user.tracking');
 
     /** Work Schedule Routes */
-    /** Work Schedule Routes */
     Route::get('/schedule', [WorkScheduleController::class, 'Index'])->name('work-schedule.index');
     
     // Shifts
@@ -167,17 +166,14 @@ Route::prefix('api/test')->group(function () {
     Route::delete('/schedule/users-schedules/bulk-destroy', [UserShiftScheduleController::class, 'BulkDestroy'])->name('users-schedules.bulk-destroy');
     Route::delete('/schedule/users-schedules/destroy/{id}', [UserShiftScheduleController::class, 'Destroy'])->name('users-schedules.destroy');
 
-    // Allowed IPs
-    Route::get('/schedule/allowed-ips', [UserAllowedIpController::class, 'Index'])->name('allowed-ips.index');
-    Route::post('/schedule/allowed-ips/store', [UserAllowedIpController::class, 'Store'])->name('allowed-ips.store');
-    Route::put('/schedule/allowed-ips/update/{id}', [UserAllowedIpController::class, 'Update'])->name('allowed-ips.update');
-    Route::delete('/schedule/allowed-ips/destroy/{id}', [UserAllowedIpController::class, 'Destroy'])->name('allowed-ips.destroy');
 
     // User Attendance
     Route::get('/schedule/my-attendance', [UserAttendanceController::class, 'MyAttendance'])->name('my-attendance.index');
     Route::get('/schedule/users-attendance', [UserAttendanceController::class, 'Index'])->name('users-attendance.index');
     Route::post('/schedule/users-attendance/store', [UserAttendanceController::class, 'Store'])->name('users-attendance.store');
     Route::put('/schedule/users-attendance/update/{id}', [UserAttendanceController::class, 'Update'])->name('users-attendance.update');
+    Route::post('/schedule/users-attendance/toggle-ip-restriction', [UserAttendanceController::class, 'ToggleIpRestriction'])->name('users-attendance.toggle-ip-restriction');
+    Route::get('/get-current-ip', [UserAttendanceController::class, 'GetCurrentIp'])->name('get-current-ip');
     Route::delete('/schedule/users-attendance/destroy/{id}', [UserAttendanceController::class, 'Destroy'])->name('users-attendance.destroy');
 
     /** Leave Management Routes */

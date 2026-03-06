@@ -14,18 +14,24 @@ import {
     Tag,
     dayjs,
     Card,
-    CheckOutlined, PlusCircleOutlined, CloseCircleFilled,
+    CheckOutlined, PlusCircleOutlined, CloseCircleFilled, InfoCircleOutlined,
     DeleteOutlined,
     HomeOutlined,
     ApartmentOutlined,
     Select, EditOutlined, LoginOutlined, LogoutOutlined,
     Badge,
     Calendar,
-    Alert
+    Alert,
+    Button,
+    Typography,
+    Divider,
+    Space
 } from "@shared/ui";
+
+const { Text, Title } = Typography;
 import MainLayout from "@layout";
 
-const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShiftSchedules, holidays }) => {
+const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShiftSchedules, holidays, config }) => {
     const [api, contextHolder] = notification.useNotification();
     const [loading, setLoading] = useState(false);
     const [isAttendanceGridModalOpen, setIsAttendanceGridModalOpen] = useState(false);
@@ -34,6 +40,7 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
     const [isActionModalOpen, setIsActionModalOpen] = useState(false);
     const [currentActionRecord, setCurrentActionRecord] = useState(null);
     const [newOutsideEntry, setNewOutsideEntry] = useState({ hh: '01', mm: '00', work_from: 'office' });
+    const [isPenaltyInfoModalOpen, setIsPenaltyInfoModalOpen] = useState(false);
 
     const user = auth.user;
     const [filterYear, setFilterYear] = useState(selectedYear);
@@ -117,7 +124,50 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         return formatMinsToHrs(totalMins);
     };
 
-    const handleCheckIn = (date) => {
+    const validateIpAccess = async (type = 'regular') => {
+        let needsCheck = false;
+        if (type === 'regular') {
+            needsCheck = workedFrom === 'office';
+        } else {
+            const entries = currentActionRecord?.total_outside_hours || [];
+            needsCheck = entries.some(e => (e.work_from || 'office') === 'office');
+        }
+
+        if (!user.ip_restriction || !needsCheck) return true;
+
+        try {
+            const response = await axios.get(route('get-current-ip'));
+            const currentIp = response.data.ip;
+
+            let allowedIps = config?.user_attendace_allowed_ips || [];
+            if (typeof allowedIps === 'string') {
+                try { allowedIps = JSON.parse(allowedIps); } catch (e) { allowedIps = []; }
+            }
+            if (!Array.isArray(allowedIps)) allowedIps = [];
+
+            if (!allowedIps.includes(currentIp)) {
+                api.error({
+                    message: "Access Denied",
+                    description: `Your current IP (${currentIp}) is not authorized for ${type === 'manual' ? 'manual' : 'regular'} office attendance.`,
+                    placement: "topRight"
+                });
+                return false;
+            }
+            return true;
+        } catch (error) {
+            api.error({
+                message: "IP Verification Failed",
+                description: "Could not verify your IP address. Please check your internet connection.",
+                placement: "topRight"
+            });
+            return false;
+        }
+    };
+
+    const handleCheckIn = async (date) => {
+        const isAllowed = await validateIpAccess();
+        if (!isAllowed) return;
+
         setLoading(true);
         axios.post(route('users-attendance.store'), {
             user_id: user.id,
@@ -134,11 +184,15 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         }).finally(() => setLoading(false));
     };
 
-    const handleCheckOut = (record) => {
+    const handleCheckOut = async (record) => {
+        const isAllowed = await validateIpAccess();
+        if (!isAllowed) return;
+
         setLoading(true);
         axios.put(route('users-attendance.update', record.id), {
             ...record,
-            check_out: dayjs().format('HH:mm:ss')
+            check_out: dayjs().format('HH:mm:ss'),
+            worked_from: workedFrom, // Ensure latest workedFrom is sent
         }).then(() => {
             api.success({ message: "Checked Out Successfully" });
             setIsActionModalOpen(false);
@@ -148,11 +202,15 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         }).finally(() => setLoading(false));
     };
 
-    const handleBreakStart = (record) => {
+    const handleBreakStart = async (record) => {
+        const isAllowed = await validateIpAccess();
+        if (!isAllowed) return;
+
         setLoading(true);
         axios.put(route('users-attendance.update', record.id), {
             ...record,
-            break_start: dayjs().format('HH:mm:ss')
+            break_start: dayjs().format('HH:mm:ss'),
+            worked_from: workedFrom,
         }).then(() => {
             api.success({ message: "Break Started" });
             setIsActionModalOpen(false);
@@ -162,11 +220,15 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         }).finally(() => setLoading(false));
     };
 
-    const handleBreakEnd = (record) => {
+    const handleBreakEnd = async (record) => {
+        const isAllowed = await validateIpAccess();
+        if (!isAllowed) return;
+
         setLoading(true);
         axios.put(route('users-attendance.update', record.id), {
             ...record,
-            break_end: dayjs().format('HH:mm:ss')
+            break_end: dayjs().format('HH:mm:ss'),
+            worked_from: workedFrom,
         }).then(() => {
             api.success({ message: "Break Ended" });
             setIsActionModalOpen(false);
@@ -517,6 +579,7 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                                 className="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center w-100"
                                 onClick={() => {
                                     setCurrentActionRecord(params.data);
+                                    setWorkedFrom(params.data.worked_from || 'office');
                                     setIsActionModalOpen(true);
                                 }}
                             >
@@ -536,6 +599,7 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                             className={`btn btn-sm d-flex align-items-center justify-content-center w-100 ${isOffDay ? 'btn-outline-warning' : 'btn-success'}`}
                             onClick={() => {
                                 setCurrentActionRecord(params.data);
+                                setWorkedFrom(params.data.worked_from || 'office');
                                 setIsActionModalOpen(true);
                             }}
                         >
@@ -641,6 +705,15 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                             style={{ width: 120 }}
                             options={years.map(y => ({ label: y, value: y }))}
                         />
+                        <Button
+                            type="primary"
+                            ghost
+                            icon={<InfoCircleOutlined />}
+                            onClick={() => setIsPenaltyInfoModalOpen(true)}
+                            className="d-flex align-items-center"
+                        >
+                            Must Read Rules
+                        </Button>
                     </div>
                 </div>
 
@@ -939,7 +1012,9 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                                 <button
                                     className="btn btn-success w-100 py-2"
                                     disabled={loading || !Array.isArray(currentActionRecord.total_outside_hours) || currentActionRecord.total_outside_hours.length === 0}
-                                    onClick={() => {
+                                    onClick={async () => {
+                                        const isAllowed = await validateIpAccess('manual');
+                                        if (!isAllowed) return;
                                         setLoading(true);
                                         const url = currentActionRecord.isPlaceholder ? route('users-attendance.store') : route('users-attendance.update', currentActionRecord.id);
                                         const method = currentActionRecord.isPlaceholder ? 'post' : 'put';
@@ -954,6 +1029,7 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                                             user_id: user.id,
                                             status: finalStatus,
                                             worked_from: workedFrom,
+                                            manual_hours_save: true,
                                         }).then(response => {
                                             api.success({ message: "Outside Hours Saved" });
                                             setIsActionModalOpen(false);
@@ -981,7 +1057,7 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                                         </div>
                                     </div>
 
-                                    <div className="mb-3">
+                                    {/* <div className="mb-3">
                                         <label className="fw-bold small text-muted d-block mb-1">Status (Read-only)</label>
                                         <Tag color={
                                             currentActionRecord.status === 'present' ? 'success' :
@@ -990,14 +1066,19 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                                         } className="px-3 py-1 fw-bold">
                                             {currentActionRecord.status.toUpperCase()}
                                         </Tag>
-                                    </div>
+                                    </div> */}
 
                                     <button
                                         className="btn btn-primary w-100 mt-2"
                                         disabled={loading}
-                                        onClick={() => {
+                                        onClick={async () => {
+                                            const isAllowed = await validateIpAccess('regular');
+                                            if (!isAllowed) return;
                                             setLoading(true);
-                                            axios.put(route('users-attendance.update', currentActionRecord.id), currentActionRecord)
+                                            axios.put(route('users-attendance.update', currentActionRecord.id), {
+                                                ...currentActionRecord,
+                                                worked_from: workedFrom
+                                            })
                                                 .then(response => {
                                                     api.success({ message: "Attendance Updated Successfully" });
                                                     setIsActionModalOpen(false);
@@ -1016,6 +1097,98 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                         </div>
                     </div>
                 )}
+            </Modal>
+
+            <Modal
+                title={<Space><InfoCircleOutlined className="text-primary" /> Attendance & Penalty Rules</Space>}
+                open={isPenaltyInfoModalOpen}
+                onCancel={() => setIsPenaltyInfoModalOpen(false)}
+                footer={null}
+                width={700}
+                centered
+                bodyStyle={{ padding: '24px' }}
+            >
+                <div className="penalty-rules-container">
+                    <Alert
+                        message="Please Read Carefully"
+                        description="Understanding these rules will help you avoid unnecessary salary deductions. All penalties are calculated monthly based on the global payroll configuration."
+                        type="info"
+                        showIcon
+                        className="mb-4"
+                    />
+
+                    <div className="row g-4">
+                        <div className="col-md-6">
+                            <Card size="small" title={<Text strong>Late Arrival Rules</Text>} className="h-100 border-0 shadow-sm bg-light">
+                                <ul className="ps-3 mb-0 small">
+                                    <li className="mb-2">
+                                        <Text strong>15-Minute Grace:</Text> You have 15 minutes of grace after your shift start time. Arriving after this is marked as "Late".
+                                    </li>
+                                    <li className="mb-2">
+                                        <Text strong>Late Grace (Monthly):</Text> A specific number of late days (e.g., 2 or 3) are allowed without penalty each month.
+                                    </li>
+                                    <li>
+                                        <Text strong>Late Penalty:</Text> After exceeding the grace count, each late day will result in a fixed deduction (e.g., PKR 500) from your salary.
+                                    </li>
+                                </ul>
+                            </Card>
+                        </div>
+
+                        <div className="col-md-6">
+                            <Card size="small" title={<Text strong>Missing Check-in/out</Text>} className="h-100 border-0 shadow-sm bg-light">
+                                <ul className="ps-3 mb-0 small">
+                                    <li className="mb-2">
+                                        <Text strong>Incomplete Logs:</Text> If you forget to check in OR check out, your attendance is flagged as "Missing".
+                                    </li>
+                                    <li className="mb-2">
+                                        <Text strong>Missing Grace:</Text> You are allowed a small number of forgotten logs (Missing Grace) per month.
+                                    </li>
+                                    <li>
+                                        <Text strong>Missing Penalty:</Text> Exceeding the grace will result in a per-day penalty (Missing Penalty) regardless of hours worked.
+                                    </li>
+                                </ul>
+                            </Card>
+                        </div>
+
+                        <div className="col-md-6">
+                            <Card size="small" title={<Text strong>Undertime & Absents</Text>} className="h-100 border-0 shadow-sm bg-light">
+                                <ul className="ps-3 mb-0 small">
+                                    <li className="mb-2">
+                                        <Text strong>Working Hours:</Text> You must complete your shift duration (net of breaks).
+                                    </li>
+                                    <li className="mb-2">
+                                        <Text strong>Undertime Penalty:</Text> Each hour of work missing from your required shift time is deducted at your hourly rate.
+                                    </li>
+                                    <li>
+                                        <Text strong>Absence:</Text> Total monthly required hours are calculated. Full days missed are deducted as per "Absent Penalty".
+                                    </li>
+                                </ul>
+                            </Card>
+                        </div>
+
+                        <div className="col-md-6">
+                            <Card size="small" title={<Text strong>Working From Home (WFH)</Text>} className="h-100 border-0 shadow-sm bg-light">
+                                <ul className="ps-3 mb-0 small">
+                                    <li className="mb-2">
+                                        <Text strong>IP Restriction:</Text> Office attendance must be marked from an authorized office IP address.
+                                    </li>
+                                    <li className="mb-2">
+                                        <Text strong>Home Shifts:</Text> If your shift is from home, IP restriction is bypassed.
+                                    </li>
+                                    <li>
+                                        <Text strong>Manual Hours:</Text> Outside hours logged from home are also exempt from IP checks but require admin approval.
+                                    </li>
+                                </ul>
+                            </Card>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-top text-end">
+                        <Button type="primary" onClick={() => setIsPenaltyInfoModalOpen(false)}>
+                            I Understand
+                        </Button>
+                    </div>
+                </div>
             </Modal>
         </>
     );

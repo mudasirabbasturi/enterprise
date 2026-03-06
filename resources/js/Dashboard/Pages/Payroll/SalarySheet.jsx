@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Head, Link, Breadcrumb, EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, DownloadOutlined, DollarOutlined, SettingOutlined, CheckCircleFilled, router, notification, PlusCircleOutlined, PrinterOutlined, CalendarOutlined, dayjs, WalletOutlined } from "@shared/ui";
+import { Head, Link, Breadcrumb, EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, DownloadOutlined, DollarOutlined, SettingOutlined, ApartmentOutlined, CheckCircleFilled, router, notification, PlusCircleOutlined, PrinterOutlined, CalendarOutlined, dayjs, WalletOutlined, HomeOutlined } from "@shared/ui";
 import { AgGridReact, gridTheme, defaultColDef } from "@agConfig/AgGridConfig";
 import { Select, Space, Button, Modal, Form, Input, InputNumber, DatePicker, Card, Typography, Divider, Tag, Tooltip, Dropdown, Menu } from 'antd';
 import MainLayout from "@layout";
@@ -101,6 +101,9 @@ const SalarySheet =
                 let approvedLeaveDays = 0;
                 let absentDays = 0;
                 let requiredDays = 0;
+                let manualHomeMins = 0;
+                let manualOfficeMins = 0;
+                let regularHomeMins = 0;
 
                 for (let d = 1; d <= lastDayOfMonth; d++) {
                     const dateObj = startOfMonth.date(d);
@@ -163,6 +166,10 @@ const SalarySheet =
                                 overtimeHours += (netWorked - shiftDur) / 60;
                             }
 
+                            if (att.worked_from === 'home') {
+                                regularHomeMins += netWorked;
+                            }
+
                             // Late calculation (15 min grace)
                             if (att.check_in) {
                                 const sTotal = getMinutes(shift.start_time);
@@ -176,6 +183,20 @@ const SalarySheet =
                             absentDays++;
                             absentHours += shiftDur / 60;
                         }
+                    }
+
+                    // Manual Outside Hours Calculation (Approved only) - regardless of shift
+                    const att_manual = userAttendances.find(a => a.date === dateStr);
+                    if (att_manual && Array.isArray(att_manual.total_outside_hours)) {
+                        att_manual.total_outside_hours.forEach(m => {
+                            if (m.status !== 'approved' && m.status !== 'Approved') return;
+                            const mins = getMinutes(m.manual_hours);
+                            if (m.work_from === 'home') {
+                                manualHomeMins += mins;
+                            } else {
+                                manualOfficeMins += mins;
+                            }
+                        });
                     }
                 }
 
@@ -198,6 +219,17 @@ const SalarySheet =
                 const absentDeduction = absentHours * absentRate;
                 const undertimeDeduction = undertimeHours * undertimeRate;
                 const overtimeBonus = overtimeHours * overtimeRate;
+
+                // New Extra Earnings Calculation
+                const manualHomeRate = parseFloat(config?.manual_outside_home_rate || 0);
+                const manualOfficeRate = parseFloat(config?.manual_outside_office_rate || 0);
+                const regularHomeRate = parseFloat(config?.regular_home_rate || 0);
+
+                const manualHomeEarnings = (manualHomeMins / 60) * manualHomeRate;
+                const manualOfficeEarnings = (manualOfficeMins / 60) * manualOfficeRate;
+                const regularHomeBonus = (regularHomeMins / 60) * regularHomeRate;
+
+                const totalExtraEarnings = manualHomeEarnings + manualOfficeEarnings + regularHomeBonus;
 
                 // Late Penalty Calculation
                 const lateGraceCount = parseInt(config?.late_grace_count || 0);
@@ -242,7 +274,7 @@ const SalarySheet =
                 const deductionTotal = userAdjustments.filter(a => a.type === 'deduction').reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
 
                 const totalDeductions = absentDeduction + undertimeDeduction + latePenaltyDeduction + missingAttendancePenaltyDeduction + totalManualPenalty + totalTax + deductionTotal;
-                const netPay = Math.max(0, grossSalary + overtimeBonus + bonusTotal + manualPointsTotal + projectPointsAmount - totalDeductions);
+                const netPay = Math.max(0, grossSalary + overtimeBonus + totalExtraEarnings + bonusTotal + manualPointsTotal + projectPointsAmount - totalDeductions);
 
                 const payment = payments.find(p => p.user_id === user.id);
 
@@ -266,6 +298,9 @@ const SalarySheet =
                             { label: 'Approved Leaves', count: approvedLeaveDays, amount: 0, unit: 'd' },
                             { label: 'Overtime Bonus', count: overtimeHours.toFixed(2), rate: overtimeRate, amount: overtimeBonus, unit: 'hrs', status: 'Bonus' },
                             { label: 'Project Points', count: userProjectPoints, rate: pointRate, amount: projectPointsAmount, unit: 'pts', status: 'Bonus' },
+                            { label: 'Manual Hours (Home)', count: (manualHomeMins / 60).toFixed(2), rate: manualHomeRate, amount: manualHomeEarnings, unit: 'hrs', status: 'Bonus' },
+                            { label: 'Manual Hours (Office)', count: (manualOfficeMins / 60).toFixed(2), rate: manualOfficeRate, amount: manualOfficeEarnings, unit: 'hrs', status: 'Bonus' },
+                            { label: 'Regular Shift (Home)', count: (regularHomeMins / 60).toFixed(2), rate: regularHomeRate, amount: regularHomeBonus, unit: 'hrs', status: 'Bonus' },
                             ...userAdjustments.filter(a => a.type === 'bonus' || a.type === 'points').map((a, i) => ({
                                 label: a.label,
                                 amount: a.type === 'points' ? (parseFloat(a.amount) * pointRate) : parseFloat(a.amount),
@@ -291,6 +326,7 @@ const SalarySheet =
                     late_penalty_deduction: latePenaltyDeduction,
                     missing_attendance_penalty_deduction: missingAttendancePenaltyDeduction,
                     overtime_bonus: overtimeBonus,
+                    total_extra_earnings: totalExtraEarnings,
                     manual_penalty: totalManualPenalty,
                     bonus_total: bonusTotal,
                     adjustment_deduction: deductionTotal,
@@ -514,7 +550,7 @@ const SalarySheet =
             // manual_penalty here might already include existing deduction adjustments if we aren't careful.
             // Let's use the raw values if possible, or just be consistent.
 
-            const netPayCalculated = selectedUser.gross_salary + selectedUser.overtime_bonus + selectedUser.project_points_amount + bonusTotal - (
+            const netPayCalculated = selectedUser.gross_salary + selectedUser.overtime_bonus + selectedUser.total_extra_earnings + selectedUser.project_points_amount + bonusTotal - (
                 selectedUser.absent_deduction +
                 selectedUser.undertime_deduction +
                 selectedUser.total_tax +
@@ -532,6 +568,7 @@ const SalarySheet =
                 year: year,
                 gross_salary: selectedUser.gross_salary,
                 overtime_bonus: selectedUser.overtime_bonus,
+                total_extra_earnings: selectedUser.total_extra_earnings,
                 total_deductions: (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.late_penalty_deduction + selectedUser.missing_attendance_penalty_deduction + selectedUser.total_tax + deductionTotal + selectedUser.manual_penalty),
                 net_pay: netPayCalculated,
                 payment_date: values.payment_date.format('YYYY-MM-DD'),
@@ -802,6 +839,7 @@ const SalarySheet =
                                                     Rs. {Math.round(
                                                         selectedUser.gross_salary +
                                                         selectedUser.overtime_bonus +
+                                                        selectedUser.total_extra_earnings +
                                                         selectedUser.project_points_amount +
                                                         (watchedAdjustments?.filter(a => a?.type === 'bonus').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0) -
                                                         (
@@ -909,104 +947,145 @@ const SalarySheet =
                 </Modal>
 
                 <Modal
-                    title="Payroll Global Settings"
+                    title={<Space><SettingOutlined className="text-primary" /> Payroll Global Settings</Space>}
                     open={isConfigModalOpen}
                     onCancel={() => setIsConfigModalOpen(false)}
                     footer={null}
-                    width={500}
+                    width={650}
+                    centered
+                    bodyStyle={{ padding: '20px 24px' }}
                 >
-                    <Form form={configForm} layout="vertical" onFinish={handleConfigSubmit}>
-                        <div className="alert alert-info mb-4" style={{ fontSize: '13px' }}>
-                            These settings apply globally to all salary calculations for {monthOptions.find(m => m.value === month).label} {year}.
+                    <Form form={configForm} layout="vertical" onFinish={handleConfigSubmit} className="creative-form">
+                        <div className="alert alert-info mb-4 border-0 shadow-sm d-flex align-items-center gap-3" style={{ background: '#e6f7ff', borderRadius: '12px' }}>
+                            <div className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px', flexShrink: 0 }}>
+                                <SettingOutlined style={{ fontSize: '20px' }} />
+                            </div>
+                            <div>
+                                <Text strong style={{ display: 'block' }}>Global Calculation Rules</Text>
+                                <Text type="secondary" style={{ fontSize: '12px' }}>
+                                    Adjust rates and penalties applied to all salary calculations for <strong>{monthOptions.find(m => m.value === month).label} {year}</strong>.
+                                </Text>
+                            </div>
                         </div>
 
-                        <Form.Item
-                            name="absent_penalty_rate"
-                            label="Absent Penalty Rate (PKR per hour)"
-                            extra="If not set, it defaults to (Gross Salary / Total Required Hours)"
-                        >
-                            <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 500" />
-                        </Form.Item>
+                        <Divider orientation="left" className="m-0 mb-3"><Text strong type="secondary" style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Rate & Bonus Settings</Text></Divider>
+
+                        <div className="row g-3 mb-4">
+                            <div className="col-md-6">
+                                <Card size="small" className="bg-light border-0 shadow-sm h-100" bodyStyle={{ padding: '15px' }}>
+                                    <Form.Item
+                                        name="overtime_bonus_per_hour"
+                                        label={<Space><DollarOutlined /> Overtime Rate</Space>}
+                                        extra="PKR per overtime hour"
+                                    >
+                                        <InputNumber className="w-100" min={0} placeholder="e.g. 500" />
+                                    </Form.Item>
+                                </Card>
+                            </div>
+                            <div className="col-md-6">
+                                <Card size="small" className="bg-light border-0 shadow-sm h-100" bodyStyle={{ padding: '15px' }}>
+                                    <Form.Item
+                                        name="project_point_rate"
+                                        label={<Space><DollarOutlined /> Point Rate</Space>}
+                                        extra="PKR per Project Point"
+                                    >
+                                        <InputNumber className="w-100" min={0} placeholder="e.g. 100" />
+                                    </Form.Item>
+                                </Card>
+                            </div>
+                        </div>
+
+                        <Card size="small" className="border-primary-subtle bg-primary-subtle bg-opacity-10 mb-4" bodyStyle={{ padding: '15px' }}>
+                            <div className="row g-3">
+                                <div className="col-md-6">
+                                    <Form.Item
+                                        name="manual_outside_office_rate"
+                                        label={<Space><ApartmentOutlined /> Manual (Office) Rate</Space>}
+                                        extra="PKR per hour from Office"
+                                    >
+                                        <InputNumber className="w-100" min={0} placeholder="e.g. 600" />
+                                    </Form.Item>
+                                </div>
+                                <div className="col-md-6">
+                                    <Form.Item
+                                        name="manual_outside_home_rate"
+                                        label={<Space><HomeOutlined /> Manual (Home) Rate</Space>}
+                                        extra="PKR per hour from Home"
+                                    >
+                                        <InputNumber className="w-100" min={0} placeholder="e.g. 500" />
+                                    </Form.Item>
+                                </div>
+                                <div className="col-12 mt-0">
+                                    <Form.Item
+                                        name="regular_home_rate"
+                                        label={<Space><HomeOutlined /> Regular (Home) Rate</Space>}
+                                        extra="PKR per hour for regular shift hours from Home"
+                                    >
+                                        <InputNumber className="w-100" min={0} placeholder="e.g. 400" />
+                                    </Form.Item>
+                                </div>
+                            </div>
+                        </Card>
+
+                        <Divider orientation="left" className="m-0 mb-3"><Text strong type="secondary" style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Penalty & Deduction Settings</Text></Divider>
+
+                        <div className="row g-3 mb-4">
+                            <div className="col-md-6">
+                                <Form.Item
+                                    name="absent_penalty_rate"
+                                    label="Absent Penalty (PKR/hr)"
+                                    tooltip="Defaults to hourly rate if empty"
+                                >
+                                    <InputNumber className="w-100" min={0} placeholder="e.g. 1000" />
+                                </Form.Item>
+                            </div>
+                            <div className="col-md-6">
+                                <Form.Item
+                                    name="undertime_penalty_per_hour"
+                                    label="Undertime Penalty (PKR/hr)"
+                                >
+                                    <InputNumber className="w-100" min={0} placeholder="e.g. 200" />
+                                </Form.Item>
+                            </div>
+                        </div>
+
+                        <Card size="small" className="bg-light border-0 mb-4" bodyStyle={{ padding: '15px' }}>
+                            <div className="row g-3">
+                                <div className="col-md-3">
+                                    <Form.Item name="late_grace_count" label="Late Grace" extra="Days allowed">
+                                        <InputNumber className="w-100" min={0} />
+                                    </Form.Item>
+                                </div>
+                                <div className="col-md-3">
+                                    <Form.Item name="late_penalty_per_day" label="Late Penalty" extra="PKR / day">
+                                        <InputNumber className="w-100" min={0} />
+                                    </Form.Item>
+                                </div>
+                                <div className="col-md-3">
+                                    <Form.Item name="missing_attendance_grace_count" label="Missing Grace" extra="Days allowed">
+                                        <InputNumber className="w-100" min={0} />
+                                    </Form.Item>
+                                </div>
+                                <div className="col-md-3">
+                                    <Form.Item name="missing_attendance_penalty_per_day" label="Missing Penalty" extra="PKR / day">
+                                        <InputNumber className="w-100" min={0} />
+                                    </Form.Item>
+                                </div>
+                            </div>
+                        </Card>
 
                         <Form.Item
                             name="working_days_override"
-                            label="Standard Working Days (Override)"
-                            extra={`Only used if no shifts are assigned. Defaults to weekdays in month (${calculatedWorkingDays}).`}
+                            label="Working Days Override"
+                            extra={`Systems calculation: ${calculatedWorkingDays} days`}
                         >
-                            <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 22" />
+                            <InputNumber className="w-100" min={0} />
                         </Form.Item>
 
-
-                        <Form.Item
-                            name="undertime_penalty_per_hour"
-                            label="Undertime Penalty (PKR per hour)"
-                            extra="Deducted for each hour of undertime calculated in attendance"
-                        >
-                            <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 200" />
-                        </Form.Item>
-
-                        <div className="row g-2">
-                            <div className="col-6">
-                                <Form.Item
-                                    name="late_grace_count"
-                                    label="Late Grace Count"
-                                    extra="Lates allowed before penalty"
-                                >
-                                    <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 2" />
-                                </Form.Item>
-                            </div>
-                            <div className="col-6">
-                                <Form.Item
-                                    name="late_penalty_per_day"
-                                    label="Late Penalty (per day)"
-                                    extra="PKR per late after grace"
-                                >
-                                    <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 500" />
-                                </Form.Item>
-                            </div>
-                        </div>
-
-                        <div className="row g-2">
-                            <div className="col-6">
-                                <Form.Item
-                                    name="missing_attendance_grace_count"
-                                    label="Missing Attendance Grace"
-                                    extra="Days allowed with missing in/out"
-                                >
-                                    <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 1" />
-                                </Form.Item>
-                            </div>
-                            <div className="col-6">
-                                <Form.Item
-                                    name="missing_attendance_penalty_per_day"
-                                    label="Missing Penalty (per day)"
-                                    extra="PKR per day after grace"
-                                >
-                                    <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 500" />
-                                </Form.Item>
-                            </div>
-                        </div>
-
-                        <Form.Item
-                            name="overtime_bonus_per_hour"
-                            label="Overtime Bonus (PKR per hour)"
-                            extra="Added for each hour of overtime calculated in attendance"
-                        >
-                            <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 300" />
-                        </Form.Item>
-
-                        <Form.Item
-                            name="project_point_rate"
-                            label="Project Point Rate (PKR per point)"
-                            extra="Applied to manual 'Project Points' adjustments"
-                        >
-                            <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 100" />
-                        </Form.Item>
-
-                        <div className="d-flex justify-content-end gap-2 mt-4">
-                            <Button onClick={() => setIsConfigModalOpen(false)}>Cancel</Button>
-                            <Button type="primary" htmlType="submit" loading={loading}>
-                                Save Configuration
+                        <div className="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                            <Button size="large" onClick={() => setIsConfigModalOpen(false)}>Cancel</Button>
+                            <Button size="large" type="primary" htmlType="submit" loading={loading} style={{ borderRadius: '8px' }}>
+                                Save All Changes
                             </Button>
                         </div>
                     </Form>
