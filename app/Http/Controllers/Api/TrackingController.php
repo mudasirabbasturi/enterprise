@@ -233,7 +233,7 @@ class TrackingController extends Controller
             'screenshot_interval' => $interval ? (int)$interval->value : 300,
             'tracker_sync_interval' => $syncInterval ? (int)$syncInterval->value : 30,
             'tracker_admin_password' => $password ? $password->value : 'bidwinners#12',
-            'tracker_allowed_ips' => $allowedIps ? json_decode($allowedIps->value, true) : []
+            'tracker_allowed_ips' => $allowedIps ? $allowedIps->value : []
         ]);
     }
 
@@ -263,7 +263,7 @@ class TrackingController extends Controller
 
         \App\Models\PayrollConfig::updateOrCreate(
             ['key' => 'tracker_allowed_ips'],
-            ['value' => json_encode($request->tracker_allowed_ips ?? [])]
+            ['value' => $request->tracker_allowed_ips ?? []]
         );
 
         return response()->json(['status' => 'success', 'message' => 'Settings updated successfully']);
@@ -288,7 +288,7 @@ class TrackingController extends Controller
         $status = $request->query('status', 'active');
         $users = \App\Models\User::where('status', $status)->get();
         $allowedIps = \App\Models\PayrollConfig::where('key', 'tracker_allowed_ips')->first();
-        $allowedIps = $allowedIps ? json_decode($allowedIps->value, true) : [];
+        $allowedIps = $allowedIps ? $allowedIps->value : [];
         $clientIp = request()->ip();
 
         return response()->json($users->map(function($user) use ($allowedIps, $clientIp) {
