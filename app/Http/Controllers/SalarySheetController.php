@@ -15,46 +15,171 @@ use App\Models\Holiday;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Carbon\Carbon;
+use Illuminate\Validation\ValidationException;
 
 class SalarySheetController extends Controller
 {
-    public function saveMonthlyShifts(Request $request)
-    {
-        $validated = $request->validate([
-            'month' => 'required|integer|between:1,12',
-            'year' => 'required|integer',
-            'shifts' => 'nullable|array',
-            'shifts.*.shift_id' => 'required|exists:shifts,id',
-            'shifts.*.start_day' => 'required|integer|min:1|max:31',
-            'shifts.*.end_day' => 'required|integer|min:1|max:31',
-        ]);
+    // public function saveMonthlyShifts(Request $request)
+    // {
+    //     $validated = $request->validate([
+    //         'month' => 'required|integer|between:1,12',
+    //         'year' => 'required|integer',
+    //         'groups' => 'nullable|array',
+    //         'groups.*.user_ids' => 'nullable|array',
+    //         'groups.*.user_ids.*' => 'exists:users,id',
+    //         'groups.*.ranges' => 'required|array|min:1',
+    //         'groups.*.ranges.*.shift_id' => 'required|exists:shifts,id',
+    //         'groups.*.ranges.*.start_day' => 'required|integer|min:1|max:31',
+    //         'groups.*.ranges.*.end_day' => 'required|integer|min:1|max:31',
+    //     ]);
 
+    //     MonthlyShiftAssignment::where('month', $validated['month'])
+    //         ->where('year', $validated['year'])
+    //         ->delete();
+
+    //     if (isset($validated['groups'])) {
+    //         foreach ($validated['groups'] as $group) {
+    //             $userIds = $group['user_ids'] ?? [];
+    //             $ranges = $group['ranges'] ?? [];
+                
+    //             if (empty($userIds)) {
+    //                 // Global assignments for these ranges
+    //                 foreach ($ranges as $range) {
+    //                     MonthlyShiftAssignment::create([
+    //                         'month' => $validated['month'],
+    //                         'year' => $validated['year'],
+    //                         'user_id' => null,
+    //                         'shift_id' => $range['shift_id'],
+    //                         'start_day' => $range['start_day'],
+    //                         'end_day' => $range['end_day'],
+    //                     ]);
+    //                 }
+    //             } else {
+    //                 foreach ($userIds as $userId) {
+    //                     foreach ($ranges as $range) {
+    //                         MonthlyShiftAssignment::create([
+    //                             'month' => $validated['month'],
+    //                             'year' => $validated['year'],
+    //                             'user_id' => $userId,
+    //                             'shift_id' => $range['shift_id'],
+    //                             'start_day' => $range['start_day'],
+    //                             'end_day' => $range['end_day'],
+    //                         ]);
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     return redirect()->back()->with('message', 'Monthly shift assignments updated successfully.');
+    // }
+public function saveMonthlyShifts(Request $request)
+{
+    $validated = $request->validate([
+        'month' => 'required|integer|between:1,12',
+        'year' => 'required|integer',
+        'groups' => 'nullable|array',
+        'groups.*.user_ids' => 'nullable|array',
+        'groups.*.user_ids.*' => 'exists:users,id',
+        'groups.*.ranges' => 'required|array|min:1',
+        'groups.*.ranges.*.shift_id' => 'required|exists:shifts,id',
+        'groups.*.ranges.*.start_day' => 'required|integer|min:1|max:31',
+        'groups.*.ranges.*.end_day' => 'required|integer|min:1|max:31',
+    ]);
+
+    try {
+        \DB::beginTransaction();
+        
+        // Delete all existing assignments for this month/year
         MonthlyShiftAssignment::where('month', $validated['month'])
             ->where('year', $validated['year'])
             ->delete();
 
-        if (isset($validated['shifts'])) {
-            foreach ($validated['shifts'] as $shift) {
-                MonthlyShiftAssignment::create([
-                    'month' => $validated['month'],
-                    'year' => $validated['year'],
-                    'shift_id' => $shift['shift_id'],
-                    'start_day' => $shift['start_day'],
-                    'end_day' => $shift['end_day'],
-                ]);
+        // Track assigned users to prevent duplicates
+        $assignedUsers = [];
+
+        if (isset($validated['groups']) && !empty($validated['groups'])) {
+            foreach ($validated['groups'] as $group) {
+                $userIds = $group['user_ids'] ?? [];
+                $ranges = $group['ranges'] ?? [];
+
+                // Sort ranges by start_day to check for overlaps
+                usort($ranges, function($a, $b) {
+                    return $a['start_day'] <=> $b['start_day'];
+                });
+
+                // Check for overlapping ranges within the same group
+                for ($i = 0; $i < count($ranges) - 1; $i++) {
+                    if ($ranges[$i]['end_day'] >= $ranges[$i+1]['start_day']) {
+                        throw ValidationException::withMessages([
+                            'error' => "Shift ranges in a group cannot overlap. (Range {$ranges[$i]['start_day']}-{$ranges[$i]['end_day']} overlaps with {$ranges[$i+1]['start_day']}-{$ranges[$i+1]['end_day']})"
+                        ]);
+                    }
+                }
+
+                // Skip if no ranges defined
+                if (empty($ranges)) {
+                    continue;
+                }
+
+                // If no users selected, this becomes a global assignment
+                if (empty($userIds)) {
+                    foreach ($ranges as $range) {
+                        MonthlyShiftAssignment::create([
+                            'month' => $validated['month'],
+                            'year' => $validated['year'],
+                            'user_id' => null,
+                            'shift_id' => $range['shift_id'],
+                            'start_day' => $range['start_day'],
+                            'end_day' => $range['end_day'],
+                        ]);
+                    }
+                } else {
+                    // Create assignments for each user in this group
+                    foreach ($userIds as $userId) {
+                        // Check for duplicate assignments
+                        if (in_array($userId, $assignedUsers)) {
+                            $user = User::find($userId);
+                            throw ValidationException::withMessages([
+                                'error' => "User {$user->name} is assigned to multiple groups. Each user can only be in one group."
+                            ]);
+                        }
+                        
+                        $assignedUsers[] = $userId;
+                        
+                        foreach ($ranges as $range) {
+                            MonthlyShiftAssignment::create([
+                                'month' => $validated['month'],
+                                'year' => $validated['year'],
+                                'user_id' => $userId,
+                                'shift_id' => $range['shift_id'],
+                                'start_day' => $range['start_day'],
+                                'end_day' => $range['end_day'],
+                            ]);
+                        }
+                    }
+                }
             }
         }
 
-        return redirect()->back()->with('message', 'Monthly shift ranges updated successfully.');
-    }
+        \DB::commit();
 
+        return redirect()->back()->with('success', 'Monthly shift assignments updated successfully.');
+        
+    } catch (ValidationException $e) {
+        \DB::rollBack();
+        throw $e;
+    } catch (\Exception $e) {
+        \DB::rollBack();
+        throw ValidationException::withMessages(['error' => $e->getMessage()]);
+    }
+}
     public function index(Request $request)
     {
         $month = $request->input('month', Carbon::now()->month);
         $year = $request->input('year', Carbon::now()->year);
 
         $users = User::with(['salary.package.allowances', 'salary.package.taxRules', 'userShiftSchedules.shift'])
-            ->where('status', 'active')
             ->get();
         
         $attendances = UserAttendance::whereMonth('date', $month)

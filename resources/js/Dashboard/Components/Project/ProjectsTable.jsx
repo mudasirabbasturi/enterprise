@@ -27,13 +27,13 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
 
   const hasPermission = (userpermission, permName) =>
     userpermission?.some((p) => p.name === permName);
-  const { auth } = usePage().props;
-  const { url, props } = usePage();
+  const { url, props: inertiaProps } = usePage();
+  const { auth } = inertiaProps;
 
-  const userPermissions = props?.auth?.user?.role?.permissions ?? [];
+  const userPermissions = inertiaProps?.auth?.user?.role?.permissions ?? [];
   const can = (perm) => hasPermission(userPermissions, perm);
-  const user = props?.auth?.user ?? {};
-  const permissions = props?.permissions ?? []; // master list
+  const user = inertiaProps?.auth?.user ?? {};
+  const permissions = inertiaProps?.permissions ?? []; // master list
   const hasViewProjectTeamPermission =
     Array.isArray(userPermissions) &&
     userPermissions.some((perm) => perm.name === "View Project Team");
@@ -57,15 +57,16 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
 
   const route = useRoute();
   const [localRowData, setLocalRowData] = useState(projects);
+  const gridRef = useRef(null);
 
   const [colDefs, setColDefs] = useState([
     {
       headerName: "Project Points",
       headerTooltip: "Estimator Points",
       field: "project_points",
+      filter: "agNumberColumnFilter",
       editable: false,
-      filter: false,
-      sortable: false,
+      sortable: true,
       cellRenderer: "agGroupCellRenderer",
       cellRendererParams: {
         suppressCount: true,
@@ -73,7 +74,6 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
           const data = params.data;
           if (!data) return null;
 
-          const user = props?.auth?.user ?? {};
           const total = Number(data.project_points || 0);
           const members = data.project_team_members || [];
           const used = members.reduce(
@@ -226,18 +226,18 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
 
                   const avatarProps = isClickable
                     ? {
-                        onClick: () =>
-                          showDrawer("AddEditPoint", {
-                            ...params.data,
-                            member_id: per.id,
-                            name: user.name,
-                            points_gain: per.points_gain,
-                          }),
-                        style: {
-                          cursor: "pointer",
-                          backgroundColor: "#87d068",
-                        },
-                      }
+                      onClick: () =>
+                        showDrawer("AddEditPoint", {
+                          ...params.data,
+                          member_id: per.id,
+                          name: user.name,
+                          points_gain: per.points_gain,
+                        }),
+                      style: {
+                        cursor: "pointer",
+                        backgroundColor: "#87d068",
+                      },
+                    }
                     : {};
 
                   return (
@@ -301,40 +301,40 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
     },
     ...(can("View Client Admin")
       ? [
-          {
-            headerName: "Client Name Admin",
-            headerTooltip: "Client Name For Admin",
-            field: "client_name_for_admin",
+        {
+          headerName: "Client Name Admin",
+          headerTooltip: "Client Name For Admin",
+          field: "client_name_for_admin",
 
-            cellRenderer: (params) => {
-              if (params.data?.client_name_for_admin) {
-                const div = document.createElement("div");
-                div.innerHTML =
-                  params.value || "<i>No Client Name For Admin</i>";
-                const text = div.textContent || div.innerText || "";
-                return text.length > 100
-                  ? text.substring(0, 100) + "..."
-                  : text;
-              } else {
-                return "N/A";
-              }
-            },
+          cellRenderer: (params) => {
+            if (params.data?.client_name_for_admin) {
+              const div = document.createElement("div");
+              div.innerHTML =
+                params.value || "<i>No Client Name For Admin</i>";
+              const text = div.textContent || div.innerText || "";
+              return text.length > 100
+                ? text.substring(0, 100) + "..."
+                : text;
+            } else {
+              return "N/A";
+            }
           },
-        ]
+        },
+      ]
       : []),
-    
+
     {
       headerName: "Mask Client Name",
       headerTooltip: "Masked Client Name",
       field: "mask_client_name",
-valueGetter: (params) => {
-  const name = params.data?.client_name_for_admin || "";
-  if (!name) return "N/A";
+      valueGetter: (params) => {
+        const name = params.data?.client_name_for_admin || "";
+        if (!name) return "N/A";
 
-  const clean = name.replace(/\s+/g, " ").trim(); // normalize spaces
+        const clean = name.replace(/\s+/g, " ").trim(); // normalize spaces
 
-  return `bid#${clean.slice(0, 3).toLowerCase()}${clean.slice(-3).toLowerCase()}`;
-},
+        return `bid#${clean.slice(0, 3).toLowerCase()}${clean.slice(-3).toLowerCase()}`;
+      },
       cellRenderer: (params) => {
         return params.value;
       },
@@ -342,48 +342,48 @@ valueGetter: (params) => {
 
     ...(can("View Client")
       ? [
-          {
-            headerName: "Client Notes",
-            headerTooltip: "Client Notes",
-            field: "client.notes",
+        {
+          headerName: "Client Notes",
+          headerTooltip: "Client Notes",
+          field: "client.notes",
 
-            cellRenderer: (params) => {
-              if (params.data.client?.notes) {
-                const div = document.createElement("div");
-                div.innerHTML = params.value || "<i>No Client Notes</i>";
-                const text = div.textContent || div.innerText || "";
-                return text.length > 100
-                  ? text.substring(0, 100) + "..."
-                  : text;
-              } else {
-                return "N/A";
-              }
-            },
+          cellRenderer: (params) => {
+            if (params.data.client?.notes) {
+              const div = document.createElement("div");
+              div.innerHTML = params.value || "<i>No Client Notes</i>";
+              const text = div.textContent || div.innerText || "";
+              return text.length > 100
+                ? text.substring(0, 100) + "..."
+                : text;
+            } else {
+              return "N/A";
+            }
           },
-        ]
+        },
+      ]
       : []),
     ...(can("View Admin Notes")
       ? [
-          {
-            headerName: "Admin | Supervisor Notes",
-            headerTooltip:
-              "Notes from admin or supervisor or from any Authenticate user",
-            field: "project_admin_notes",
+        {
+          headerName: "Admin | Supervisor Notes",
+          headerTooltip:
+            "Notes from admin or supervisor or from any Authenticate user",
+          field: "project_admin_notes",
 
-            cellRenderer: (params) => {
-              if (params.data?.project_admin_notes) {
-                const div = document.createElement("div");
-                div.innerHTML = params.value || "<i>No Notes</i>";
-                const text = div.textContent || div.innerText || "";
-                return text.length > 100
-                  ? text.substring(0, 100) + "..."
-                  : text;
-              } else {
-                return "N/A";
-              }
-            },
+          cellRenderer: (params) => {
+            if (params.data?.project_admin_notes) {
+              const div = document.createElement("div");
+              div.innerHTML = params.value || "<i>No Notes</i>";
+              const text = div.textContent || div.innerText || "";
+              return text.length > 100
+                ? text.substring(0, 100) + "..."
+                : text;
+            } else {
+              return "N/A";
+            }
           },
-        ]
+        },
+      ]
       : []),
 
     {
@@ -404,48 +404,48 @@ valueGetter: (params) => {
     },
     ...(can("View Private Notes")
       ? [
-          {
-            headerName: "Client Notes Only Admin",
-            headerTooltip: "Client Notes only admin or autorised by admin",
-            field: "notes_private",
-            cellRenderer: (params) => {
-              if (params.data?.notes_private) {
-                const div = document.createElement("div");
-                div.innerHTML = params.value || "<i>No Notes</i>";
-                const text = div.textContent || div.innerText || "";
-                return text.length > 100
-                  ? text.substring(0, 100) + "..."
-                  : text;
-              } else {
-                return "N/A";
-              }
-            },
+        {
+          headerName: "Client Notes Only Admin",
+          headerTooltip: "Client Notes only admin or autorised by admin",
+          field: "notes_private",
+          cellRenderer: (params) => {
+            if (params.data?.notes_private) {
+              const div = document.createElement("div");
+              div.innerHTML = params.value || "<i>No Notes</i>";
+              const text = div.textContent || div.innerText || "";
+              return text.length > 100
+                ? text.substring(0, 100) + "..."
+                : text;
+            } else {
+              return "N/A";
+            }
           },
-        ]
+        },
+      ]
       : []),
     ...(can("View Initial Link(onside)")
       ? [
-          {
-            headerName: "OnSide Link / Admin",
-            headerTooltip: "Link during project submition by admin",
-            field: "project_init_link",
+        {
+          headerName: "OnSide Link / Admin",
+          headerTooltip: "Link during project submition by admin",
+          field: "project_init_link",
 
-            cellRenderer: (params) => {
-              if (params.data.project_init_link) {
-                // return params.data.project_init_link;
-                return (
-                  <>
-                    <a href={params.data.project_init_link} target="_blank">
-                      OnSide Link.
-                    </a>
-                  </>
-                );
-              } else {
-                return "N/A";
-              }
-            },
+          cellRenderer: (params) => {
+            if (params.data.project_init_link) {
+              // return params.data.project_init_link;
+              return (
+                <>
+                  <a href={params.data.project_init_link} target="_blank">
+                    OnSide Link.
+                  </a>
+                </>
+              );
+            } else {
+              return "N/A";
+            }
           },
-        ]
+        },
+      ]
       : []),
     {
       headerName: "Offside Link / Estimator",
@@ -651,55 +651,58 @@ valueGetter: (params) => {
     },
     ...(can("View Budget")
       ? [
-          {
-            headerName: "Project Total Budget",
-            headerTooltip: "Total Budget Of The Project",
-            field: "budget_total",
+        {
+          headerName: "Project Total Budget",
+          headerTooltip: "Total Budget Of The Project",
+          field: "budget_total",
+          filter: "agNumberColumnFilter",
 
-            cellRenderer: (params) => {
-              if (params.data?.budget_total) {
-                return params.data?.budget_total;
-              }
-              return "N/A";
-            },
+          cellRenderer: (params) => {
+            if (params.data?.budget_total) {
+              return params.data?.budget_total;
+            }
+            return "N/A";
           },
-        ]
+        },
+      ]
       : []),
 
     ...(can("View Deduction")
       ? [
-          {
-            headerName: "Deduction Amount",
-            headerTooltip: "Amount Of Deduction",
-            field: "deduction_amount",
-            cellRenderer: (params) => {
-              if (params.data?.deduction_amount) {
-                return params.data?.deduction_amount;
-              }
-              return "N/A";
-            },
+        {
+          headerName: "Deduction Amount",
+          headerTooltip: "Amount Of Deduction",
+          field: "deduction_amount",
+          filter: "agNumberColumnFilter",
+          cellRenderer: (params) => {
+            if (params.data?.deduction_amount) {
+              return params.data?.deduction_amount;
+            }
+            return "N/A";
           },
-        ]
+        },
+      ]
       : []),
 
     ...(can("View Budget")
       ? [
-          {
-            headerName: "Final Price",
-            headerTooltip: "Final Price After All, Tax, Discount ...",
-            field: "final_Price",
-            cellRenderer: (params) => {
-              const budget = params.data?.budget_total;
-              const deduction = params.data?.deduction_amount ?? 0; // Treat null/undefined as 0
+        {
+          headerName: "Final Price",
+          headerTooltip: "Final Price After All, Tax, Discount ...",
+          field: "final_Price",
+          filter: "agNumberColumnFilter",
+          cellRenderer: (params) => {
+            const budget = params.data?.budget_total;
+            const deduction = params.data?.deduction_amount ?? 0; // Treat null/undefined as 0
 
-              if (budget !== null && budget !== undefined && budget !== "") {
-                const total = budget - deduction;
-                return `$${total}`;
-              }
-              return "N/A";
-            },
+            if (budget !== null && budget !== undefined && budget !== "") {
+              const total = budget - deduction;
+              return `$${total}`;
+            }
+            return "N/A";
           },
-        ]
+        },
+      ]
       : []),
 
     {
@@ -788,113 +791,19 @@ valueGetter: (params) => {
     setRowData(projects);
   }, [projects]);
 
-  // add project channel
-  useEffect(() => {
-    const channel = window.Echo.channel("project-channel");
-    const handler = (data) => {
-      if (data.project) {
-        if (user.email !== data.userEmail) {
-          setRowData((prev) => [data.project, ...prev]);
-        }
-      }
-    };
-    channel.listen(".event-project-created", handler);
-    return () => {
-      channel.stopListening(".event-project-created", handler);
-    };
-  }, []);
+  const isSSRM = inertiaProps.status === "Deliver";
 
-  // update project channel
-  useEffect(() => {
-    const channel = window.Echo.channel("project-channel");
-    const handler = (data) => {
-      if (data.project) {
-        if (user.email !== data.userEmail) {
-          setRowData?.((prev) =>
-            prev.map((row) => (row.id === data.project.id ? data.project : row))
-          );
-        }
+  const refreshGrid = useCallback(() => {
+    if (gridRef.current?.api) {
+      if (isSSRM) {
+        gridRef.current.api.refreshServerSide();
+      } else {
+        // For client side, we might need a full refresh from server or just filter
+        // Standard client-side refresh:
+        gridRef.current.api.redrawRows();
       }
-    };
-    channel.listen(".event-project-updated", handler);
-    return () => {
-      channel.stopListening(".event-project-updated", handler);
-    };
-  }, []);
-
-  // update project column channel
-  useEffect(() => {
-    const channel = window.Echo.channel("project-channel");
-    const handler = (data) => {
-      if (data.project) {
-        if (user.email !== data.userEmail) {
-          setRowData?.((prev) =>
-            prev.map((row) => (row.id === data.project.id ? data.project : row))
-          );
-        }
-      }
-    };
-    channel.listen(".event-project-update-coloumn", handler);
-    return () => {
-      channel.stopListening(".event-project-update-coloumn", handler);
-    };
-  }, []);
-
-  // join project channel
-  useEffect(() => {
-    const channel = window.Echo.channel("project-channel");
-    const handler = (data) => {
-      if (data.project) {
-        if (user.email !== data.userEmail) {
-          setRowData((prev) =>
-            prev.map((p) => (p.id === data.project.id ? data.project : p))
-          );
-        }
-      }
-    };
-    channel.listen(".event-project-joined", handler);
-    return () => {
-      channel.stopListening(".event-project-joined", handler);
-    };
-  }, []);
-
-  // delete project channel
-  useEffect(() => {
-    const channel = window.Echo.channel("project-channel");
-    const handler = (data) => {
-      if (data.project) {
-        if (user.email !== data.userEmail) {
-          setRowData((prev) =>
-            prev.filter((item) => item.id !== Number(data.project.id))
-          );
-        }
-      }
-    };
-    channel.listen(".event-project-delete", handler);
-    return () => {
-      channel.stopListening(".event-project-delete", handler);
-    };
-  }, []);
-
-  // leave join project
-  useEffect(() => {
-    const channel = window.Echo.channel("project-channel");
-    const handler = (data) => {
-      if (data.project) {
-        if (user.email !== data.userEmail) {
-          setRowData((prev) =>
-            prev.map((proj) =>
-              proj.id === data.project.id ? data.project : proj
-            )
-          );
-        }
-      }
-    };
-    channel.listen(".event-project-leave", handler);
-    return () => {
-      channel.stopListening(".event-project-leave", handler);
-    };
-  }, []);
+    }
+  }, [isSSRM]);
 
   const confirmDelProject = async (id) => {
     try {
@@ -905,9 +814,7 @@ valueGetter: (params) => {
           description: data.message,
           placement: "topRight",
         });
-        setRowData((prev) =>
-          prev.filter((item) => item.id !== Number(data.project.id))
-        );
+        refreshGrid();
       }
     } catch (error) {
       api.error({
@@ -927,11 +834,7 @@ valueGetter: (params) => {
           description: data.message,
           placement: "topRight",
         });
-        setRowData((prev) =>
-          prev.map((proj) =>
-            proj.id === data.project.id ? data.project : proj
-          )
-        );
+        refreshGrid();
       }
     } catch (error) {
       api.error({
@@ -939,7 +842,6 @@ valueGetter: (params) => {
         description: "Failed to remove from joined project",
         placement: "topRight",
       });
-    } finally {
     }
   };
 
@@ -953,7 +855,7 @@ valueGetter: (params) => {
         params.colDef.field === "client.notes" ||
         params.colDef.field === "final_Price" ||
         params.colDef.headerName === "Mask Client Name" ||
-        (params.colDef.field === "project_points" && user.role_id !== 1) 
+        (params.colDef.field === "project_points" && user.role_id !== 1)
       )
         return;
       showDrawer("EditColumn", {
@@ -1008,11 +910,7 @@ valueGetter: (params) => {
             description: response.message,
             placement: "topRight",
           });
-          setRowData?.((prev) =>
-            prev.map((row) =>
-              row.id === response.project.id ? response.project : row
-            )
-          );
+          refreshGrid();
         }
       } catch (error) {
         console.error(error.response?.data);
@@ -1045,9 +943,8 @@ valueGetter: (params) => {
           <li>
             Total Points Left:{" "}
             <span
-              className={`font-semibold ${
-                leftPoints < 0 ? "text-red-500" : "text-green-600"
-              }`}
+              className={`font-semibold ${leftPoints < 0 ? "text-red-500" : "text-green-600"
+                }`}
             >
               {leftPoints}
             </span>
@@ -1094,13 +991,88 @@ valueGetter: (params) => {
     );
   };
 
-  const gridRef = useRef(null);
   const onFilterTextBoxChanged = useCallback(() => {
-    gridRef.current.api.setGridOption(
-      "quickFilterText",
-      document.getElementById("filter-text-box").value
-    );
-  }, []);
+    if (gridRef.current?.api) {
+      if (isSSRM) {
+        gridRef.current.api.refreshServerSide();
+      } else {
+        gridRef.current.api.setGridOption(
+          "quickFilterText",
+          document.getElementById("filter-text-box")?.value
+        );
+      }
+    }
+  }, [isSSRM]);
+
+  const isSelf = url.includes("/project/self");
+
+  const onGridReady = useCallback((params) => {
+    gridRef.current = params;
+
+    // Restore column state if saved
+    gridOptionsConfig.onGridReady(params);
+
+    if (isSSRM) {
+      const datasource = {
+        getRows: async (params) => {
+          try {
+            NProgress.start();
+            const quickFilter = document.getElementById("filter-text-box")?.value || "";
+            const filterModel = params.api.getFilterModel();
+
+            const { data } = await axios.post(route("project.status.data", { status: inertiaProps.status || 'All' }), {
+              ...params.request,
+              filterModel: filterModel,
+              isSelf: isSelf,
+              quickFilter: quickFilter
+            });
+            params.success({
+              rowData: data.rows,
+              rowCount: data.totalCount,
+            });
+          } catch (e) {
+            console.error("SSRM error", e);
+            params.fail();
+          } finally {
+            NProgress.done();
+          }
+        },
+      };
+
+      params.api.setGridOption("serverSideDatasource", datasource);
+
+      // Add listener to refresh on filter changes
+      params.api.addEventListener('filterChanged', () => {
+        params.api.refreshServerSide();
+      });
+    }
+  }, [inertiaProps.status, isSelf, isSSRM]);
+
+  // Echo Listeners
+  useEffect(() => {
+    const channel = window.Echo.channel("project-channel");
+    const handler = (data) => {
+      if (data.project && user.email !== data.userEmail) {
+        refreshGrid();
+      }
+    };
+
+    const events = [
+      ".event-project-created",
+      ".event-project-updated",
+      ".event-project-update-coloumn",
+      ".event-project-joined",
+      ".event-project-delete",
+      ".event-project-leave"
+    ];
+
+    events.forEach(event => channel.listen(event, handler));
+
+    return () => {
+      events.forEach(event => channel.stopListening(event, handler));
+    };
+  }, [refreshGrid, user.email]);
+
 
   return (
     <>
@@ -1116,7 +1088,6 @@ valueGetter: (params) => {
       </div>
       <AgGridReact
         ref={gridRef}
-        rowData={projects}
         {...gridOptions}
         columnDefs={colDefs}
         defaultColDef={{
@@ -1124,12 +1095,13 @@ valueGetter: (params) => {
           flex: undefined,
         }}
         theme={gridTheme}
-        pagination={
-          url === "/project" || url === "/project/Deliver" || url === "/project/self/Deliver" || url === "/project/self/All"  ? true : false
-        }
-        paginationAutoPageSize={true}
+        rowModelType={isSSRM ? "serverSide" : undefined}
+        rowData={isSSRM ? undefined : projects}
+        pagination={isSSRM}
+        paginationPageSize={20}
+        cacheBlockSize={20}
         sideBar={sideBarConfig}
-        onGridReady={gridOptionsConfig.onGridReady}
+        onGridReady={onGridReady}
         onColumnMoved={gridOptionsConfig.onColumnMoved}
         onColumnPinned={gridOptionsConfig.onColumnPinned}
         onColumnVisible={gridOptionsConfig.onColumnVisible}

@@ -32,6 +32,7 @@ class ProjectController extends Controller
         return Inertia('Pages/Project/Index', [
             'projects' => $projects,
             'clients' => $clients,
+            'status' => 'All',
         ]);
     }
 
@@ -127,22 +128,20 @@ class ProjectController extends Controller
 
     public function Status(Request $request, $status)
     {
-        $query = Project::with([
-            'projectTeamMembers.user.media' => function($query) {
-                $query->where('category', 'profile')->latest()->limit(1);
-            },
-            'client'
-        ])
-        ->where('project_status', $status)
-        ->latest();
-
-        if ($status === 'Deliver') {
-            $query->take(1000);
+        $projects = [];
+        if ($status !== 'Deliver') {
+            $projects = Project::with([
+                'projectTeamMembers.user.media' => function($query) {
+                    $query->where('category', 'profile')->latest()->limit(1);
+                },
+                'client'
+            ])
+            ->where('project_status', $status)
+            ->latest()
+            ->get();
         }
 
-        $projects = $query->get();
         $clients = Client::get();
-
         return Inertia('Pages/Project/Index', [
             'projects' => $projects,
             'status' => $status,
@@ -151,35 +150,443 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function SelfStatus(Request $request, $status)
+    public function AgGridData(Request $request, $status)
     {
-        $userId = Auth::id();
+        $startRow = $request->input('startRow', 0);
+        $endRow = $request->input('endRow', 100);
+        $sortModel = $request->input('sortModel', []);
+        $filterModel = $request->input('filterModel', []);
+        $quickFilter = $request->input('quickFilter', '');
+        $isSelf = $request->input('isSelf', false);
+
         $query = Project::with([
-            'projectTeamMembers' => function($query) use ($userId) {
-                $query->where('user_id', $userId);
-            },
             'projectTeamMembers.user.media' => function($query) {
                 $query->where('category', 'profile')->latest()->limit(1);
             },
             'client'
-        ])
-        ->whereHas('projectTeamMembers', function($query) use ($userId) {
-            $query->where('user_id', $userId);
-        });
+        ]);
 
-        // Apply custom status logic
-        if ($status === 'Recent') {
-            // All except delivered
-            $query->where('project_status', '!=', 'deliver');
-        } elseif ($status !== 'All') {
-            // Normal specific status filter (keep old behavior)
+        if ($isSelf) {
+            $userId = Auth::id();
+            $query->whereHas('projectTeamMembers', function($q) use ($userId) {
+                $q->where('user_id', $userId);
+            });
+        }
+
+        // Status filter
+        if ($status !== 'All' && $status !== 'Deliver') {
             $query->where('project_status', $status);
         }
-        // If status == 'All', no filtering on status is applied
 
-        $projects = $query->latest()->get();
+        // Apply Quick Filter
+        if (!empty($quickFilter)) {
+            $query->where(function($q) use ($quickFilter) {
+                $q->where('project_title', 'like', '%' . $quickFilter . '%')
+                  ->orWhere('project_address', 'like', '%' . $quickFilter . '%')
+                  ->orWhere('client_name_for_admin', 'like', '%' . $quickFilter . '%')
+                  ->orWhere('project_admin_notes', 'like', '%' . $quickFilter . '%')
+                  ->orWhere('budget_total', 'like', '%' . $quickFilter . '%')
+                  ->orWhere('deduction_amount', 'like', '%' . $quickFilter . '%')
+                  ->orWhereHas('client', function($cq) use ($quickFilter) {
+                      $cq->where('name', 'like', '%' . $quickFilter . '%')
+                        ->orWhere('notes', 'like', '%' . $quickFilter . '%');
+                  })
+                  ->orWhereHas('projectTeamMembers.user', function($uq) use ($quickFilter) {
+                      $uq->where('name', 'like', '%' . $quickFilter . '%');
+                  });
+            });
+        }
+
+        // Apply Column Filters
+        if (!empty($filterModel)) {
+            foreach ($filterModel as $field => $filter) {
+                $this->applyAgGridFilter($query, $field, $filter);
+            }
+        }
+
+        // Apply sorting
+        if (!empty($sortModel)) {
+            foreach ($sortModel as $sort) {
+                $field = $sort['colId'];
+                $direction = $sort['sort'];
+                
+                // Handle special fields
+                if ($field === 'final_Price') {
+                    $query->orderByRaw('(COALESCE(budget_total, 0) - COALESCE(deduction_amount, 0)) ' . $direction);
+                } elseif ($field === 'mask_client_name') {
+                    $query->orderBy('client_name_for_admin', $direction);
+                } elseif (str_contains($field, '.')) {
+                    continue; // Skip complex relations for now
+                } else {
+                    if (in_array($field, $this->allowedFields)) {
+                        $query->orderBy($field, $direction);
+                    }
+                }
+            }
+        } else {
+            $query->latest('id');
+        }
+
+        $totalCount = (clone $query)->count();
+        
+        $projects = $query->skip($startRow)
+            ->take($endRow - $startRow)
+            ->get();
+
+        return response()->json([
+            'rows' => $projects,
+            'lastRow' => $totalCount,
+            'totalCount' => $totalCount
+        ]);
+    }
+
+    private function applyAgGridFilter($query, $field, $filter)
+    {
+        // Handle Multi Filter
+        if (isset($filter['filterType']) && $filter['filterType'] === 'multi') {
+            if (isset($filter['filterModels']) && is_array($filter['filterModels'])) {
+                foreach ($filter['filterModels'] as $subFilter) {
+                    if ($subFilter && !empty($subFilter)) {
+                        $this->applyAgGridFilter($query, $field, $subFilter);
+                    }
+                }
+            }
+            return;
+        }
+
+        // Handle Combined Filter (AND/OR)
+        if (isset($filter['operator'])) {
+            $operator = strtolower($filter['operator']) === 'or' ? 'or' : 'and';
+            $conditions = [];
+            
+            if (isset($filter['condition1']) && !empty($filter['condition1'])) {
+                $conditions[] = $filter['condition1'];
+            }
+            if (isset($filter['condition2']) && !empty($filter['condition2'])) {
+                $conditions[] = $filter['condition2'];
+            }
+
+            if (!empty($conditions)) {
+                $query->where(function ($q) use ($field, $conditions, $operator) {
+                    foreach ($conditions as $index => $condition) {
+                        $method = ($index === 0) ? 'where' : ($operator === 'or' ? 'orWhere' : 'where');
+                        $this->applySpecificFilter($q, $field, $condition, $method);
+                    }
+                });
+            }
+            return;
+        }
+
+        // Simple filter
+        $this->applySpecificFilter($query, $field, $filter, 'where');
+    }
+
+    private function applySpecificFilter($query, $field, $condition, $method = 'where')
+    {
+        if (empty($condition) || !isset($condition['filterType'])) {
+            return;
+        }
+
+        $mappedField = $this->mapFieldToDatabase($field);
+        
+        // Handle relation filters
+        if (str_contains($mappedField, '.')) {
+            [$relation, $relationField] = explode('.', $mappedField, 2);
+            $query->{$method . 'Has'}($relation, function ($q) use ($relationField, $condition) {
+                $this->applySpecificFilter($q, $relationField, $condition, 'where');
+            });
+            return;
+        }
+
+        // Special field handlers
+        if ($field === 'teams') {
+            $query->{$method . 'Has'}('projectTeamMembers.user', function ($q) use ($condition) {
+                $this->applySpecificFilter($q, 'name', $condition, 'where');
+            });
+            return;
+        }
+
+        if ($field === 'final_Price') {
+            $this->applyFinalPriceFilter($query, $condition, $method);
+            return;
+        }
+
+        if ($field === 'mask_client_name') {
+            $this->applyMaskClientNameFilter($query, $condition, $method);
+            return;
+        }
+
+        // Standard filter handling
+        $filterType = $condition['filterType'] ?? 'text';
+        $type = $condition['type'] ?? 'contains';
+
+        switch ($filterType) {
+            case 'set':
+                $values = $condition['values'] ?? [];
+                if (!empty($values)) {
+                    $query->{$method . 'In'}($mappedField, $values);
+                }
+                break;
+                
+            case 'date':
+                $this->applyDateFilter($query, $mappedField, $condition, $method);
+                break;
+                
+            case 'number':
+                $this->applyNumberFilter($query, $mappedField, $condition, $method);
+                break;
+                
+            case 'text':
+            default:
+                $this->applyTextFilter($query, $mappedField, $condition, $method);
+                break;
+        }
+    }
+
+    private function mapFieldToDatabase($field)
+    {
+        $mapping = [
+            'client.notes' => 'client.notes',
+            'project_title' => 'project_title',
+            'project_address' => 'project_address',
+            'project_points' => 'project_points',
+            'budget_total' => 'budget_total',
+            'deduction_amount' => 'deduction_amount',
+            'project_admin_notes' => 'project_admin_notes',
+            'project_notes_estimator' => 'project_notes_estimator',
+            'notes_private' => 'notes_private',
+            'project_init_link' => 'project_init_link',
+            'project_final_link' => 'project_final_link',
+            'project_pricing' => 'project_pricing',
+            'project_area' => 'project_area',
+            'project_construction_type' => 'project_construction_type',
+            'project_line_items_pricing' => 'project_line_items_pricing',
+            'project_floor_number' => 'project_floor_number',
+            'project_due_date' => 'project_due_date',
+            'project_main_scope' => 'project_main_scope',
+            'project_scope_details' => 'project_scope_details',
+            'project_template' => 'project_template',
+            'project_status' => 'project_status',
+            'project_source' => 'project_source',
+            'preview_status' => 'preview_status',
+            'client_name_for_admin' => 'client_name_for_admin',
+        ];
+
+        return $mapping[$field] ?? $field;
+    }
+
+    private function applyFinalPriceFilter($query, $condition, $method)
+    {
+        $type = $condition['type'] ?? 'equals';
+        $value = $condition['filter'] ?? null;
+        $valueTo = $condition['filterTo'] ?? null;
+        
+        $rawExpression = '(COALESCE(budget_total, 0) - COALESCE(deduction_amount, 0))';
+        
+        switch ($type) {
+            case 'equals':
+                $query->{$method . 'Raw'}("$rawExpression = ?", [$value]);
+                break;
+            case 'notEqual':
+                $query->{$method . 'Raw'}("$rawExpression != ?", [$value]);
+                break;
+            case 'greaterThan':
+                $query->{$method . 'Raw'}("$rawExpression > ?", [$value]);
+                break;
+            case 'greaterThanOrEqual':
+                $query->{$method . 'Raw'}("$rawExpression >= ?", [$value]);
+                break;
+            case 'lessThan':
+                $query->{$method . 'Raw'}("$rawExpression < ?", [$value]);
+                break;
+            case 'lessThanOrEqual':
+                $query->{$method . 'Raw'}("$rawExpression <= ?", [$value]);
+                break;
+            case 'inRange':
+                if ($value !== null && $valueTo !== null) {
+                    $query->{$method . 'Raw'}("$rawExpression BETWEEN ? AND ?", [$value, $valueTo]);
+                }
+                break;
+            case 'blank':
+                $query->where(function($q) use ($method) {
+                     $q->{$method . 'Null'}('budget_total')->{$method . 'Null'}('deduction_amount');
+                });
+                break;
+            case 'notBlank':
+                $query->where(function($q) use ($method) {
+                    $q->{$method . 'NotNull'}('budget_total')->orWhereNotNull('deduction_amount');
+                });
+                break;
+        }
+    }
+
+    private function applyMaskClientNameFilter($query, $condition, $method)
+    {
+        $type = $condition['type'] ?? 'contains';
+        $value = $condition['filter'] ?? null;
+
+        if ($type === 'blank') {
+            $query->{$method . 'Null'}('client_name_for_admin');
+            return;
+        }
+        if ($type === 'notBlank') {
+            $query->{$method . 'NotNull'}('client_name_for_admin');
+            return;
+        }
+
+        if (!$value) return;
+
+        $sqlValue = match ($type) {
+            'equals' => $value,
+            'startsWith' => $value . '%',
+            'endsWith' => '%' . $value,
+            'contains' => '%' . $value . '%',
+            default => '%' . $value . '%'
+        };
+
+        $query->{$method}('client_name_for_admin', 'like', $sqlValue);
+    }
+
+    private function applyDateFilter($query, $field, $condition, $method)
+    {
+        $type = $condition['type'] ?? 'equals';
+        $dateFrom = $condition['dateFrom'] ?? null;
+        $dateTo = $condition['dateTo'] ?? null;
+
+        if (!$dateFrom && $type !== 'blank' && $type !== 'notBlank') return;
+
+        switch ($type) {
+            case 'equals':
+                $query->{$method . 'Date'}($field, '=', $dateFrom);
+                break;
+            case 'notEqual':
+                $query->{$method . 'Date'}($field, '!=', $dateFrom);
+                break;
+            case 'greaterThan':
+                $query->{$method . 'Date'}($field, '>', $dateFrom);
+                break;
+            case 'greaterThanOrEqual':
+                $query->{$method . 'Date'}($field, '>=', $dateFrom);
+                break;
+            case 'lessThan':
+                $query->{$method . 'Date'}($field, '<', $dateFrom);
+                break;
+            case 'lessThanOrEqual':
+                $query->{$method . 'Date'}($field, '<=', $dateFrom);
+                break;
+            case 'inRange':
+                if ($dateFrom && $dateTo) {
+                    $query->{$method . 'Between'}($field, [$dateFrom, $dateTo]);
+                }
+                break;
+            case 'blank':
+                $query->{$method . 'Null'}($field);
+                break;
+            case 'notBlank':
+                $query->{$method . 'NotNull'}($field);
+                break;
+        }
+    }
+
+    private function applyNumberFilter($query, $field, $condition, $method)
+    {
+        $type = $condition['type'] ?? 'equals';
+        $value = $condition['filter'] ?? null;
+        $valueTo = $condition['filterTo'] ?? null;
+
+        switch ($type) {
+            case 'equals':
+                if ($value !== null) $query->{$method}($field, '=', $value);
+                break;
+            case 'notEqual':
+                if ($value !== null) $query->{$method}($field, '!=', $value);
+                break;
+            case 'greaterThan':
+                if ($value !== null) $query->{$method}($field, '>', $value);
+                break;
+            case 'greaterThanOrEqual':
+                if ($value !== null) $query->{$method}($field, '>=', $value);
+                break;
+            case 'lessThan':
+                if ($value !== null) $query->{$method}($field, '<', $value);
+                break;
+            case 'lessThanOrEqual':
+                if ($value !== null) $query->{$method}($field, '<=', $value);
+                break;
+            case 'inRange':
+                if ($value !== null && $valueTo !== null) {
+                    $query->{$method . 'Between'}($field, [$value, $valueTo]);
+                }
+                break;
+            case 'blank':
+                $query->{$method . 'Null'}($field);
+                break;
+            case 'notBlank':
+                $query->{$method . 'NotNull'}($field);
+                break;
+        }
+    }
+
+    private function applyTextFilter($query, $field, $condition, $method)
+    {
+        $type = $condition['type'] ?? 'contains';
+        $value = $condition['filter'] ?? null;
+
+        if ($type === 'blank') {
+            $query->{$method . 'Null'}($field);
+            return;
+        }
+        if ($type === 'notBlank') {
+            $query->{$method . 'NotNull'}($field);
+            return;
+        }
+
+        if (!$value) return;
+
+        $operator = 'like';
+        $sqlValue = match ($type) {
+            'equals' => $value,
+            'notEqual' => $value,
+            'startsWith' => $value . '%',
+            'endsWith' => '%' . $value,
+            'contains' => '%' . $value . '%',
+            'notContains' => '%' . $value . '%',
+            default => '%' . $value . '%'
+        };
+
+        if ($type === 'notEqual') {
+            $operator = '!=';
+        } elseif ($type === 'notContains') {
+            $operator = 'not like';
+        }
+
+        $query->{$method}($field, $operator, $sqlValue);
+    }
+
+    public function SelfStatus(Request $request, $status)
+    {
+        $userId = Auth::id();
+        $projects = [];
+        
+        if ($status !== 'Deliver') {
+            $query = Project::with([
+                'projectTeamMembers.user.media' => function($query) {
+                    $query->where('category', 'profile')->latest()->limit(1);
+                },
+                'client'
+            ])
+            ->whereHas('projectTeamMembers', function($q) use ($userId) {
+                $q->where('user_id', $userId);
+            });
+
+            if ($status !== 'All') {
+                $query->where('project_status', $status);
+            }
+
+            $projects = $query->latest()->get();
+        }
+
         $clients = Client::get();
-
         return Inertia('Pages/Project/Index', [
             'projects' => $projects,
             'status' => $status,

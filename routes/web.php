@@ -97,6 +97,7 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/project/destroy/{id}', [ProjectController::class, 'Destroy'])->name('project.destroy');
     Route::get('/project/{status}', [ProjectController::class, 'Status'])->name('project.status');
     Route::get('/project/self/{status}', [ProjectController::class, 'SelfStatus'])->name('project.self.status');
+    Route::post('/project/status/{status}/data', [ProjectController::class, 'AgGridData'])->name('project.status.data');
     Route::put('/project/column/update/{id}', [ProjectController::class, 'ProjectColumnUpdate'])->name('project.column.update');
     Route::get('/project-report', [ProjectController::class, 'ProjectReport'])->name('project.report');
     Route::get('/project-report/chart', [ProjectController::class, 'ProjectReportChart'])->name('project.report.chart');

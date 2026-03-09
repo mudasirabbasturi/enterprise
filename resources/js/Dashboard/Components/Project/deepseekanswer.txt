@@ -1,0 +1,535 @@
+Looking at your code, I can identify several issues with the column filters in your Server-Side Row Model (SSRM) implementation. The main problem is that the filter model from AG Grid isn't being properly sent to your backend and processed correctly.
+
+Key Issues Identified:
+Missing filterModel in the request payload - Your frontend isn't sending the filterModel to the backend
+
+Incomplete filter handling in backend - Some filter types aren't properly handled
+
+Column field mapping issues - Virtual fields aren't properly mapped to database columns
+
+Missing filter type handling - Some AG Grid filter operators aren't supported
+
+Fixed Code:
+1. Updated Frontend (ProjectsTable.jsx)
+Here's the corrected onGridReady function with proper filterModel handling:
+
+const onGridReady = useCallback((params) => {
+  gridRef.current = params;
+
+  // Restore column state if saved
+  gridOptionsConfig.onGridReady(params);
+
+  if (isSSRM) {
+    const datasource = {
+      getRows: async (params) => {
+        try {
+          NProgress.start();
+          
+          const quickFilter = document.getElementById("filter-text-box")?.value || "";
+          
+          // Get the current filter model from the grid
+          const filterModel = params.api.getFilterModel();
+          
+          // Get sort model
+          const sortModel = params.request.sortModel || [];
+          
+          const requestPayload = {
+            startRow: params.request.startRow,
+            endRow: params.request.endRow,
+            sortModel: sortModel,
+            filterModel: filterModel, // This was missing!
+            quickFilter: quickFilter,
+            isSelf: isSelf
+          };
+
+          const { data } = await axios.post(
+            route("project.status.data", { status: inertiaProps.status || 'All' }), 
+            requestPayload
+          );
+          
+          params.success({
+            rowData: data.rows,
+            rowCount: data.totalCount,
+          });
+        } catch (e) {
+          console.error("SSRM error", e);
+          params.fail();
+        } finally {
+          NProgress.done();
+        }
+      },
+    };
+
+    params.api.setGridOption("serverSideDatasource", datasource);
+    
+    // Add filter changed listener to refresh when filters change
+    params.api.addEventListener('filterChanged', () => {
+      params.api.refreshServerSide();
+    });
+  }
+}, [inertiaProps.status, isSelf, isSSRM]);
+
+2. Updated Backend (ProjectController.php)
+Here's the improved AgGridData and filter methods:
+
+public function AgGridData(Request $request, $status)
+{
+    $startRow = $request->input('startRow', 0);
+    $endRow = $request->input('endRow', 100);
+    $sortModel = $request->input('sortModel', []);
+    $filterModel = $request->input('filterModel', []);
+    $quickFilter = $request->input('quickFilter', '');
+    $isSelf = $request->input('isSelf', false);
+
+    \Log::info('Filter Model Received:', $filterModel); // Debug log
+
+    $query = Project::with([
+        'projectTeamMembers.user.media' => function($query) {
+            $query->where('category', 'profile')->latest()->limit(1);
+        },
+        'client'
+    ]);
+
+    if ($isSelf) {
+        $userId = Auth::id();
+        $query->whereHas('projectTeamMembers', function($q) use ($userId) {
+            $q->where('user_id', $userId);
+        });
+    }
+
+    // Status filter
+    if ($status !== 'All' && $status !== 'Deliver') {
+        $query->where('project_status', $status);
+    }
+
+    // Apply Quick Filter
+    if (!empty($quickFilter)) {
+        $query->where(function($q) use ($quickFilter) {
+            $q->where('project_title', 'like', '%' . $quickFilter . '%')
+              ->orWhere('project_address', 'like', '%' . $quickFilter . '%')
+              ->orWhere('client_name_for_admin', 'like', '%' . $quickFilter . '%')
+              ->orWhere('project_admin_notes', 'like', '%' . $quickFilter . '%')
+              ->orWhere('budget_total', 'like', '%' . $quickFilter . '%')
+              ->orWhere('deduction_amount', 'like', '%' . $quickFilter . '%')
+              ->orWhereHas('client', function($cq) use ($quickFilter) {
+                  $cq->where('name', 'like', '%' . $quickFilter . '%')
+                    ->orWhere('notes', 'like', '%' . $quickFilter . '%');
+              })
+              ->orWhereHas('projectTeamMembers.user', function($uq) use ($quickFilter) {
+                  $uq->where('name', 'like', '%' . $quickFilter . '%');
+              });
+        });
+    }
+
+    // Apply Column Filters
+    if (!empty($filterModel)) {
+        foreach ($filterModel as $field => $filter) {
+            $this->applyAgGridFilter($query, $field, $filter);
+        }
+    }
+
+    // Apply sorting
+    if (!empty($sortModel)) {
+        foreach ($sortModel as $sort) {
+            $field = $sort['colId'];
+            $direction = $sort['sort'];
+            
+            // Handle special fields
+            if ($field === 'final_Price') {
+                $query->orderByRaw('(COALESCE(budget_total, 0) - COALESCE(deduction_amount, 0)) ' . $direction);
+            } elseif ($field === 'mask_client_name') {
+                $query->orderBy('client_name_for_admin', $direction);
+            } elseif (str_contains($field, '.')) {
+                // Skip complex relations for now or implement joins
+                continue;
+            } else {
+                $query->orderBy($field, $direction);
+            }
+        }
+    } else {
+        $query->latest('id');
+    }
+
+    // Get total count before pagination
+    $totalCount = (clone $query)->count();
+    
+    // Apply pagination
+    $projects = $query->skip($startRow)
+        ->take($endRow - $startRow)
+        ->get();
+
+    return response()->json([
+        'rows' => $projects,
+        'lastRow' => $totalCount,
+        'totalCount' => $totalCount
+    ]);
+}
+
+private function applyAgGridFilter($query, $field, $filter)
+{
+    // Handle Multi Filter (AG Grid Multi Filter)
+    if (isset($filter['filterType']) && $filter['filterType'] === 'multi') {
+        if (isset($filter['filterModels']) && is_array($filter['filterModels'])) {
+            foreach ($filter['filterModels'] as $subFilter) {
+                if ($subFilter && !empty($subFilter)) {
+                    $this->applyAgGridFilter($query, $field, $subFilter);
+                }
+            }
+        }
+        return;
+    }
+
+    // Handle Combined Filter (AND/OR)
+    if (isset($filter['operator'])) {
+        $operator = strtolower($filter['operator']) === 'or' ? 'or' : 'and';
+        $conditions = [];
+        
+        if (isset($filter['condition1']) && !empty($filter['condition1'])) {
+            $conditions[] = $filter['condition1'];
+        }
+        if (isset($filter['condition2']) && !empty($filter['condition2'])) {
+            $conditions[] = $filter['condition2'];
+        }
+
+        if (!empty($conditions)) {
+            $query->where(function ($q) use ($field, $conditions, $operator) {
+                foreach ($conditions as $index => $condition) {
+                    if ($index === 0) {
+                        $this->applySpecificFilter($q, $field, $condition, 'where');
+                    } else {
+                        $method = $operator === 'or' ? 'orWhere' : 'where';
+                        $this->applySpecificFilter($q, $field, $condition, $method);
+                    }
+                }
+            });
+        }
+        return;
+    }
+
+    // Simple filter
+    $this->applySpecificFilter($query, $field, $filter, 'where');
+}
+
+private function applySpecificFilter($query, $field, $condition, $method = 'where')
+{
+    // Skip if no filter type or empty condition
+    if (empty($condition) || !isset($condition['filterType'])) {
+        return;
+    }
+
+    // Map virtual fields to actual DB fields
+    $mappedField = $this->mapFieldToDatabase($field);
+    
+    // Handle relation filters
+    if (str_contains($mappedField, '.')) {
+        [$relation, $relationField] = explode('.', $mappedField, 2);
+        $this->applyRelationFilter($query, $relation, $relationField, $condition, $method);
+        return;
+    }
+
+    // Special field handlers
+    if ($field === 'teams') {
+        $query->{$method . 'Has'}('projectTeamMembers.user', function ($q) use ($condition) {
+            $this->applySpecificFilter($q, 'name', $condition, 'where');
+        });
+        return;
+    }
+
+    if ($field === 'final_Price') {
+        $this->applyFinalPriceFilter($query, $condition, $method);
+        return;
+    }
+
+    if ($field === 'mask_client_name') {
+        $this->applyMaskClientNameFilter($query, $condition, $method);
+        return;
+    }
+
+    // Standard filter handling
+    $filterType = $condition['filterType'] ?? 'text';
+    $type = $condition['type'] ?? 'contains';
+
+    switch ($filterType) {
+        case 'set':
+            $this->applySetFilter($query, $mappedField, $condition, $method);
+            break;
+            
+        case 'date':
+            $this->applyDateFilter($query, $mappedField, $condition, $method);
+            break;
+            
+        case 'number':
+            $this->applyNumberFilter($query, $mappedField, $condition, $method);
+            break;
+            
+        case 'text':
+        default:
+            $this->applyTextFilter($query, $mappedField, $condition, $method);
+            break;
+    }
+}
+
+private function mapFieldToDatabase($field)
+{
+    $mapping = [
+        'client.notes' => 'client.notes',
+        'project_title' => 'project_title',
+        'project_address' => 'project_address',
+        'project_points' => 'project_points',
+        'budget_total' => 'budget_total',
+        'deduction_amount' => 'deduction_amount',
+        'project_admin_notes' => 'project_admin_notes',
+        'project_notes_estimator' => 'project_notes_estimator',
+        'notes_private' => 'notes_private',
+        'project_init_link' => 'project_init_link',
+        'project_final_link' => 'project_final_link',
+        'project_pricing' => 'project_pricing',
+        'project_area' => 'project_area',
+        'project_construction_type' => 'project_construction_type',
+        'project_line_items_pricing' => 'project_line_items_pricing',
+        'project_floor_number' => 'project_floor_number',
+        'project_due_date' => 'project_due_date',
+        'project_main_scope' => 'project_main_scope',
+        'project_scope_details' => 'project_scope_details',
+        'project_template' => 'project_template',
+        'project_status' => 'project_status',
+        'project_source' => 'project_source',
+        'preview_status' => 'preview_status',
+        'client_name_for_admin' => 'client_name_for_admin',
+    ];
+
+    return $mapping[$field] ?? $field;
+}
+
+private function applyRelationFilter($query, $relation, $field, $condition, $method)
+{
+    $query->{$method . 'Has'}($relation, function ($q) use ($field, $condition) {
+        $this->applySpecificFilter($q, $field, $condition, 'where');
+    });
+}
+
+private function applyFinalPriceFilter($query, $condition, $method)
+{
+    $filterType = $condition['filterType'] ?? 'number';
+    if ($filterType !== 'number') return;
+
+    $type = $condition['type'] ?? 'equals';
+    $value = $condition['filter'] ?? null;
+    $valueTo = $condition['filterTo'] ?? null;
+    
+    $rawExpression = '(COALESCE(budget_total, 0) - COALESCE(ded_amount, 0))';
+    
+    switch ($type) {
+        case 'equals':
+            $query->whereRaw("$rawExpression = ?", [$value]);
+            break;
+        case 'notEqual':
+            $query->whereRaw("$rawExpression != ?", [$value]);
+            break;
+        case 'greaterThan':
+            $query->whereRaw("$rawExpression > ?", [$value]);
+            break;
+        case 'greaterThanOrEqual':
+            $query->whereRaw("$rawExpression >= ?", [$value]);
+            break;
+        case 'lessThan':
+            $query->whereRaw("$rawExpression < ?", [$value]);
+            break;
+        case 'lessThanOrEqual':
+            $query->whereRaw("$rawExpression <= ?", [$value]);
+            break;
+        case 'inRange':
+            if ($value !== null && $valueTo !== null) {
+                $query->whereRaw("$rawExpression BETWEEN ? AND ?", [$value, $valueTo]);
+            }
+            break;
+        case 'blank':
+            $query->whereNull('budget_total')->whereNull('deduction_amount');
+            break;
+        case 'notBlank':
+            $query->whereNotNull('budget_total')->orWhereNotNull('deduction_amount');
+            break;
+    }
+}
+
+private function applyMaskClientNameFilter($query, $condition, $method)
+{
+    $type = $condition['type'] ?? 'contains';
+    $value = $condition['filter'] ?? null;
+
+    if ($type === 'blank') {
+        $query->{$method . 'Null'}('client_name_for_admin');
+        return;
+    }
+    if ($type === 'notBlank') {
+        $query->{$method . 'NotNull'}('client_name_for_admin');
+        return;
+    }
+
+    if (!$value) return;
+
+    // For mask_client_name, we filter on the actual client_name_for_admin
+    $operator = 'like';
+    $sqlValue = match ($type) {
+        'equals' => $value,
+        'startsWith' => $value . '%',
+        'endsWith' => '%' . $value,
+        'contains' => '%' . $value . '%',
+        default => '%' . $value . '%'
+    };
+
+    $query->{$method}('client_name_for_admin', $operator, $sqlValue);
+}
+
+private function applySetFilter($query, $field, $condition, $method)
+{
+    $values = $condition['values'] ?? [];
+    if (empty($values)) return;
+    
+    $query->{$method . 'In'}($field, $values);
+}
+
+private function applyDateFilter($query, $field, $condition, $method)
+{
+    $type = $condition['type'] ?? 'equals';
+    $dateFrom = $condition['dateFrom'] ?? null;
+    $dateTo = $condition['dateTo'] ?? null;
+
+    if (!$dateFrom && $type !== 'blank' && $type !== 'notBlank') return;
+
+    switch ($type) {
+        case 'equals':
+            $query->{$method . 'Date'}($field, $dateFrom);
+            break;
+        case 'notEqual':
+            $query->{$method . 'Date'}($field, '!=', $dateFrom);
+            break;
+        case 'greaterThan':
+            $query->{$method . 'Date'}($field, '>', $dateFrom);
+            break;
+        case 'greaterThanOrEqual':
+            $query->{$method . 'Date'}($field, '>=', $dateFrom);
+            break;
+        case 'lessThan':
+            $query->{$method . 'Date'}($field, '<', $dateFrom);
+            break;
+        case 'lessThanOrEqual':
+            $query->{$method . 'Date'}($field, '<=', $dateFrom);
+            break;
+        case 'inRange':
+            if ($dateFrom && $dateTo) {
+                $query->{$method . 'Between'}($field, [$dateFrom, $dateTo]);
+            }
+            break;
+        case 'blank':
+            $query->{$method . 'Null'}($field);
+            break;
+        case 'notBlank':
+            $query->{$method . 'NotNull'}($field);
+            break;
+    }
+}
+
+private function applyNumberFilter($query, $field, $condition, $method)
+{
+    $type = $condition['type'] ?? 'equals';
+    $value = $condition['filter'] ?? null;
+    $valueTo = $condition['filterTo'] ?? null;
+
+    switch ($type) {
+        case 'equals':
+            if ($value !== null) $query->{$method}($field, '=', $value);
+            break;
+        case 'notEqual':
+            if ($value !== null) $query->{$method}($field, '!=', $value);
+            break;
+        case 'greaterThan':
+            if ($value !== null) $query->{$method}($field, '>', $value);
+            break;
+        case 'greaterThanOrEqual':
+            if ($value !== null) $query->{$method}($field, '>=', $value);
+            break;
+        case 'lessThan':
+            if ($value !== null) $query->{$method}($field, '<', $value);
+            break;
+        case 'lessThanOrEqual':
+            if ($value !== null) $query->{$method}($field, '<=', $value);
+            break;
+        case 'inRange':
+            if ($value !== null && $valueTo !== null) {
+                $query->{$method . 'Between'}($field, [$value, $valueTo]);
+            }
+            break;
+        case 'blank':
+            $query->{$method . 'Null'}($field);
+            break;
+        case 'notBlank':
+            $query->{$method . 'NotNull'}($field);
+            break;
+    }
+}
+
+private function applyTextFilter($query, $field, $condition, $method)
+{
+    $type = $condition['type'] ?? 'contains';
+    $value = $condition['filter'] ?? null;
+
+    if ($type === 'blank') {
+        $query->{$method . 'Null'}($field);
+        return;
+    }
+    if ($type === 'notBlank') {
+        $query->{$method . 'NotNull'}($field);
+        return;
+    }
+
+    if (!$value) return;
+
+    $operator = 'like';
+    $sqlValue = match ($type) {
+        'equals' => $value,
+        'notEqual' => $value,
+        'startsWith' => $value . '%',
+        'endsWith' => '%' . $value,
+        'contains' => '%' . $value . '%',
+        'notContains' => '%' . $value . '%',
+        default => '%' . $value . '%'
+    };
+
+    if ($type === 'notEqual') {
+        $operator = '!=';
+    } elseif ($type === 'notContains') {
+        $operator = 'not like';
+    }
+
+    $query->{$method}($field, $operator, $sqlValue);
+}
+
+3. Additional Debug Helper (Optional)
+Add this temporary method to debug filter issues:
+
+private function debugFilter($filterModel)
+{
+    \Log::info('=== FILTER DEBUG ===');
+    foreach ($filterModel as $field => $filter) {
+        \Log::info("Field: $field", $filter);
+    }
+    \Log::info('===================');
+}
+
+Key Changes Made:
+Frontend: Added filterModel: params.api.getFilterModel() to the request payload
+
+Frontend: Added filterChanged event listener to auto-refresh when filters change
+
+Backend: Completely refactored filter handling with proper type separation
+
+Backend: Added field mapping for virtual/computed columns
+
+Backend: Properly handles all filter types (text, number, date, set)
+
+Backend: Added support for blank/notBlank operators
+
+Backend: Better handling of relation filters
+
+The main issue was that the filter model wasn't being sent from the frontend to the backend. Once that's fixed and the backend properly processes all filter types, your column filters should work correctly.

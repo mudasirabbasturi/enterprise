@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Head, Link, Breadcrumb, EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, DownloadOutlined, DollarOutlined, SettingOutlined, ApartmentOutlined, CheckCircleFilled, router, notification, PlusCircleOutlined, PrinterOutlined, CalendarOutlined, dayjs, WalletOutlined, HomeOutlined } from "@shared/ui";
 import { AgGridReact, gridTheme, defaultColDef } from "@agConfig/AgGridConfig";
-import { Select, Space, Button, Modal, Form, Input, InputNumber, DatePicker, Card, Typography, Divider, Tag, Tooltip, Dropdown, Menu } from 'antd';
+import { Select, Space, Button, Modal, Form, Input, Checkbox, InputNumber, DatePicker, Card, Typography, Divider, Tag, Tooltip, Dropdown, Menu, Collapse, Empty } from 'antd';
 import MainLayout from "@layout";
 import { calc } from 'antd/es/theme/internal';
 
@@ -27,9 +27,9 @@ const SalarySheet =
         // Sync local state when prop changes (e.g. month change)
         useEffect(() => {
             setAppliedShifts(monthlyShiftAssignments || []);
-            shiftForm.setFieldsValue({ shifts: monthlyShiftAssignments || [] });
         }, [monthlyShiftAssignments]);
         const watchedAdjustments = Form.useWatch('manual_adjustments', form);
+        const watchedGroups = Form.useWatch('groups', shiftForm);
 
         const monthOptions = [
             { value: 1, label: 'January' }, { value: 2, label: 'February' }, { value: 3, label: 'March' },
@@ -59,6 +59,74 @@ const SalarySheet =
 
         const calculatedWorkingDays = useMemo(() => getWorkingDays(month, year), [month, year]);
 
+        const usersByStatus = useMemo(() => {
+            const groups = {};
+            users.forEach(u => {
+                const s = u.status || 'active';
+                if (!groups[s]) groups[s] = [];
+                groups[s].push(u);
+            });
+            return groups;
+        }, [users]);
+
+        const getInitialGroups = () => {
+            let baseGroups = [];
+            if (appliedShifts && appliedShifts.length > 0) {
+                const userConfigs = {};
+                appliedShifts.forEach(s => {
+                    if (s.user_id !== null) {
+                        const range = { shift_id: s.shift_id, start_day: s.start_day, end_day: s.end_day };
+                        if (!userConfigs[s.user_id]) userConfigs[s.user_id] = [];
+                        userConfigs[s.user_id].push(range);
+                    }
+                });
+
+                const groupedByConfig = {};
+                Object.entries(userConfigs).forEach(([userId, ranges]) => {
+                    const sorted = [...ranges].sort((a, b) => a.start_day - b.start_day || a.shift_id - b.shift_id);
+                    const key = JSON.stringify(sorted);
+                    if (!groupedByConfig[key]) groupedByConfig[key] = { ranges: sorted, user_ids: [] };
+                    groupedByConfig[key].user_ids.push(parseInt(userId));
+                });
+
+                baseGroups = Object.values(groupedByConfig).map(group => ({
+                    ranges: group.ranges,
+                    user_ids: group.user_ids
+                }));
+            }
+
+            // Always ensure we have at least 1 group (Group A)
+            // If we have fewer, pad with an empty group
+            while (baseGroups.length < 1) {
+                baseGroups.push({ ranges: [{}], user_ids: [] });
+            }
+            return baseGroups;
+        };
+
+        useEffect(() => {
+            if (isShiftModalOpen) {
+                shiftForm.setFieldsValue({ groups: getInitialGroups() });
+            }
+        }, [isShiftModalOpen, appliedShifts]);
+
+        const unassignedUsers = useMemo(() => {
+            const assignedUserIds = new Set();
+            (watchedGroups || getInitialGroups()).forEach(g => {
+                (g.user_ids || []).forEach(id => assignedUserIds.add(id));
+            });
+            return users.filter(u => !assignedUserIds.has(u.id));
+        }, [users, watchedGroups, isShiftModalOpen]);
+
+        const unassignedUsersByStatus = useMemo(() => {
+            const groups = {};
+            unassignedUsers.forEach(u => {
+                const s = u.status || 'active';
+                if (!groups[s]) groups[s] = [];
+                groups[s].push(u);
+            });
+            return groups;
+        }, [unassignedUsers]);
+
         const getMinutes = (timeStr) => {
             if (!timeStr) return 0;
             const [h, m] = timeStr.split(':').map(Number);
@@ -77,6 +145,16 @@ const SalarySheet =
             const pointRate = parseFloat(config?.project_point_rate) || 0;
             const startOfMonth = dayjs(`${year}-${String(month).padStart(2, '0')}-01`);
             const lastDayOfMonth = startOfMonth.endOf('month').date();
+
+            // Pre-calculate user groups for display
+            const initialGroups = getInitialGroups();
+            const userGroupMap = {};
+            initialGroups.forEach((group, index) => {
+                const groupName = `Group ${String.fromCharCode(65 + index)}`;
+                (group.user_ids || []).forEach(uid => {
+                    userGroupMap[uid] = groupName;
+                });
+            });
 
             return users.map(user => {
                 if (!user.salary) return null;
@@ -105,6 +183,9 @@ const SalarySheet =
                 let manualOfficeMins = 0;
                 let regularHomeMins = 0;
 
+                let assignedShiftNames = [];
+                let hasMatchedAnyShift = false;
+
                 for (let d = 1; d <= lastDayOfMonth; d++) {
                     const dateObj = startOfMonth.date(d);
                     const dateStr = dateObj.format('YYYY-MM-DD');
@@ -124,14 +205,21 @@ const SalarySheet =
                         return dateObj.isSameOrAfter(leaveStart, 'day') && dateObj.isSameOrBefore(leaveEnd, 'day');
                     });
 
-                    // Match shift for the day
-                    const shiftRange = appliedShifts.find(s => d >= s.start_day && d <= s.end_day);
+                    // Match shift for the day: 
+                    // Priority 1: User-specific assignment for this range
+                    // Priority 2: Global monthly assignment for this range
+                    let shiftRange = appliedShifts.find(s => d >= s.start_day && d <= s.end_day && s.user_id === user.id);
+                    if (!shiftRange) {
+                        shiftRange = appliedShifts.find(s => d >= s.start_day && d <= s.end_day && !s.user_id);
+                    }
+
                     let shift = null;
                     if (shiftRange) {
+                        hasMatchedAnyShift = true;
                         shift = shifts.find(s => s.id === shiftRange.shift_id);
-                    } else {
-                        const weeklyShift = user.user_shift_schedules?.find(s => s.day === dayName);
-                        shift = weeklyShift?.shift;
+                        if (shift && !assignedShiftNames.includes(shift.name)) {
+                            assignedShiftNames.push(shift.name);
+                        }
                     }
 
                     if (onLeave) {
@@ -153,10 +241,10 @@ const SalarySheet =
                                 totalMissingAttendanceDays++;
                             }
 
-                            const workedDur = getDuration(att.check_in, att.check_out);
-                            const breakDur = getDuration(att.break_start, att.break_end);
-                            const actualBreak = (breakDur > 0) ? breakDur : (shift.total_break_minutes || 0);
-                            const netWorked = workedDur - actualBreak;
+                            // Rule: If check_out is missing, user does not count any hours
+                            const workedDur = (att.check_in && att.check_out) ? getDuration(att.check_in, att.check_out) : 0;
+                            // Rule: Do not count/subtract break duration
+                            const netWorked = workedDur;
 
                             totalActualWorkedMinutes += netWorked;
 
@@ -211,7 +299,8 @@ const SalarySheet =
                 const totalRequiredHours = finalRequiredMinutes / 60;
                 const totalWorkedHours = totalActualWorkedMinutes / 60;
 
-                const hourlyRate = grossSalary / (Math.max(1, totalRequiredHours));
+                // CRITICAL CHANGE: hourlyRate is now based on baseSalary (Basic Salary) instead of grossSalary
+                const hourlyRate = baseSalary / (Math.max(1, totalRequiredHours));
                 const undertimeRate = parseFloat(config?.undertime_penalty_per_hour) || hourlyRate;
                 const absentRate = parseFloat(config?.absent_penalty_rate) || hourlyRate;
                 const overtimeRate = parseFloat(config?.overtime_bonus_per_hour) || 0;
@@ -273,14 +362,19 @@ const SalarySheet =
                 const projectPointsAmount = userProjectPoints * pointRate;
                 const deductionTotal = userAdjustments.filter(a => a.type === 'deduction').reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
 
-                const totalDeductions = absentDeduction + undertimeDeduction + latePenaltyDeduction + missingAttendancePenaltyDeduction + totalManualPenalty + totalTax + deductionTotal;
-                const netPay = Math.max(0, grossSalary + overtimeBonus + totalExtraEarnings + bonusTotal + manualPointsTotal + projectPointsAmount - totalDeductions);
+                const hasNoShift = !hasMatchedAnyShift;
+                const totalDeductions = hasNoShift ? 0 : (absentDeduction + undertimeDeduction + latePenaltyDeduction + missingAttendancePenaltyDeduction + totalManualPenalty + totalTax + deductionTotal);
+                const netPay = hasNoShift ? 0 : Math.max(0, grossSalary + overtimeBonus + totalExtraEarnings + bonusTotal + manualPointsTotal + projectPointsAmount - totalDeductions);
 
                 const payment = payments.find(p => p.user_id === user.id);
 
                 return {
                     ...user,
-                    gross_salary: grossSalary,
+                    base_salary: baseSalary,
+                    gross_salary: hasNoShift ? 0 : grossSalary,
+                    shift_group: userGroupMap[user.id] || "No Group Assigned",
+                    assigned_shift: assignedShiftNames.length > 0 ? assignedShiftNames.join(", ") : "No Shift Assigned",
+                    has_no_shift: hasNoShift,
                     present_days: presentDays,
                     leave_days: approvedLeaveDays,
                     absent_days: absentDays,
@@ -291,6 +385,7 @@ const SalarySheet =
                     missing_attendance_days: totalMissingAttendanceDays,
                     total_required_hours: totalRequiredHours,
                     total_worked_hours: totalWorkedHours,
+                    hourly_rate: hourlyRate,
 
                     // Detailed Breakdown for Modal
                     breakdown: {
@@ -344,7 +439,24 @@ const SalarySheet =
         }, [users, attendances, penalties, payments, adjustments, config, leaveRequests, month, year, appliedShifts, shifts, holidays]);
 
         const columnDefs = useMemo(() => [
+            { headerName: "Group", field: "shift_group", rowGroup: true, hide: true },
             { headerName: "Employee", field: "name", pinned: 'left', width: 200 },
+            {
+                headerName: "Emp. Status",
+                field: "status",
+                width: 110,
+                cellRenderer: params => (
+                    <Tag color={params.value === 'active' ? 'success' : 'error'}>
+                        {params.value ? params.value.charAt(0).toUpperCase() + params.value.slice(1) : 'N/A'}
+                    </Tag>
+                )
+            },
+            {
+                headerName: "Assigned Shift",
+                field: "assigned_shift",
+                width: 140,
+                cellRenderer: params => <Tag color="processing">{params.value}</Tag>
+            },
             {
                 headerName: "Required/Worked Hrs",
                 valueGetter: params => `${params.data.total_required_hours?.toFixed(1)} / ${params.data.total_worked_hours?.toFixed(1)}`,
@@ -359,6 +471,14 @@ const SalarySheet =
                 filter: false,
                 sortable: false,
                 cellClass: 'fw-bold',
+            },
+            {
+                headerName: "Basic Salary",
+                field: "base_salary",
+                width: 120,
+                valueFormatter: params => (params.value || 0).toLocaleString(),
+                filter: false,
+                sortable: false
             },
             {
                 headerName: "Gross Salary",
@@ -395,7 +515,27 @@ const SalarySheet =
             {
                 headerName: "Deductions",
                 children: [
-                    { headerName: "Tax", field: "total_tax", width: 100, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
+                    {
+                        headerName: "Taxes",
+                        field: "total_tax",
+                        minWidth: 150,
+                        flex: 3,
+                        filter: false,
+                        sortable: false,
+                        cellRenderer: params => {
+                            const taxes = params.data.breakdown?.taxes || [];
+                            if (taxes.length === 0) return <Text type="secondary">No Tax</Text>;
+                            return (
+                                <div style={{ fontSize: '12px', lineHeight: '1.2', display: 'flex', flexWrap: 'nowrap', gap: '4px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                    {taxes.map((t, i) => (
+                                        <Tag key={i} color="red" style={{ fontSize: '10px', margin: 0, flexShrink: 0 }}>
+                                            {t.name}: {Math.round(t.amount).toLocaleString()}
+                                        </Tag>
+                                    ))}
+                                </div>
+                            );
+                        }
+                    },
                     { headerName: "Undertime", field: "undertime_deduction", width: 110, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
                     { headerName: "Abs Pen", field: "absent_deduction", width: 110, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
                     { headerName: "Manual Pen", field: "manual_penalty", width: 120, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
@@ -407,22 +547,18 @@ const SalarySheet =
                     {
                         headerName: "Net Pay",
                         field: "net_pay",
-                        pinned: 'right',
                         cellClass: 'fw-bold text-success',
                         valueFormatter: params => `Rs. ${Math.round(params.value || 0).toLocaleString()}`,
                         width: 140,
-
                         filter: false,
-                        sortable: false,
+                        sortable: false, pinned: 'right',
                     },
                     {
                         headerName: "Status",
                         field: "payment_status",
-                        pinned: 'right',
-                        width: 100,
-
+                        width: 110,
                         filter: false,
-                        sortable: false,
+                        sortable: false, pinned: 'right',
                         cellRenderer: params => (
                             <Tag color={params.value === 'Paid' ? 'success' : 'warning'}>{params.value}</Tag>
                         )
@@ -431,8 +567,8 @@ const SalarySheet =
                         headerName: "Actions",
                         colId: 'actions',
                         pinned: 'right',
-                        width: 80,
-
+                        width: 100,
+                        suppressSizeToFit: true,
                         filter: false,
                         sortable: false,
                         cellRenderer: params => (
@@ -626,7 +762,7 @@ const SalarySheet =
                     <div className="d-flex justify-content-between align-items-center ps-2 pe-2 mt-2">
                         <Breadcrumb
                             className='breadCrumb'
-                            items={[{ title: <Link href="/">Home</Link> }, { title: 'Payroll' }, { title: 'Salary Sheets' }]}
+                            items={[{ title: <Link href="/">Home</Link> }, { title: 'Payroll' }, { title: 'Salary Sheets' }, { title: <small style={{ color: "green" }}>Users: (Salary Assigned )</small> }]}
                         />
                         <div className="d-flex gap-2">
                             <Select value={month} onChange={setMonth} options={monthOptions} style={{ width: 130 }} />
@@ -659,9 +795,9 @@ const SalarySheet =
                         </div>
                     </div>
 
-                    <div className="card mt-4 mx-2 border-0 shadow-sm" style={{ borderRadius: '12px', overflow: 'hidden' }}>
+                    <div className="card mt-2 mx-2 border-0 shadow-sm" style={{ borderRadius: '12px' }}>
                         <div className="card-body p-0">
-                            <div className="ag-grid-wrapper">
+                            <div className="ag-grid-wrapper" style={{ height: 'calc(100vh - 130px)' }}>
                                 <AgGridReact
                                     ref={gridRef}
                                     rowData={rowData}
@@ -669,16 +805,29 @@ const SalarySheet =
                                     defaultColDef={{
                                         ...defaultColDef,
                                         flex: 1,
+                                        minWidth: 120,
                                         suppressMenu: true,
                                         suppressHeaderMenuButton: true,
                                         filter: true,
                                         floatingFilter: false,
                                         wrapHeaderText: true,
                                         autoHeaderHeight: true,
+                                        resizable: true,
+                                    }}
+                                    getRowStyle={params => {
+                                        if (params.data?.has_no_shift) {
+                                            return { backgroundColor: '#fff1f0', color: '#cf1322' };
+                                        }
                                     }}
                                     theme={gridTheme}
                                     pagination={true}
-                                    paginationPageSize={20}
+                                    paginationPageSize={100}
+                                    groupDisplayType="groupRows"
+                                    groupDefaultExpanded={1}
+                                    autoSizeStrategy={{
+                                        type: 'fitGridWidth',
+                                        defaultMinWidth: 100
+                                    }}
                                 />
                             </div>
                         </div>
@@ -1092,89 +1241,382 @@ const SalarySheet =
                 </Modal>
 
                 <Modal
-                    title="Define Monthly Shift Ranges"
+                    title={<Space><ApartmentOutlined /> {monthOptions.find(m => m.value === month)?.label} {year} - Advanced Shift Assignment</Space>}
                     open={isShiftModalOpen}
                     onCancel={() => setIsShiftModalOpen(false)}
-                    onOk={() => {
-                        shiftForm.validateFields().then(values => {
-                            setLoading(true);
-                            router.post(route('salary-sheets.shifts.save'), {
-                                month,
-                                year,
-                                shifts: values.shifts
-                            }, {
-                                onSuccess: () => {
+                    footer={[
+                        <Button key="cancel" onClick={() => setIsShiftModalOpen(false)}>Close</Button>,
+                        <Button key="submit" type="primary" loading={loading} onClick={() => {
+                            shiftForm.validateFields().then(values => {
+                                setLoading(true);
+                                router.post(route('salary-sheets.shifts.save'), {
+                                    month,
+                                    year,
+                                    groups: values.groups || []
+                                }, {
+                                    onSuccess: () => {
+                                        setLoading(false);
+                                        setIsShiftModalOpen(false);
+                                        api.success({ message: 'Saved Successfully', description: 'All group assignments have been updated.' });
+                                    },
+                                    onError: (errors) => {
+                                        setLoading(false);
+                                        Object.values(errors).forEach(err => {
+                                            api.error({
+                                                message: 'Update Failed',
+                                                description: err,
+                                                placement: 'topRight'
+                                            });
+                                        });
+                                    }
+                                }).catch(info => {
                                     setLoading(false);
-                                    setIsShiftModalOpen(false);
-                                    api.success({ message: 'Shifts Saved', description: 'Monthly shift rules persisted and applied.' });
-                                },
-                                onError: () => setLoading(false)
+                                    api.error({
+                                        message: 'Validation Error',
+                                        description: 'Please fix the highlighted errors (like overlapping ranges) before saving.',
+                                        placement: 'topRight'
+                                    });
+                                });
                             });
-                        });
-                    }}
-                    width={700}
+                        }}>
+                            Save All Assignments
+                        </Button>
+                    ]}
+                    width={1100}
+                    centered
+                    bodyStyle={{ padding: '0', backgroundColor: '#f0f2f5' }}
                 >
-                    <div className="alert alert-warning mb-4" style={{ fontSize: '12px' }}>
-                        Define date ranges for shifts in {monthOptions.find(m => m.value === month)?.label}.
-                        Dates outside these ranges will use the default calculation.
-                    </div>
-                    <Form form={shiftForm} layout="vertical">
-                        <Form.List name="shifts">
-                            {(fields, { add, remove }) => (
-                                <>
-                                    {fields.map(({ key, name, ...restField }) => (
-                                        <div key={key} className="row g-2 mb-3 bg-light p-3 rounded mx-0">
-                                            <div className="col-md-5">
-                                                <Form.Item
-                                                    {...restField}
-                                                    name={[name, 'shift_id']}
-                                                    label="Shift"
-                                                    rules={[{ required: true, message: 'Select shift' }]}
-                                                >
-                                                    <Select
-                                                        options={shifts.map(s => ({
-                                                            label: `${s.name} (${s.start_time} - ${s.end_time})`,
-                                                            value: s.id
-                                                        }))}
-                                                        placeholder="Select Shift"
-                                                    />
-                                                </Form.Item>
-                                            </div>
-                                            <div className="col-md-3">
-                                                <Form.Item
-                                                    {...restField}
-                                                    name={[name, 'start_day']}
-                                                    label="Start Day"
-                                                    rules={[{ required: true, message: 'Req' }]}
-                                                >
-                                                    <InputNumber min={1} max={31} placeholder="1" style={{ width: '100%' }} />
-                                                </Form.Item>
-                                            </div>
-                                            <div className="col-md-3">
-                                                <Form.Item
-                                                    {...restField}
-                                                    name={[name, 'end_day']}
-                                                    label="End Day"
-                                                    rules={[{ required: true, message: 'Req' }]}
-                                                >
-                                                    <InputNumber min={1} max={31} placeholder="31" style={{ width: '100%' }} />
-                                                </Form.Item>
-                                            </div>
-                                            <div className="col-md-1 d-flex align-items-center pt-3">
-                                                <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(name)} />
-                                            </div>
+                    <div className="p-4">
+                        <Card bordered={false} className="mb-4 shadow-sm" bodyStyle={{ padding: '15px 24px' }} style={{ borderRadius: '12px', background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(8px)' }}>
+                            <div className="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <Title level={5} className="mb-1" style={{ color: '#001529' }}>Assignment Overview</Title>
+                                    <Text type="secondary" style={{ fontSize: '13px' }}>Users can be assigned to unique shift ranges. Only <strong>Unassigned</strong> users can be added to new groups.</Text>
+                                </div>
+                                <div className="text-end">
+                                    <Space size="large">
+                                        <div className="text-center">
+                                            <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1890ff' }}>{users.length}</div>
+                                            <div style={{ fontSize: '11px', color: '#8c8c8c', textTransform: 'uppercase' }}>Total Users</div>
                                         </div>
-                                    ))}
-                                    <Button type="dashed" onClick={() => add()} block icon={<PlusCircleOutlined />}>
-                                        Add Shift Range
-                                    </Button>
-                                </>
-                            )}
-                        </Form.List>
-                    </Form>
+                                        <Divider type="vertical" style={{ height: '30px' }} />
+                                        <div className="text-center">
+                                            <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#52c41a' }}>{users.length - unassignedUsers.length}</div>
+                                            <div style={{ fontSize: '11px', color: '#8c8c8c', textTransform: 'uppercase' }}>Assigned</div>
+                                        </div>
+                                        <Divider type="vertical" style={{ height: '30px' }} />
+                                        <div className="text-center">
+                                            <div style={{ fontSize: '20px', fontWeight: 'bold', color: unassignedUsers.length > 0 ? '#faad14' : '#52c41a' }}>{unassignedUsers.length}</div>
+                                            <div style={{ fontSize: '11px', color: '#8c8c8c', textTransform: 'uppercase' }}>Unassigned</div>
+                                        </div>
+                                    </Space>
+                                </div>
+                            </div>
+                        </Card>
+
+                        <Form form={shiftForm} layout="vertical">
+                            <Form.List name="groups">
+                                {(groupFields, groupOps) => (
+                                    <div className="row g-4">
+                                        {groupFields.map((groupField, groupIndex) => {
+                                            const allGroups = shiftForm.getFieldValue('groups') || [];
+                                            // Users assigned in other groups should be excluded from this group's selection list
+                                            const otherGroupUserIds = allGroups.flatMap((g, idx) =>
+                                                idx !== groupIndex ? (g.user_ids || []) : []
+                                            );
+
+                                            const groupColor = ['#1890ff', '#722ed1', '#eb2f96', '#2f54eb', '#fa8c16'][groupIndex % 5];
+
+                                            return (
+                                                <div key={groupField.key} className="col-12">
+                                                    <Card
+                                                        hoverable
+                                                        className="border-0 shadow-sm"
+                                                        style={{ borderRadius: '12px', overflow: 'hidden' }}
+                                                        bodyStyle={{ padding: 0 }}
+                                                        title={
+                                                            <div className="d-flex justify-content-between align-items-center w-100">
+                                                                <Space>
+                                                                    <div style={{ width: '8px', height: '24px', backgroundColor: groupColor, borderRadius: '4px' }} />
+                                                                    <Text strong style={{ fontSize: '16px' }}>Group {String.fromCharCode(65 + groupIndex)}</Text>
+                                                                    <Tag color="default" style={{ borderRadius: '10px', fontSize: '11px' }}>
+                                                                        {(allGroups[groupIndex]?.user_ids || []).length} Users
+                                                                    </Tag>
+                                                                </Space>
+                                                                <Space>
+                                                                    <Button
+                                                                        type="primary"
+                                                                        ghost
+                                                                        size="small"
+                                                                        icon={<CheckCircleOutlined />}
+                                                                        onClick={() => {
+                                                                            shiftForm.validateFields().then(values => {
+                                                                                setLoading(true);
+                                                                                router.post(route('salary-sheets.shifts.save'), {
+                                                                                    month, year, groups: values.groups
+                                                                                }, {
+                                                                                    onSuccess: () => {
+                                                                                        setLoading(false);
+                                                                                        api.success({ message: `Group ${String.fromCharCode(65 + groupIndex)} Updated` });
+                                                                                    },
+                                                                                    onError: (errors) => {
+                                                                                        setLoading(false);
+                                                                                        Object.values(errors).forEach(err => {
+                                                                                            api.error({
+                                                                                                message: 'Group Update Failed',
+                                                                                                description: err,
+                                                                                                placement: 'topRight'
+                                                                                            });
+                                                                                        });
+                                                                                    }
+                                                                                }).catch(info => {
+                                                                                    setLoading(false);
+                                                                                    api.error({
+                                                                                        message: 'Validation Error',
+                                                                                        description: 'Please fix the highlighted errors in this group before saving.',
+                                                                                        placement: 'topRight'
+                                                                                    });
+                                                                                });
+                                                                            });
+                                                                        }}
+                                                                    >
+                                                                        Update This Group
+                                                                    </Button>
+                                                                    <Tooltip title="Remove this group">
+                                                                        <Button type="text" danger icon={<DeleteOutlined />} onClick={() => groupOps.remove(groupIndex)} />
+                                                                    </Tooltip>
+                                                                </Space>
+                                                            </div>
+                                                        }
+                                                    >
+                                                        <div className="row g-0">
+                                                            <div className="col-md-5 border-end p-4 bg-white">
+                                                                <Divider orientation="left" style={{ marginTop: 0 }}><Text type="secondary" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>1. Shift Ranges</Text></Divider>
+
+                                                                <Form.List
+                                                                    name={[groupField.name, 'ranges']}
+                                                                    initialValue={[{}]}
+                                                                >
+                                                                    {(rangeFields, rangeOps, { errors }) => (
+                                                                        <div>
+                                                                            {rangeFields.map((rangeField, rangeIndex) => (
+                                                                                <div key={rangeField.key} className="p-3 mb-3 border rounded-3 bg-light position-relative">
+                                                                                    {rangeFields.length > 1 && (
+                                                                                        <Button
+                                                                                            type="text"
+                                                                                            danger
+                                                                                            size="small"
+                                                                                            icon={<DeleteOutlined />}
+                                                                                            className="position-absolute"
+                                                                                            style={{ top: '5px', right: '5px' }}
+                                                                                            onClick={() => rangeOps.remove(rangeIndex)}
+                                                                                        />
+                                                                                    )}
+                                                                                    <Form.Item
+                                                                                        {...rangeField}
+                                                                                        name={[rangeField.name, 'shift_id']}
+                                                                                        label="Shift Pattern"
+                                                                                        rules={[{ required: true, message: 'Select shift' }]}
+                                                                                        className="mb-2"
+                                                                                    >
+                                                                                        <Select
+                                                                                            placeholder="Choose Shift"
+                                                                                            options={shifts.map(s => ({
+                                                                                                label: `${s.name} (${s.start_time} - ${s.end_time})`,
+                                                                                                value: s.id
+                                                                                            }))}
+                                                                                        />
+                                                                                    </Form.Item>
+                                                                                    <div className="row g-2">
+                                                                                        <div className="col-6">
+                                                                                            <Form.Item
+                                                                                                {...rangeField}
+                                                                                                name={[rangeField.name, 'start_day']}
+                                                                                                label="From Day"
+                                                                                                rules={[
+                                                                                                    { required: true, message: 'Day required' },
+                                                                                                    { type: 'number', min: 1, max: 31 },
+                                                                                                    ({ getFieldValue }) => ({
+                                                                                                        validator(_, value) {
+                                                                                                            if (value === undefined || value === null) return Promise.resolve();
+                                                                                                            const ranges = getFieldValue(['groups', groupIndex, 'ranges']) || [];
+                                                                                                            const currentEnd = getFieldValue(['groups', groupIndex, 'ranges', rangeIndex, 'end_day']);
+
+                                                                                                            for (let i = 0; i < ranges.length; i++) {
+                                                                                                                if (i === rangeIndex) continue;
+                                                                                                                const other = ranges[i];
+                                                                                                                if (!other || other.start_day === undefined || other.end_day === undefined) continue;
+                                                                                                                if (value <= other.end_day && (currentEnd || value) >= other.start_day) {
+                                                                                                                    return Promise.reject(new Error(`Overlaps with range ${other.start_day}-${other.end_day}`));
+                                                                                                                }
+                                                                                                            }
+                                                                                                            return Promise.resolve();
+                                                                                                        }
+                                                                                                    })
+                                                                                                ]}
+                                                                                                className="mb-0"
+                                                                                            >
+                                                                                                <InputNumber className="w-100" />
+                                                                                            </Form.Item>
+                                                                                        </div>
+                                                                                        <div className="col-6">
+                                                                                            <Form.Item
+                                                                                                {...rangeField}
+                                                                                                name={[rangeField.name, 'end_day']}
+                                                                                                label="To Day"
+                                                                                                rules={[
+                                                                                                    { required: true, message: 'Day required' },
+                                                                                                    { type: 'number', min: 1, max: 31 },
+                                                                                                    ({ getFieldValue }) => ({
+                                                                                                        validator(_, value) {
+                                                                                                            if (value === undefined || value === null) return Promise.resolve();
+                                                                                                            const start = getFieldValue(['groups', groupIndex, 'ranges', rangeIndex, 'start_day']);
+                                                                                                            if (start && value < start) {
+                                                                                                                return Promise.reject(new Error('End must be >= Start!'));
+                                                                                                            }
+
+                                                                                                            const ranges = getFieldValue(['groups', groupIndex, 'ranges']) || [];
+                                                                                                            for (let i = 0; i < ranges.length; i++) {
+                                                                                                                if (i === rangeIndex) continue;
+                                                                                                                const other = ranges[i];
+                                                                                                                if (!other || other.start_day === undefined || other.end_day === undefined) continue;
+                                                                                                                if ((start || value) <= other.end_day && value >= other.start_day) {
+                                                                                                                    return Promise.reject(new Error(`Overlaps with range ${other.start_day}-${other.end_day}`));
+                                                                                                                }
+                                                                                                            }
+                                                                                                            return Promise.resolve();
+                                                                                                        },
+                                                                                                    }),
+                                                                                                ]}
+                                                                                                className="mb-0"
+                                                                                            >
+                                                                                                <InputNumber className="w-100" />
+                                                                                            </Form.Item>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                            <Form.ErrorList errors={errors} className="mb-2" />
+                                                                            <Button
+                                                                                type="dashed"
+                                                                                block
+                                                                                icon={<PlusCircleOutlined />}
+                                                                                onClick={() => rangeOps.add({})}
+                                                                                style={{ borderRadius: '8px' }}
+                                                                            >
+                                                                                Add Range
+                                                                            </Button>
+                                                                        </div>
+                                                                    )}
+                                                                </Form.List>
+                                                            </div>
+                                                            <div className="col-md-7 p-4" style={{ backgroundColor: '#fafafa' }}>
+                                                                <Divider orientation="left" style={{ marginTop: 0 }}><Text type="secondary" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>2. Member Selection</Text></Divider>
+
+                                                                <Form.Item name={[groupField.name, 'user_ids']} noStyle>
+                                                                    <Checkbox.Group className="w-100">
+                                                                        <div style={{ maxHeight: '350px', overflowY: 'auto', paddingRight: '10px' }}>
+                                                                            {Object.entries(usersByStatus).map(([status, statusUsers]) => {
+                                                                                // Filter users: exclude those in OTHER groups
+                                                                                const selectableUsers = statusUsers.filter(u => !otherGroupUserIds.includes(u.id));
+                                                                                if (selectableUsers.length === 0) return null;
+
+                                                                                const groupUserIds = selectableUsers.map(u => u.id);
+                                                                                const currentSelections = shiftForm.getFieldValue(['groups', groupIndex, 'user_ids']) || [];
+                                                                                const isAllSelected = groupUserIds.every(id => currentSelections.includes(id));
+
+                                                                                return (
+                                                                                    <div key={status} className="mb-4">
+                                                                                        <div className="d-flex justify-content-between align-items-baseline mb-2 border-bottom pb-1">
+                                                                                            <Text strong style={{ fontSize: '11px', textTransform: 'uppercase', color: '#8c8c8c' }}>{status} ({selectableUsers.length})</Text>
+                                                                                            <Button
+                                                                                                type="link"
+                                                                                                size="small"
+                                                                                                style={{ padding: 0, fontSize: '11px' }}
+                                                                                                onClick={() => {
+                                                                                                    const current = shiftForm.getFieldValue(['groups', groupIndex, 'user_ids']) || [];
+                                                                                                    let next;
+                                                                                                    if (isAllSelected) {
+                                                                                                        next = current.filter(id => !groupUserIds.includes(id));
+                                                                                                    } else {
+                                                                                                        next = [...new Set([...current, ...groupUserIds])];
+                                                                                                    }
+                                                                                                    const gs = [...shiftForm.getFieldValue('groups')];
+                                                                                                    gs[groupIndex] = { ...gs[groupIndex], user_ids: next };
+                                                                                                    shiftForm.setFieldsValue({ groups: gs });
+                                                                                                }}
+                                                                                            >
+                                                                                                {isAllSelected ? 'Deselect All' : 'Select All'}
+                                                                                            </Button>
+                                                                                        </div>
+                                                                                        <div className="row g-2">
+                                                                                            {selectableUsers.map(u => (
+                                                                                                <div key={u.id} className="col-md-6">
+                                                                                                    <div className={`p-2 rounded border bg-white d-flex align-items-center ${currentSelections.includes(u.id) ? 'border-primary' : ''}`} style={{ transition: 'all 0.2s' }}>
+                                                                                                        <Checkbox value={u.id}>
+                                                                                                            <Text style={{ fontSize: '13px' }}>{u.name}</Text>
+                                                                                                        </Checkbox>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    </Checkbox.Group>
+                                                                </Form.Item>
+                                                            </div>
+                                                        </div>
+                                                    </Card>
+                                                </div>
+                                            );
+                                        })}
+
+                                        <div className="col-12 mt-2">
+                                            <Button
+                                                type="dashed"
+                                                block
+                                                size="large"
+                                                icon={<PlusCircleOutlined />}
+                                                onClick={() => groupOps.add({ ranges: [{}], user_ids: [] })}
+                                                style={{ borderRadius: '12px', height: '60px', borderStyle: 'dashed', borderWidth: '2px' }}
+                                            >
+                                                Create New Assignment Group
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </Form.List>
+                        </Form>
+                    </div>
                 </Modal>
 
                 <style>{`
+                    .ag-theme-alpine, .ag-theme-alpine-dark {
+                        --ag-header-foreground-color: #444;
+                        --ag-header-background-color: #f8f9fa;
+                        --ag-font-size: 13px;
+                    }
+                    .ag-header-cell-text {
+                        white-space: normal !important;
+                        overflow: visible !important;
+                        line-height: 1.2 !important;
+                        font-weight: 600 !important;
+                    }
+                    .ag-cell {
+                        display: flex;
+                        align-items: center;
+                        white-space: normal !important;
+                        line-height: 1.4 !important;
+                        padding-top: 4px !important;
+                        padding-bottom: 4px !important;
+                    }
+                    .ag-grid-wrapper .ag-root-wrapper {
+                        border-radius: 12px !important;
+                        border: none !important;
+                    }
+                    
                     @media print {
                         @page {
                             margin: 0.5cm;

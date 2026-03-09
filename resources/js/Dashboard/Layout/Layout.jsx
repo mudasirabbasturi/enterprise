@@ -51,7 +51,6 @@ const DashboardLayout = ({ children }) => {
     userpermission?.some((p) => p.name === permName);
   const userPermissions = props.auth.user?.role?.permissions || [];
   const can = (perm) => hasPermission(userPermissions, perm);
-
   const [collapsed, setCollapsed] = useState(false);
   const [openKeys, setOpenKeys] = useState([]);
   const [savedOpenKeys, setSavedOpenKeys] = useState([]);
@@ -296,18 +295,6 @@ const DashboardLayout = ({ children }) => {
             </div>{" "}
             <div className="right">
               <div className="d-flex">
-                <div>
-                  <button
-                    className="btn btn-sm btn-outline-primary me-3"
-                    onClick={() =>
-                      router.visit(route("user.tracking"))
-                    }
-                  >
-                    User Activity
-                  </button>
-
-                </div>
-
                 {can("View Project Chart") && (
                   <>
                     <div>
@@ -325,6 +312,14 @@ const DashboardLayout = ({ children }) => {
                         }
                       >
                         <BarChartOutlined />
+                      </button>
+                      <button
+                        className="btn btn-sm btn-outline-primary me-3"
+                        onClick={() =>
+                          router.visit(route("user.tracking"))
+                        }
+                      >
+                        User Activity
                       </button>
                     </div>
                   </>
