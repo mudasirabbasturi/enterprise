@@ -38,12 +38,6 @@ const LeaveRequestForm = forwardRef(({ initialValues, mode, onClose, leaveTypes,
     const calculateDays = () => {
         const start = form.getFieldValue('start_date');
         const end = form.getFieldValue('end_date');
-        const isHalf = form.getFieldValue('is_half_day');
-
-        if (isHalf) {
-            form.setFieldsValue({ total_days: 0.5 });
-            return;
-        }
 
         if (start && end) {
             const days = end.diff(start, 'day') + 1;
@@ -171,25 +165,6 @@ const LeaveRequestForm = forwardRef(({ initialValues, mode, onClose, leaveTypes,
                     </div>
                 </div>
 
-                <div className="row">
-                    <div className="col-md-6">
-                        <Form.Item name="is_half_day" label="Half Day?" valuePropName="checked">
-                            <Switch />
-                        </Form.Item>
-                    </div>
-                    {form.getFieldValue('is_half_day') && (
-                        <div className="col-md-6">
-                            <Form.Item name="half_day_type" label="Half Day Type">
-                                <Select
-                                    options={[
-                                        { label: 'First Half', value: 'first_half' },
-                                        { label: 'Second Half', value: 'second_half' },
-                                    ]}
-                                />
-                            </Form.Item>
-                        </div>
-                    )}
-                </div>
 
                 <Form.Item
                     name="reason"

@@ -17,9 +17,7 @@ const LeaveTypeForm = forwardRef(({ initialValues, mode, onClose, notificationAp
         } else {
             form.resetFields();
             form.setFieldsValue({
-                is_paid: true,
-                is_carry_forward: false,
-                allow_half_day: true,
+                requires_approval: true,
             });
         }
     }, [initialValues, form]);
@@ -61,28 +59,17 @@ const LeaveTypeForm = forwardRef(({ initialValues, mode, onClose, notificationAp
             layout="vertical"
             onFinish={onFinish}
             initialValues={{
-                is_paid: true,
-                is_carry_forward: false,
-                allow_half_day: true,
+                requires_approval: true,
             }}
         >
             <div className="row">
-                <div className="col-md-6">
+                <div className="col-md-12">
                     <Form.Item
                         name="name"
                         label="Name"
                         rules={[{ required: true, message: "Please enter leave type name" }]}
                     >
                         <Input placeholder="e.g. Annual Leave" />
-                    </Form.Item>
-                </div>
-                <div className="col-md-6">
-                    <Form.Item
-                        name="code"
-                        label="Code"
-                        rules={[{ required: true, message: "Please enter code" }]}
-                    >
-                        <Input placeholder="e.g. AL" />
                     </Form.Item>
                 </div>
             </div>
@@ -99,20 +86,9 @@ const LeaveTypeForm = forwardRef(({ initialValues, mode, onClose, notificationAp
                     </Form.Item>
                 </div>
             </div>
-
             <div className="row">
-                <div className="col-md-4">
-                    <Form.Item name="is_paid" label="Is Paid" valuePropName="checked">
-                        <Switch />
-                    </Form.Item>
-                </div>
-                <div className="col-md-4">
-                    <Form.Item name="is_carry_forward" label="Is Carry Forward" valuePropName="checked">
-                        <Switch />
-                    </Form.Item>
-                </div>
-                <div className="col-md-4">
-                    <Form.Item name="allow_half_day" label="Allow Half Day" valuePropName="checked">
+                <div className="col-md-6">
+                    <Form.Item name="requires_approval" label="Requires Approval" valuePropName="checked">
                         <Switch />
                     </Form.Item>
                 </div>

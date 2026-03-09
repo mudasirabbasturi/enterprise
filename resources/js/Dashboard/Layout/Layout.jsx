@@ -39,6 +39,7 @@ import {
 import { Layout, Button, Dropdown, Avatar, notification } from "antd";
 
 import Sidebar from "@component/Sidebar/Sidebar";
+import QuickAttendanceModal from "@component/Attendance/QuickAttendanceModal";
 const { Header, Content } = Layout;
 
 const DashboardLayout = ({ children }) => {
@@ -46,6 +47,7 @@ const DashboardLayout = ({ children }) => {
   const route = useRoute();
   const { props } = usePage();
   const user = props.auth.user;
+  const [isQuickAttendanceModalOpen, setIsQuickAttendanceModalOpen] = useState(false);
 
   const hasPermission = (userpermission, permName) =>
     userpermission?.some((p) => p.name === permName);
@@ -295,11 +297,19 @@ const DashboardLayout = ({ children }) => {
             </div>{" "}
             <div className="right">
               <div className="d-flex">
+                <div>
+                  <button
+                    className="btn btn-sm btn-outline-info me-3"
+                    onClick={() => setIsQuickAttendanceModalOpen(true)}
+                  >
+                    Quick Attendance
+                  </button>
+                </div>
                 {can("View Project Chart") && (
                   <>
                     <div>
                       <button
-                        className="btn btn-sm btn-outline-primary me-3"
+                        className="btn btn-sm btn-outline-danger me-3"
                         onClick={handleBulkUpdate}
                       >
                         Bulk Completed To Deliver
@@ -424,6 +434,10 @@ const DashboardLayout = ({ children }) => {
           </Layout>
         </Layout>
       </Layout>
+      <QuickAttendanceModal
+        open={isQuickAttendanceModalOpen}
+        onCancel={() => setIsQuickAttendanceModalOpen(false)}
+      />
     </>
   );
 };

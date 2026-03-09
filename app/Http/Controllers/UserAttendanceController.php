@@ -117,8 +117,8 @@ class UserAttendanceController extends Controller
         if ($shiftSchedule && $shiftSchedule->shift) {
             $shift = $shiftSchedule->shift;
             $config = \App\Models\PayrollConfig::all()->pluck('value', 'key')->all();
-            $earlyBuffer = floatval($config['attendance_early_checkin_max_hours'] ?? 2);
-            $lateBuffer = floatval($config['attendance_late_checkout_max_hours'] ?? 4);
+            $earlyBufferMins = intval(floatval($config['attendance_early_checkin_max_hours'] ?? 2) * 60);
+            $lateBufferMins = intval(floatval($config['attendance_late_checkout_max_hours'] ?? 4) * 60);
             $needsIpCheck = false;
             if ($user->ip_restriction) {
                 if ($request->input('manual_hours_save')) {
@@ -159,8 +159,9 @@ class UserAttendanceController extends Controller
                 $checkInTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $validated['check_in']);
                 $shiftStartTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $shift->start_time);
                 
-                if ($checkInTime->lt($shiftStartTime->copy()->subHours($earlyBuffer))) {
-                    $errorMessage = "Too early! You can only check in up to {$earlyBuffer} hours before your shift starts (" . $shift->start_time . ").";
+                if ($checkInTime->lt($shiftStartTime->copy()->subMinutes($earlyBufferMins))) {
+                    $bufferText = $earlyBufferMins >= 60 ? (round($earlyBufferMins/60, 1) . " hours") : ($earlyBufferMins . " minutes");
+                    $errorMessage = "Too early! You can only check in up to {$bufferText} before your shift starts (" . $shift->start_time . ").";
                     if ($request->ajax() || $request->wantsJson()) {
                         return response()->json(['message' => $errorMessage], 422);
                     }
@@ -170,7 +171,7 @@ class UserAttendanceController extends Controller
                 }
             }
 
-            // Validate Check-out time against buffer
+            // Validate Check-out time against buffer and check-in
             if (!empty($validated['check_out'])) {
                 $checkOutTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $validated['check_out']);
                 $shiftEndTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $shift->end_time);
@@ -182,8 +183,21 @@ class UserAttendanceController extends Controller
                     }
                 }
 
-                if ($checkOutTime->gt($shiftEndTime->copy()->addHours($lateBuffer))) {
-                    $errorMessage = "Too late! You cannot check out more than {$lateBuffer} hours after your shift ends (" . $shift->end_time . ").";
+                // Ensure check-out is after check-in
+                if (!empty($validated['check_in'])) {
+                    $checkInTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $validated['check_in']);
+                    if ($checkOutTime->lte($checkInTime)) {
+                        $errorMessage = "Invalid Check-out! You must check out after your check-in time.";
+                        if ($request->ajax() || $request->wantsJson()) {
+                            return response()->json(['message' => $errorMessage], 422);
+                        }
+                        return redirect()->back()->withErrors(['check_out' => $errorMessage]);
+                    }
+                }
+
+                if ($checkOutTime->gt($shiftEndTime->copy()->addMinutes($lateBufferMins))) {
+                    $bufferText = $lateBufferMins >= 60 ? (round($lateBufferMins/60, 1) . " hours") : ($lateBufferMins . " minutes");
+                    $errorMessage = "Too late! You cannot check out more than {$bufferText} after your shift ends (" . $shift->end_time . ").";
                     if ($request->ajax() || $request->wantsJson()) {
                         return response()->json(['message' => $errorMessage], 422);
                     }
@@ -242,10 +256,12 @@ class UserAttendanceController extends Controller
         if ($shiftSchedule && $shiftSchedule->shift) {
             $shift = $shiftSchedule->shift;
             $config = \App\Models\PayrollConfig::all()->pluck('value', 'key')->all();
-            $earlyBuffer = floatval($config['attendance_early_checkin_max_hours'] ?? 2);
-            $lateBuffer = floatval($config['attendance_late_checkout_max_hours'] ?? 4);
-            $needsIpCheck = false;
-            if ($user->ip_restriction) {
+            $earlyBufferMins = intval(floatval($config['attendance_early_checkin_max_hours'] ?? 2) * 60);
+            $lateBufferMins = intval(floatval($config['attendance_late_checkout_max_hours'] ?? 4) * 60);
+            $isAdminAction = $request->input('is_admin_action');
+
+            if ($user->ip_restriction && !$isAdminAction) {
+                $needsIpCheck = false;
                 if ($request->input('manual_hours_save')) {
                     $outsideHours = $request->input('total_outside_hours', []);
                     if (is_array($outsideHours)) {
@@ -261,60 +277,72 @@ class UserAttendanceController extends Controller
                         $needsIpCheck = true;
                     }
                 }
-            }
 
-            if ($needsIpCheck) {
-                $allowedIps = $config['user_attendace_allowed_ips'] ?? [];
-                if (!is_array($allowedIps)) {
-                    $allowedIps = json_decode($allowedIps, true) ?: [];
-                }
-
-                $currentIp = $this->getClientIp($request);
-                if (!in_array($currentIp, $allowedIps)) {
-                    $errorMessage = "Access Denied: Your IP ($currentIp) is not authorized for office attendance.";
-                    if ($request->ajax() || $request->wantsJson()) {
-                        return response()->json(['message' => $errorMessage], 403);
+                if ($needsIpCheck) {
+                    $allowedIps = $config['user_attendace_allowed_ips'] ?? [];
+                    if (!is_array($allowedIps)) {
+                        $allowedIps = json_decode($allowedIps, true) ?: [];
                     }
-                    return redirect()->back()->withErrors(['user_id' => $errorMessage]);
+
+                    $currentIp = $this->getClientIp($request);
+                    if (!in_array($currentIp, $allowedIps)) {
+                        $errorMessage = "Access Denied: Your IP ($currentIp) is not authorized for office attendance.";
+                        if ($request->ajax() || $request->wantsJson()) {
+                            return response()->json(['message' => $errorMessage], 403);
+                        }
+                        return redirect()->back()->withErrors(['user_id' => $errorMessage]);
+                    }
                 }
             }
 
-            // Validate Check-in time against buffer
-            if (!empty($validated['check_in'])) {
-                $checkInTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $validated['check_in']);
+            // Skip buffer checks for admin action
+            if (!$isAdminAction) {
+                // Prepare times for night shift handling
+                $checkInTime = !empty($validated['check_in']) ? \Carbon\Carbon::parse($validated['date'] . ' ' . $validated['check_in']) : null;
+                $checkOutTime = !empty($validated['check_out']) ? \Carbon\Carbon::parse($validated['date'] . ' ' . $validated['check_out']) : null;
                 $shiftStartTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $shift->start_time);
-                
-                if ($checkInTime->lt($shiftStartTime->copy()->subHours($earlyBuffer))) {
-                    $errorMessage = "Too early! You can only check in up to {$earlyBuffer} hours before your shift starts (" . $shift->start_time . ").";
-                    if ($request->ajax() || $request->wantsJson()) {
-                        return response()->json(['message' => $errorMessage], 422);
-                    }
-                    return redirect()->back()->withErrors([
-                        'check_in' => $errorMessage
-                    ]);
-                }
-            }
-
-            // Validate Check-out time against buffer
-            if (!empty($validated['check_out'])) {
-                $checkOutTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $validated['check_out']);
                 $shiftEndTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $shift->end_time);
                 
+                // Night shift day crossing
                 if ($shift->end_time < $shift->start_time) {
                     $shiftEndTime->addDay();
-                    if ($checkOutTime->lt(\Carbon\Carbon::parse($validated['date'] . ' ' . $shift->start_time))) {
-                        $checkOutTime->addDay();
-                    }
+                    if ($checkInTime && $checkInTime->lt($shiftStartTime->copy()->subHours(12))) $checkInTime->addDay();
+                    if ($checkOutTime && $checkOutTime->lt($shiftStartTime->copy()->subHours(12))) $checkOutTime->addDay();
                 }
 
-                if ($checkOutTime->gt($shiftEndTime->copy()->addHours($lateBuffer))) {
-                    $errorMessage = "Too late! You cannot check out more than {$lateBuffer} hours after your shift ends (" . $shift->end_time . ").";
-                    if ($request->ajax() || $request->wantsJson()) {
-                        return response()->json(['message' => $errorMessage], 422);
+                // Validate Check-in
+                if ($checkInTime && $checkInTime->lt($shiftStartTime->copy()->subMinutes($earlyBufferMins))) {
+                    $bufferText = $earlyBufferMins >= 60 ? (round($earlyBufferMins/60, 1) . " hours") : ($earlyBufferMins . " minutes");
+                    $errorMessage = "Too early! You can only check in up to {$bufferText} before your shift starts (" . $shift->start_time . ").";
+                    if ($request->ajax() || $request->wantsJson()) return response()->json(['message' => $errorMessage], 422);
+                    return redirect()->back()->withErrors(['check_in' => $errorMessage]);
+                }
+
+                // Validate Check-out
+                if ($checkOutTime) {
+                    // Ensure check-out is after check-in
+                    $curCheckInTime = $checkInTime;
+                    if (!$curCheckInTime && !empty($attendance->check_in)) {
+                        $curCheckInTime = \Carbon\Carbon::parse($validated['date'] . ' ' . $attendance->check_in);
+                        // Handle potential day crossing for existing check-in too
+                        if ($shift->end_time < $shift->start_time && $curCheckInTime->lt($shiftStartTime->copy()->subHours(12))) {
+                            $curCheckInTime->addDay();
+                        }
                     }
-                    return redirect()->back()->withErrors([
-                        'check_out' => $errorMessage
-                    ]);
+
+                    if ($curCheckInTime && $checkOutTime->lte($curCheckInTime)) {
+                        $errorMessage = "Invalid Check-out! You must check out after your check-in time.";
+                        if ($request->ajax() || $request->wantsJson()) return response()->json(['message' => $errorMessage], 422);
+                        return redirect()->back()->withErrors(['check_out' => $errorMessage]);
+                    }
+
+                    // Strict upper limit (Shift End + Buffer)
+                    if ($checkOutTime->gt($shiftEndTime->copy()->addMinutes($lateBufferMins))) {
+                        $bufferText = $lateBufferMins >= 60 ? (round($lateBufferMins/60, 1) . " hours") : ($lateBufferMins . " minutes");
+                        $errorMessage = "Too late! You cannot check out more than {$bufferText} after your shift ends (" . $shift->end_time . ").";
+                        if ($request->ajax() || $request->wantsJson()) return response()->json(['message' => $errorMessage], 422);
+                        return redirect()->back()->withErrors(['check_out' => $errorMessage]);
+                    }
                 }
             }
         }
@@ -357,6 +385,72 @@ class UserAttendanceController extends Controller
         }
 
         return redirect()->back()->with('message', 'Attendance record deleted successfully.');
+    }
+
+    public function GetTodayAttendance(Request $request)
+    {
+        $user = auth()->user();
+        $now = now();
+        $todayDate = $now->toDateString();
+        $yesterdayDate = $now->copy()->subDay()->toDateString();
+
+        // 1. Fetch relevant config
+        $config = \App\Models\PayrollConfig::all()->pluck('value', 'key')->all();
+        $earlyBufferMins = intval(floatval($config['attendance_early_checkin_max_hours'] ?? 2) * 60);
+        $lateBufferMins = intval(floatval($config['attendance_late_checkout_max_hours'] ?? 4) * 60);
+
+        // 2. Fetch today's and yesterday's shift schedules
+        $user->load(['userShiftSchedules.shift']);
+        $schedules = $user->userShiftSchedules;
+        
+        $todayDay = $now->format('l');
+        $yesterdayDay = $now->copy()->subDay()->format('l');
+        
+        $todaySchedule = $schedules->firstWhere('day', $todayDay);
+        $yesterdaySchedule = $schedules->firstWhere('day', $yesterdayDay);
+
+        // 3. Check for active record (In Progress)
+        $activeAttendance = UserAttendance::where('user_id', $user->id)
+            ->whereNull('check_out')
+            ->orderBy('date', 'desc')
+            ->first();
+
+        if ($activeAttendance) {
+            return response()->json([
+                'attendance' => $activeAttendance,
+                'userShiftSchedules' => $schedules,
+                'config' => $config,
+                'date_context' => $activeAttendance->date
+            ]);
+        }
+
+        // 4. Decision: Which date's shift are we in?
+        $targetDate = $todayDate;
+        
+        // Check if it's currently within yesterday's night shift window
+        if ($yesterdaySchedule && $yesterdaySchedule->shift) {
+            $shift = $yesterdaySchedule->shift;
+            if ($shift->end_time < $shift->start_time) {
+                $shiftStart = \Carbon\Carbon::parse($yesterdayDate . ' ' . $shift->start_time)->subMinutes($earlyBufferMins);
+                $shiftEnd = \Carbon\Carbon::parse($yesterdayDate . ' ' . $shift->end_time)->addDay()->addMinutes($lateBufferMins);
+                
+                if ($now->between($shiftStart, $shiftEnd)) {
+                    $targetDate = $yesterdayDate;
+                }
+            }
+        }
+
+        // 5. Fetch attendance record for target date
+        $attendance = UserAttendance::where('user_id', $user->id)
+            ->where('date', $targetDate)
+            ->first();
+
+        return response()->json([
+            'attendance' => $attendance,
+            'userShiftSchedules' => $schedules,
+            'config' => $config,
+            'date_context' => $targetDate
+        ]);
     }
 
     public function GetCurrentIp(Request $request)

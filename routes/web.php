@@ -22,7 +22,6 @@ use App\Http\Controllers\UserAllowedIpController;
 use App\Http\Controllers\UserAttendanceController;
 use App\Http\Controllers\WorkScheduleController;
 use App\Http\Controllers\LeaveTypeController;
-use App\Http\Controllers\LeavePolicyController;
 use App\Http\Controllers\LeaveBalanceController;
 use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\HolidayController;
@@ -175,6 +174,7 @@ Route::prefix('api/test')->group(function () {
     Route::put('/schedule/users-attendance/update/{id}', [UserAttendanceController::class, 'Update'])->name('users-attendance.update');
     Route::post('/schedule/users-attendance/toggle-ip-restriction', [UserAttendanceController::class, 'ToggleIpRestriction'])->name('users-attendance.toggle-ip-restriction');
     Route::get('/get-current-ip', [UserAttendanceController::class, 'GetCurrentIp'])->name('get-current-ip');
+    Route::get('/get-today-attendance', [UserAttendanceController::class, 'GetTodayAttendance'])->name('get-today-attendance');
     Route::delete('/schedule/users-attendance/destroy/{id}', [UserAttendanceController::class, 'Destroy'])->name('users-attendance.destroy');
 
     /** Leave Management Routes */
@@ -185,16 +185,10 @@ Route::prefix('api/test')->group(function () {
     Route::delete('/leave/types/destroy/{id}', [LeaveTypeController::class, 'Destroy'])->name('leave-types.destroy');
     Route::delete('/leave/types/bulk-destroy', [LeaveTypeController::class, 'BulkDestroy'])->name('leave-types.bulk-destroy');
 
-    // Leave Policies
-    Route::get('/leave/policies', [LeavePolicyController::class, 'Index'])->name('leave-policies.index');
-    Route::post('/leave/policies/store', [LeavePolicyController::class, 'Store'])->name('leave-policies.store');
-    Route::put('/leave/policies/update/{id}', [LeavePolicyController::class, 'Update'])->name('leave-policies.update');
-    Route::delete('/leave/policies/destroy/{id}', [LeavePolicyController::class, 'Destroy'])->name('leave-policies.destroy');
-    Route::delete('/leave/policies/bulk-destroy', [LeavePolicyController::class, 'BulkDestroy'])->name('leave-policies.bulk-destroy');
-
     // Leave Balances
     Route::get('/leave/balances', [LeaveBalanceController::class, 'Index'])->name('leave-balances.index');
     Route::post('/leave/balances/store', [LeaveBalanceController::class, 'Store'])->name('leave-balances.store');
+    Route::post('/leave/balances/bulk-store', [LeaveBalanceController::class, 'BulkStore'])->name('leave-balances.bulk-store');
     Route::put('/leave/balances/update/{id}', [LeaveBalanceController::class, 'Update'])->name('leave-balances.update');
     Route::delete('/leave/balances/destroy/{id}', [LeaveBalanceController::class, 'Destroy'])->name('leave-balances.destroy');
     Route::delete('/leave/balances/bulk-destroy', [LeaveBalanceController::class, 'BulkDestroy'])->name('leave-balances.bulk-destroy');

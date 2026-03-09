@@ -15,15 +15,9 @@ return new class extends Migration
             $table->id();
 
             $table->string('name');
-            $table->string('code')->unique();
             $table->string('color')->nullable();
-
-            $table->boolean('is_paid')->default(true);
-            $table->boolean('is_carry_forward')->default(false);
-
             $table->integer('max_per_year')->nullable();
-            $table->boolean('allow_half_day')->default(true);
-
+            $table->boolean('requires_approval')->default(true);
             $table->timestamps();
         });
     }

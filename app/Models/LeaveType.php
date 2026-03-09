@@ -7,18 +7,13 @@ class LeaveType extends Model
 {
     protected $fillable = [
         'name',
-        'code',
         'color',
-        'is_paid',
-        'is_carry_forward',
         'max_per_year',
-        'allow_half_day',
+        'requires_approval',
     ];
 
     protected $casts = [
-        'is_paid' => 'boolean',
-        'is_carry_forward' => 'boolean',
-        'allow_half_day' => 'boolean',
+        'requires_approval' => 'boolean',
     ];
 
     public function policies()

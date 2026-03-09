@@ -395,17 +395,6 @@ export const getSidebarItems = ({
                 },
               ]
               : []),
-            ...(can("View Leave Policy")
-              ? [
-                {
-                  key: "leave-policies",
-                  label: (
-                    <Link href={route("leave-policies.index")}>Leave Policies</Link>
-                  ),
-                  icon: <CheckCircleOutlined />,
-                },
-              ]
-              : []),
             ...(can("View Holiday")
               ? [
                 {

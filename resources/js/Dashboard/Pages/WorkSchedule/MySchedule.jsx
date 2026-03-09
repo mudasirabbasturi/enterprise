@@ -58,6 +58,15 @@ const MySchedule = ({ schedules, user }) => {
             }
         },
         {
+            headerName: "Break Allowed Time",
+            field: "shift.total_break_minutes",
+            minWidth: 150,
+            cellRenderer: (params) => {
+                const mins = parseInt(params.value || 0);
+                return <Tag color="default">{formatMinsToHrs(mins)}</Tag>;
+            }
+        },
+        {
             headerName: "Notes",
             field: "notes",
             minWidth: 200,

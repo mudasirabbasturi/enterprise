@@ -44,7 +44,7 @@ class LeaveBalanceController extends Controller
             'pending' => 'numeric|min:0',
             'remaining' => 'required|numeric',
         ]);
-
+ 
         try {
             LeaveBalance::create($validated);
             return redirect()->back()->with('message', 'Leave balance record created successfully.');
@@ -55,6 +55,50 @@ class LeaveBalanceController extends Controller
         } catch (Exception $e) {
             return redirect()->back()->withErrors([
                 'error' => 'Failed to create leave balance record. Please try again.'
+            ]);
+        }
+    }
+
+    public function BulkStore(Request $request)
+    {
+        $validated = $request->validate([
+            'user_ids' => 'required|array',
+            'user_ids.*' => 'exists:users,id',
+            'leave_type_id' => 'required|exists:leave_types,id',
+            'year' => 'required|integer|min:2024',
+            'allocated' => 'required|numeric|min:0',
+        ]);
+
+        try {
+            $leaveType = LeaveType::findOrFail($validated['leave_type_id']);
+            
+            if ($validated['allocated'] > $leaveType->max_per_year) {
+                return redirect()->back()->withErrors([
+                    'allocated' => "The maximum allowed allocation for {$leaveType->name} is {$leaveType->max_per_year} days per year."
+                ]);
+            }
+
+            foreach ($validated['user_ids'] as $userId) {
+                // We use updateOrCreate to ensure we don't create duplicates and can update existing records if needed
+                $balance = LeaveBalance::updateOrCreate(
+                    [
+                        'user_id' => $userId,
+                        'leave_type_id' => $validated['leave_type_id'],
+                        'year' => $validated['year'],
+                    ],
+                    [
+                        'allocated' => $validated['allocated'],
+                    ]
+                );
+                
+                // Recalculate balances to ensure everything is in sync
+                LeaveBalance::updateBalances($userId, $validated['leave_type_id'], $validated['year']);
+            }
+
+            return redirect()->back()->with('message', 'Bulk leave balance records created/updated successfully.');
+        } catch (Exception $e) {
+            return redirect()->back()->withErrors([
+                'error' => 'Failed to process bulk leave balance. Please try again.'
             ]);
         }
     }

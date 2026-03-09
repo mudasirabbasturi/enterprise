@@ -267,7 +267,10 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
             field: "totalRequiredMinutes",
             minWidth: 120,
             cellClass: "text-center text-nowrap",
-            cellRenderer: (params) => <Tag color="orange">{formatMinsToHrs(params.value)}</Tag>
+            cellRenderer: (params) => {
+                if (params.value === 0) return <Tag color="default">Shift N/A</Tag>;
+                return <Tag color="orange">{formatMinsToHrs(params.value)}</Tag>;
+            }
         },
         {
             headerName: "Total Regular Hours",
@@ -353,15 +356,20 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                 const dayName = dayjs(d).format('dddd');
                 const schedule = (userShiftSchedules || []).find(s => s.day === dayName);
                 if (schedule && schedule.shift) {
+                    let dayReqMins = 0;
                     if (schedule.shift.duration) {
-                        totalRequiredMinutes += parseInt(schedule.shift.duration);
+                        dayReqMins = parseInt(schedule.shift.duration);
                     } else if (schedule.shift.start_time && schedule.shift.end_time) {
                         const start = dayjs(`2000-01-01 ${schedule.shift.start_time}`);
                         const end = dayjs(`2000-01-01 ${schedule.shift.end_time}`);
                         let diff = end.diff(start, 'minute');
                         if (diff < 0) diff += 1440;
-                        totalRequiredMinutes += diff;
+                        dayReqMins = diff;
                     }
+
+                    // Subtract break time
+                    const breakMins = parseInt(schedule.shift.total_break_minutes || 0);
+                    totalRequiredMinutes += Math.max(0, dayReqMins - breakMins);
                 }
             });
 
@@ -474,17 +482,24 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                 const dayName = dayjs(params.value).format('dddd');
                 const schedule = (userShiftSchedules || []).find(s => s.day === dayName);
                 if (schedule && schedule.shift) {
+                    let totalMins = 0;
                     if (schedule.shift.duration) {
-                        return <Tag color="orange">{formatMinsToHrs(parseInt(schedule.shift.duration))}</Tag>;
+                        totalMins = parseInt(schedule.shift.duration);
                     } else if (schedule.shift.start_time && schedule.shift.end_time) {
                         const start = dayjs(`2000-01-01 ${schedule.shift.start_time}`);
                         const end = dayjs(`2000-01-01 ${schedule.shift.end_time}`);
                         let diff = end.diff(start, 'minute');
                         if (diff < 0) diff += 1440;
-                        return <Tag color="orange">{formatMinsToHrs(diff)}</Tag>;
+                        totalMins = diff;
                     }
+
+                    // Subtract break time
+                    const breakMins = parseInt(schedule.shift.total_break_minutes || 0);
+                    const netMins = Math.max(0, totalMins - breakMins);
+
+                    return <Tag color="orange">{formatMinsToHrs(netMins)}</Tag>;
                 }
-                return "-";
+                return <Tag color="default">Shift N/A</Tag>;
             }
         },
         {
@@ -1125,26 +1140,29 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                                         <Text strong>15-Minute Grace:</Text> You have 15 minutes of grace after your shift start time. Arriving after this is marked as "Late".
                                     </li>
                                     <li className="mb-2">
-                                        <Text strong>Late Grace (Monthly):</Text> A specific number of late days (e.g., 2 or 3) are allowed without penalty each month.
+                                        <Text strong>Late Grace (Monthly):</Text> {config?.late_grace_count || 0} late days are allowed without penalty each month.
                                     </li>
                                     <li>
-                                        <Text strong>Late Penalty:</Text> After exceeding the grace count, each late day will result in a fixed deduction (e.g., PKR 500) from your salary.
+                                        <Text strong>Late Penalty:</Text> After exceeding the grace, each late day will result in a deduction of PKR {parseFloat(config?.late_penalty_per_day || 0).toLocaleString()} from your salary.
                                     </li>
                                 </ul>
                             </Card>
                         </div>
 
                         <div className="col-md-6">
-                            <Card size="small" title={<Text strong>Missing Check-in/out</Text>} className="h-100 border-0 shadow-sm bg-light">
+                            <Card size="small" title={<Text strong>Check-in/out Window</Text>} className="h-100 border-0 shadow-sm bg-light">
                                 <ul className="ps-3 mb-0 small">
                                     <li className="mb-2">
-                                        <Text strong>Incomplete Logs:</Text> If you forget to check in OR check out, your attendance is flagged as "Missing".
+                                        <Text strong>Early Check-in:</Text> You can check in up to {config?.attendance_early_checkin_max_hours || 2} hours before your shift starts.
                                     </li>
                                     <li className="mb-2">
-                                        <Text strong>Missing Grace:</Text> You are allowed a small number of forgotten logs (Missing Grace) per month.
+                                        <Text strong>Late Check-out:</Text> You must check out within {config?.attendance_late_checkout_max_hours || 4} hours after your shift ends.
+                                    </li>
+                                    <li className="mb-2">
+                                        <Text strong>Missing Logs:</Text> If you forget to check in OR check out, the day is flagged as "Missing" and you will be marked as <Text type="danger" strong>Absent (0 Hours)</Text>.
                                     </li>
                                     <li>
-                                        <Text strong>Missing Penalty:</Text> Exceeding the grace will result in a per-day penalty (Missing Penalty) regardless of hours worked.
+                                        <Text strong>Break Rules:</Text> If you start a break but forget to "End Break", a penalty of <Text type="danger">PKR {parseFloat(config?.missing_attendance_penalty_per_day || 0).toLocaleString()}</Text> will apply. You have a monthly grace of <Text strong>{config?.missing_attendance_grace_count || 0}</Text> missing break-outs.
                                     </li>
                                 </ul>
                             </Card>
@@ -1154,29 +1172,39 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                             <Card size="small" title={<Text strong>Undertime & Absents</Text>} className="h-100 border-0 shadow-sm bg-light">
                                 <ul className="ps-3 mb-0 small">
                                     <li className="mb-2">
-                                        <Text strong>Working Hours:</Text> You must complete your shift duration (net of breaks).
+                                        <Text strong>Working Hours:</Text> You must complete your required shift duration (net of breaks).
                                     </li>
                                     <li className="mb-2">
-                                        <Text strong>Undertime Penalty:</Text> Each hour of work missing from your required shift time is deducted at your hourly rate.
+                                        <Text strong>Undertime Penalty:</Text> Missing hours are deducted at your hourly rate.
+                                    </li>
+                                    <li className="mb-2">
+                                        <Text strong>Absence:</Text> Full days missed are deducted as per the "Absent Penalty" (PKR {parseFloat(config?.absent_penalty_rate || 0).toLocaleString()} or hourly rate).
                                     </li>
                                     <li>
-                                        <Text strong>Absence:</Text> Total monthly required hours are calculated. Full days missed are deducted as per "Absent Penalty".
+                                        <Text strong>Rejected Leave:</Text> If your leave request is rejected, it will be treated as an unpaid day and will be automatically flagged as an <Text type="danger" strong>Absent Flag</Text>.
                                     </li>
                                 </ul>
                             </Card>
                         </div>
 
                         <div className="col-md-6">
-                            <Card size="small" title={<Text strong>Working From Home (WFH)</Text>} className="h-100 border-0 shadow-sm bg-light">
+                            <Card size="small" title={<Text strong>IP Restriction & Locations</Text>} className="h-100 border-0 shadow-sm bg-light">
                                 <ul className="ps-3 mb-0 small">
                                     <li className="mb-2">
-                                        <Text strong>IP Restriction:</Text> Office attendance must be marked from an authorized office IP address.
+                                        <Text strong>Office IP:</Text> Attendance must be marked from an authorized office IP address.
                                     </li>
                                     <li className="mb-2">
-                                        <Text strong>Home Shifts:</Text> If your shift is from home, IP restriction is bypassed.
+                                        <Text strong>Home Shifts:</Text> Home-based shifts bypass IP restrictions automatically.
                                     </li>
                                     <li>
-                                        <Text strong>Manual Hours:</Text> Outside hours logged from home are also exempt from IP checks but require admin approval.
+                                        <Text strong>Allowed IPs:</Text> {(() => {
+                                            try {
+                                                const ips = typeof config?.user_attendace_allowed_ips === 'string'
+                                                    ? JSON.parse(config.user_attendace_allowed_ips)
+                                                    : (Array.isArray(config?.user_attendace_allowed_ips) ? config.user_attendace_allowed_ips : []);
+                                                return ips.length > 0 ? ips.join(', ') : 'No specific IPs configured';
+                                            } catch (e) { return 'N/A'; }
+                                        })()}
                                     </li>
                                 </ul>
                             </Card>

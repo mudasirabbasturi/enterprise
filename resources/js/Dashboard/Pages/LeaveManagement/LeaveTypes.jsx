@@ -72,26 +72,20 @@ const LeaveTypes = ({ leaveTypes }) => {
             )
         },
         {
-            headerName: "Code",
-            field: "code",
-            flex: 1,
-            cellClass: "fw-medium"
-        },
-        {
-            headerName: "Paid",
-            field: "is_paid",
-            flex: 1,
-            cellRenderer: (params) => (
-                <Tag color={params.value ? "success" : "processing"}>
-                    {params.value ? "PAID" : "UNPAID"}
-                </Tag>
-            )
-        },
-        {
             headerName: "Max/Year",
             field: "max_per_year",
             flex: 1,
             valueFormatter: (params) => params.value ? `${params.value} days` : "Unlimited"
+        },
+        {
+            headerName: "Req. Approval",
+            field: "requires_approval",
+            flex: 1,
+            cellRenderer: (params) => (
+                <Tag color={params.value ? "error" : "success"}>
+                    {params.value ? "YES" : "NO"}
+                </Tag>
+            )
         },
         {
             headerName: "Actions",

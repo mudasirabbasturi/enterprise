@@ -1,0 +1,12 @@
+Removed Columns from leave_types tables
+code
+Is Paid
+Is Carry Forward
+Allow Half Day
+and add column 
+requires_approval  
+
+
+removed table leave_policies 
+
+remove leave policies permissions

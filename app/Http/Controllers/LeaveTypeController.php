@@ -21,12 +21,9 @@ class LeaveTypeController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'code' => 'required|string|max:10|unique:leave_types,code',
             'color' => 'nullable|string|max:20',
-            'is_paid' => 'boolean',
-            'is_carry_forward' => 'boolean',
             'max_per_year' => 'nullable|integer|min:0',
-            'allow_half_day' => 'boolean',
+            'requires_approval' => 'boolean',
         ]);
 
         try {
@@ -50,12 +47,9 @@ class LeaveTypeController extends Controller
 
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
-                'code' => 'required|string|max:10|unique:leave_types,code,' . $id,
                 'color' => 'nullable|string|max:20',
-                'is_paid' => 'boolean',
-                'is_carry_forward' => 'boolean',
                 'max_per_year' => 'nullable|integer|min:0',
-                'allow_half_day' => 'boolean',
+                'requires_approval' => 'boolean',
             ]);
 
             $leaveType->update($validated);

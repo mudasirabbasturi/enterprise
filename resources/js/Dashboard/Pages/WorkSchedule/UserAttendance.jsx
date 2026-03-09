@@ -692,6 +692,7 @@ const UserAttendance =
                     check_out: values.check_out ? values.check_out.format('HH:mm:ss') : null,
                     break_start: values.break_start ? values.break_start.format('HH:mm:ss') : null,
                     break_end: values.break_end ? values.break_end.format('HH:mm:ss') : null,
+                    is_admin_action: true,
                 };
 
                 const url = editingAttendance && !editingAttendance.isPlaceholder

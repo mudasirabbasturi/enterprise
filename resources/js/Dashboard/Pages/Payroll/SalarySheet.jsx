@@ -258,11 +258,12 @@ const SalarySheet =
                                 regularHomeMins += netWorked;
                             }
 
-                            // Late calculation (15 min grace)
+                            // Late calculation (Dynamic grace from config)
                             if (att.check_in) {
                                 const sTotal = getMinutes(shift.start_time);
                                 const aTotal = getMinutes(att.check_in);
-                                if (aTotal > (sTotal + 15)) {
+                                const lateGraceMins = parseInt(config?.attendance_late_grace_minutes || 0);
+                                if (aTotal > (sTotal + lateGraceMins)) {
                                     totalLateDays++;
                                 }
                             }
@@ -408,8 +409,8 @@ const SalarySheet =
                         penalties: [
                             { label: 'Absence Penalty', count: absentHours.toFixed(2), rate: absentRate, amount: absentDeduction, unit: 'hrs' },
                             { label: 'Undertime Penalty', count: undertimeHours.toFixed(2), rate: undertimeRate, amount: undertimeDeduction, unit: 'hrs' },
-                            { label: 'Late Arrival Penalty', count: taxableLateDays, rate: latePenaltyPerDay, amount: latePenaltyDeduction, unit: 'days' },
-                            { label: 'Missing Check-in/out Penalty', count: taxableMissingAttendanceDays, rate: missingAttendancePenaltyPerDay, amount: missingAttendancePenaltyDeduction, unit: 'days' },
+                            { label: 'Late Arrival Penalty (Per Day)', count: taxableLateDays, rate: latePenaltyPerDay, amount: latePenaltyDeduction, unit: 'days' },
+                            { label: 'Missing Break/Attendance Penalty (Per Incident)', count: taxableMissingAttendanceDays, rate: missingAttendancePenaltyPerDay, amount: missingAttendancePenaltyDeduction, unit: 'incidents' },
                             ...manualPenaltiesBreakdown.map((p, i) => ({ label: `Manual Penalty: ${p.type}`, reason: p.reason, amount: p.amount, key: `manual-${i}` })),
                             ...userAdjustments.filter(a => a.type === 'deduction').map((a, i) => ({ label: a.label, reason: a.reason, amount: parseFloat(a.amount), key: `adj-d-${i}` }))
                         ].filter(p => p.amount > 0),
@@ -1124,7 +1125,14 @@ const SalarySheet =
                                 <Card size="small" className="bg-light border-0 shadow-sm h-100" bodyStyle={{ padding: '15px' }}>
                                     <Form.Item
                                         name="overtime_bonus_per_hour"
-                                        label={<Space><DollarOutlined /> Overtime Rate</Space>}
+                                        label={
+                                            <Space>
+                                                <DollarOutlined /> Overtime Rate
+                                                <Tooltip title="Hourly rate for overtime. If empty, defaults to (Total Basic Salary / Required Hours) * Overtime Hours.">
+                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
+                                                </Tooltip>
+                                            </Space>
+                                        }
                                         extra="PKR per overtime hour"
                                     >
                                         <InputNumber className="w-100" min={0} placeholder="e.g. 500" />
@@ -1149,7 +1157,14 @@ const SalarySheet =
                                 <div className="col-md-6">
                                     <Form.Item
                                         name="manual_outside_office_rate"
-                                        label={<Space><ApartmentOutlined /> Manual (Office) Rate</Space>}
+                                        label={
+                                            <Space>
+                                                <ApartmentOutlined /> Manual (Office) Rate
+                                                <Tooltip title="Rate for manual hours from office. If empty, defaults to (Basic Salary / Required Hours).">
+                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
+                                                </Tooltip>
+                                            </Space>
+                                        }
                                         extra="PKR per hour from Office"
                                     >
                                         <InputNumber className="w-100" min={0} placeholder="e.g. 600" />
@@ -1158,7 +1173,14 @@ const SalarySheet =
                                 <div className="col-md-6">
                                     <Form.Item
                                         name="manual_outside_home_rate"
-                                        label={<Space><HomeOutlined /> Manual (Home) Rate</Space>}
+                                        label={
+                                            <Space>
+                                                <HomeOutlined /> Manual (Home) Rate
+                                                <Tooltip title="Rate for manual hours from home. If empty, defaults to (Basic Salary / Required Hours).">
+                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
+                                                </Tooltip>
+                                            </Space>
+                                        }
                                         extra="PKR per hour from Home"
                                     >
                                         <InputNumber className="w-100" min={0} placeholder="e.g. 500" />
@@ -1167,7 +1189,14 @@ const SalarySheet =
                                 <div className="col-12 mt-0">
                                     <Form.Item
                                         name="regular_home_rate"
-                                        label={<Space><HomeOutlined /> Regular (Home) Rate</Space>}
+                                        label={
+                                            <Space>
+                                                <HomeOutlined /> Regular (Home) Rate
+                                                <Tooltip title="Bonus/Rate for regular shift hours worked from home. If empty, defaults to (Basic Salary / Required Hours).">
+                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
+                                                </Tooltip>
+                                            </Space>
+                                        }
                                         extra="PKR per hour for regular shift hours from Home"
                                     >
                                         <InputNumber className="w-100" min={0} placeholder="e.g. 400" />
@@ -1182,8 +1211,14 @@ const SalarySheet =
                             <div className="col-md-6">
                                 <Form.Item
                                     name="absent_penalty_rate"
-                                    label="Absent Penalty (PKR/hr)"
-                                    tooltip="Defaults to hourly rate if empty"
+                                    label={
+                                        <Space>
+                                            Absent Penalty (PKR/hr)
+                                            <Tooltip title="Penalty for full day absence. If empty, defaults to (Basic Salary / Required Hours) * Shift Hours.">
+                                                <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
+                                            </Tooltip>
+                                        </Space>
+                                    }
                                 >
                                     <InputNumber className="w-100" min={0} placeholder="e.g. 1000" />
                                 </Form.Item>
@@ -1191,7 +1226,14 @@ const SalarySheet =
                             <div className="col-md-6">
                                 <Form.Item
                                     name="undertime_penalty_per_hour"
-                                    label="Undertime Penalty (PKR/hr)"
+                                    label={
+                                        <Space>
+                                            Undertime Penalty (PKR/hr)
+                                            <Tooltip title="Penalty for leaving early or starting late. If empty, defaults to (Basic Salary / Required Hours) * Undertime Hours.">
+                                                <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
+                                            </Tooltip>
+                                        </Space>
+                                    }
                                 >
                                     <InputNumber className="w-100" min={0} placeholder="e.g. 200" />
                                 </Form.Item>
@@ -1200,23 +1242,83 @@ const SalarySheet =
 
                         <Card size="small" className="bg-light border-0 mb-4" bodyStyle={{ padding: '15px' }}>
                             <div className="row g-3">
-                                <div className="col-md-3">
-                                    <Form.Item name="late_grace_count" label="Late Grace" extra="Days allowed">
+                                <div className="col-md-4">
+                                    <Form.Item
+                                        name="attendance_late_grace_minutes"
+                                        label={
+                                            <Space>
+                                                Late Grace (Mins)
+                                                <Tooltip title="Time in minutes allowed after shift start before being considered 'Late'. Defaults to 0 (exact time) if empty.">
+                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
+                                                </Tooltip>
+                                            </Space>
+                                        }
+                                        extra="Buffer minutes (Default: 0)"
+                                    >
+                                        <InputNumber className="w-100" min={0} placeholder="e.g. 15" />
+                                    </Form.Item>
+                                </div>
+                                <div className="col-md-4">
+                                    <Form.Item
+                                        name="late_grace_count"
+                                        label={
+                                            <Space>
+                                                Allowed Lates (Count)
+                                                <Tooltip title="Number of lates allowed per month without penalty.">
+                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
+                                                </Tooltip>
+                                            </Space>
+                                        }
+                                        extra="Days allowed"
+                                    >
                                         <InputNumber className="w-100" min={0} />
                                     </Form.Item>
                                 </div>
-                                <div className="col-md-3">
-                                    <Form.Item name="late_penalty_per_day" label="Late Penalty" extra="PKR / day">
+                                <div className="col-md-4">
+                                    <Form.Item
+                                        name="late_penalty_per_day"
+                                        label={
+                                            <Space>
+                                                Late Penalty (Amount)
+                                                <Tooltip title="Penalty amount applied for each late beyond the allowed count.">
+                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
+                                                </Tooltip>
+                                            </Space>
+                                        }
+                                        extra="PKR / day"
+                                    >
                                         <InputNumber className="w-100" min={0} />
                                     </Form.Item>
                                 </div>
-                                <div className="col-md-3">
-                                    <Form.Item name="missing_attendance_grace_count" label="Missing Grace" extra="Days allowed">
+                                <div className="col-md-6">
+                                    <Form.Item
+                                        name="missing_attendance_grace_count"
+                                        label={
+                                            <Space>
+                                                Missing Grace
+                                                <Tooltip title="Number of 'Missing Break-outs' allowed per month. If you forget to 'End Break', a penalty applies after this grace.">
+                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
+                                                </Tooltip>
+                                            </Space>
+                                        }
+                                        extra="Break rules grace"
+                                    >
                                         <InputNumber className="w-100" min={0} />
                                     </Form.Item>
                                 </div>
-                                <div className="col-md-3">
-                                    <Form.Item name="missing_attendance_penalty_per_day" label="Missing Penalty" extra="PKR / day">
+                                <div className="col-md-6">
+                                    <Form.Item
+                                        name="missing_attendance_penalty_per_day"
+                                        label={
+                                            <Space>
+                                                Missing Penalty
+                                                <Tooltip title="Penalty amount (e.g. PKR 300) applied if more than missing grace breaks occur.">
+                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
+                                                </Tooltip>
+                                            </Space>
+                                        }
+                                        extra="PKR / incident"
+                                    >
                                         <InputNumber className="w-100" min={0} />
                                     </Form.Item>
                                 </div>
@@ -1225,8 +1327,15 @@ const SalarySheet =
 
                         <Form.Item
                             name="working_days_override"
-                            label="Working Days Override"
-                            extra={`Systems calculation: ${calculatedWorkingDays} days`}
+                            label={
+                                <Space>
+                                    Working Days Override
+                                    <Tooltip title="Overrides the system's calculated working days. If empty, the system counts Monday to Friday as working days.">
+                                        <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
+                                    </Tooltip>
+                                </Space>
+                            }
+                            extra={`Systems calculation (Mon-Fri): ${calculatedWorkingDays} days`}
                         >
                             <InputNumber className="w-100" min={0} />
                         </Form.Item>

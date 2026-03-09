@@ -79,6 +79,14 @@ class LeaveRequestController extends Controller
         ]);
 
         try {
+            $leaveType = LeaveType::findOrFail($validated['leave_type_id']);
+            
+            if (!$leaveType->requires_approval) {
+                $validated['status'] = 'approved';
+                $validated['approved_at'] = now();
+                $validated['approved_by'] = auth()->id();
+            }
+
             $leaveRequest = LeaveRequest::create($validated);
             LeaveBalance::updateBalances($leaveRequest->user_id, $leaveRequest->leave_type_id, $leaveRequest->start_date->year);
             return redirect()->back()->with('message', 'Leave request submitted successfully.');
