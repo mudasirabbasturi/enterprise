@@ -97,19 +97,23 @@ const UserAttendance =
         }, []);
 
         const calculateHoursMins = (record) => {
-            const { check_in, check_out, break_start, break_end } = record;
+            const { check_in, check_out, break: breaks } = record;
             if (!check_in || !check_out) return 0;
             const s = dayjs(`2000-01-01 ${check_in}`);
             const e = dayjs(`2000-01-01 ${check_out}`);
             let diff = e.diff(s, 'minute');
             if (diff < 0) diff += 1440; // Handle night shifts
 
-            if (break_start && break_end) {
-                const bs = dayjs(`2000-01-01 ${break_start}`);
-                const be = dayjs(`2000-01-01 ${break_end}`);
-                let bDiff = be.diff(bs, 'minute');
-                if (bDiff < 0) bDiff += 1440;
-                diff -= bDiff;
+            if (Array.isArray(breaks)) {
+                breaks.forEach(b => {
+                    if (b.break_start && b.break_end) {
+                        const bs = dayjs(`2000-01-01 ${b.break_start}`);
+                        const be = dayjs(`2000-01-01 ${b.break_end}`);
+                        let bDiff = be.diff(bs, 'minute');
+                        if (bDiff < 0) bDiff += 1440;
+                        diff -= bDiff;
+                    }
+                });
             }
             return diff > 0 ? diff : 0;
         };
@@ -396,18 +400,24 @@ const UserAttendance =
                 cellRenderer: (params) => params.value ? <Tag color="cyan">{params.value}</Tag> : "-"
             },
             {
-                headerName: "Break Start",
-                field: "break_start",
-                minWidth: 100,
+                headerName: "Breaks",
+                field: "break",
+                minWidth: 150,
                 cellClass: "text-nowrap",
-                cellRenderer: (params) => params.value ? <Tag color="orange">{params.value}</Tag> : "-"
-            },
-            {
-                headerName: "Break End",
-                field: "break_end",
-                minWidth: 100,
-                cellClass: "text-nowrap",
-                cellRenderer: (params) => params.value ? <Tag color="orange">{params.value}</Tag> : "-"
+                cellRenderer: (params) => {
+                    const breaks = params.value;
+                    if (!Array.isArray(breaks) || breaks.length === 0) return "-";
+
+                    return (
+                        <div className="d-flex align-items-center gap-1 flex-wrap">
+                            {breaks.map((b, idx) => (
+                                <Tag color="orange" key={idx} className="m-0 text-nowrap">
+                                    {b.break_start || '...'} to {b.break_end || '...'}
+                                </Tag>
+                            ))}
+                        </div>
+                    );
+                }
             },
             {
                 headerName: "Required Hours",
@@ -605,20 +615,24 @@ const UserAttendance =
         }, [selectedUserForAttendance, attendances, filterDate, getDaysInMonth, leaveRequests, holidays]);
 
         const handleValuesChange = (changedValues, allValues) => {
-            if (changedValues.check_in || changedValues.check_out || changedValues.break_start || changedValues.break_end) {
-                const { check_in, check_out, break_start, break_end } = allValues;
+            if (changedValues.check_in || changedValues.check_out || changedValues.break) {
+                const { check_in, check_out, break: breaks } = allValues;
                 if (check_in && check_out) {
                     const s = dayjs(check_in);
                     const e = dayjs(check_out);
                     let diff = e.diff(s, 'minute');
                     if (diff < 0) diff += 1440; // Handle night shifts
 
-                    if (break_start && break_end) {
-                        const bs = dayjs(break_start);
-                        const be = dayjs(break_end);
-                        let bDiff = be.diff(bs, 'minute');
-                        if (bDiff < 0) bDiff += 1440;
-                        diff -= bDiff;
+                    if (Array.isArray(breaks)) {
+                        breaks.forEach(b => {
+                            if (b && b.break_start && b.break_end) {
+                                const bs = dayjs(b.break_start);
+                                const be = dayjs(b.break_end);
+                                let bDiff = be.diff(bs, 'minute');
+                                if (bDiff < 0) bDiff += 1440;
+                                diff -= bDiff;
+                            }
+                        });
                     }
 
                     if (diff < 0) diff = 0;
@@ -639,8 +653,10 @@ const UserAttendance =
                 date: dayjs(rec.date),
                 check_in: rec.check_in ? dayjs(rec.check_in, 'HH:mm:ss') : null,
                 check_out: rec.check_out ? dayjs(rec.check_out, 'HH:mm:ss') : null,
-                break_start: rec.break_start ? dayjs(rec.break_start, 'HH:mm:ss') : null,
-                break_end: rec.break_end ? dayjs(rec.break_end, 'HH:mm:ss') : null,
+                break: Array.isArray(rec.break) ? rec.break.map(b => ({
+                    break_start: b.break_start ? dayjs(b.break_start, 'HH:mm:ss') : null,
+                    break_end: b.break_end ? dayjs(b.break_end, 'HH:mm:ss') : null,
+                })) : [],
                 status: rec.status === 'Not Marked' || rec.status === 'Weekend' || rec.status === 'Holiday' ? 'present' : rec.status,
                 worked_from: rec.worked_from || 'office',
                 total_regular_hours: rec.total_regular_hours,
@@ -690,8 +706,10 @@ const UserAttendance =
                     date: values.date.format('YYYY-MM-DD'),
                     check_in: values.check_in ? values.check_in.format('HH:mm:ss') : null,
                     check_out: values.check_out ? values.check_out.format('HH:mm:ss') : null,
-                    break_start: values.break_start ? values.break_start.format('HH:mm:ss') : null,
-                    break_end: values.break_end ? values.break_end.format('HH:mm:ss') : null,
+                    break: Array.isArray(values.break) ? values.break.map(b => ({
+                        break_start: b && b.break_start ? b.break_start.format('HH:mm:ss') : null,
+                        break_end: b && b.break_end ? b.break_end.format('HH:mm:ss') : null,
+                    })) : [],
                     is_admin_action: true,
                 };
 
@@ -891,15 +909,47 @@ const UserAttendance =
                                     <TimePicker className="w-100" format="HH:mm" />
                                 </Form.Item>
                             </div>
-                            <div className="col-md-3">
-                                <Form.Item name="break_start" label="Break Start">
-                                    <TimePicker className="w-100" format="HH:mm" />
-                                </Form.Item>
-                            </div>
-                            <div className="col-md-3">
-                                <Form.Item name="break_end" label="Break End">
-                                    <TimePicker className="w-100" format="HH:mm" />
-                                </Form.Item>
+                        </div>
+                        <div className="row">
+                            <div className="col-12">
+                                <Card size="small" title="Breaks" className="mb-4 bg-light border-0">
+                                    <Form.List name="break">
+                                        {(fields, { add, remove }) => (
+                                            <>
+                                                {fields.map(({ key, name, ...restField }) => (
+                                                    <div key={key} className="d-flex align-items-center gap-2 mb-2 p-2 bg-white rounded border">
+                                                        <Form.Item
+                                                            {...restField}
+                                                            name={[name, 'break_start']}
+                                                            className="mb-0 flex-grow-1"
+                                                            label="Break Start"
+                                                            rules={[{ required: true, message: 'Required' }]}
+                                                        >
+                                                            <TimePicker format="HH:mm" className="w-100" />
+                                                        </Form.Item>
+                                                        <Form.Item
+                                                            {...restField}
+                                                            name={[name, 'break_end']}
+                                                            className="mb-0 flex-grow-1"
+                                                            label="Break End"
+                                                        >
+                                                            <TimePicker format="HH:mm" className="w-100" />
+                                                        </Form.Item>
+                                                        <button
+                                                            className="btn btn-outline-danger btn-sm mt-4 p-1 border-0"
+                                                            onClick={(e) => { e.preventDefault(); remove(name); }}
+                                                        >
+                                                            <DeleteOutlined />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                                                    Add Break
+                                                </Button>
+                                            </>
+                                        )}
+                                    </Form.List>
+                                </Card>
                             </div>
                         </div>
                         <div className="row">

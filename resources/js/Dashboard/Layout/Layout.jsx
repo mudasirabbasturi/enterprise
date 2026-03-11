@@ -437,6 +437,10 @@ const DashboardLayout = ({ children }) => {
       <QuickAttendanceModal
         open={isQuickAttendanceModalOpen}
         onCancel={() => setIsQuickAttendanceModalOpen(false)}
+        onSuccess={() => {
+          setIsQuickAttendanceModalOpen(false);
+          router.reload();
+        }}
       />
     </>
   );

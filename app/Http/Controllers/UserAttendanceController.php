@@ -101,8 +101,7 @@ class UserAttendanceController extends Controller
             'worked_from' => 'required|in:home,office',
             'check_in_ip' => 'nullable|ip',
             'check_out_ip' => 'nullable|ip',
-            'break_start' => 'nullable',
-            'break_end' => 'nullable',
+            'break' => 'nullable|array',
             'total_regular_hours' => 'nullable',
             'total_outside_hours' => 'nullable|array',
             'status' => 'required|string',
@@ -240,8 +239,7 @@ class UserAttendanceController extends Controller
             'worked_from' => 'required|in:home,office',
             'check_in_ip' => 'nullable|ip',
             'check_out_ip' => 'nullable|ip',
-            'break_start' => 'nullable',
-            'break_end' => 'nullable',
+            'break' => 'nullable|array',
             'total_regular_hours' => 'nullable',
             'total_outside_hours' => 'nullable|array',
             'status' => 'required|string',
@@ -390,7 +388,16 @@ class UserAttendanceController extends Controller
     public function GetTodayAttendance(Request $request)
     {
         $user = auth()->user();
+        
         $now = now();
+        if ($request->has('client_date')) {
+            // Attempt to parse the client date, fallback to now if invalid
+            try {
+                $clientDate = \Carbon\Carbon::parse($request->input('client_date'));
+                $now->setDateFrom($clientDate);
+            } catch (\Exception $e) {}
+        }
+
         $todayDate = $now->toDateString();
         $yesterdayDate = $now->copy()->subDay()->toDateString();
 
@@ -409,7 +416,8 @@ class UserAttendanceController extends Controller
         $todaySchedule = $schedules->firstWhere('day', $todayDay);
         $yesterdaySchedule = $schedules->firstWhere('day', $yesterdayDay);
 
-        // 3. Check for active record (In Progress)
+        // 3. Priority 1: Check for any active record (In Progress - waiting for checkout)
+        // This covers night shifts that started yesterday but are still active today.
         $activeAttendance = UserAttendance::where('user_id', $user->id)
             ->whereNull('check_out')
             ->orderBy('date', 'desc')
@@ -424,32 +432,17 @@ class UserAttendanceController extends Controller
             ]);
         }
 
-        // 4. Decision: Which date's shift are we in?
-        $targetDate = $todayDate;
-        
-        // Check if it's currently within yesterday's night shift window
-        if ($yesterdaySchedule && $yesterdaySchedule->shift) {
-            $shift = $yesterdaySchedule->shift;
-            if ($shift->end_time < $shift->start_time) {
-                $shiftStart = \Carbon\Carbon::parse($yesterdayDate . ' ' . $shift->start_time)->subMinutes($earlyBufferMins);
-                $shiftEnd = \Carbon\Carbon::parse($yesterdayDate . ' ' . $shift->end_time)->addDay()->addMinutes($lateBufferMins);
-                
-                if ($now->between($shiftStart, $shiftEnd)) {
-                    $targetDate = $yesterdayDate;
-                }
-            }
-        }
-
-        // 5. Fetch attendance record for target date
+        // 4. Priority 2: Today's record (could be completed or not started)
+        // Following the rule: "yesterday checkin is closed ... only check in of today"
         $attendance = UserAttendance::where('user_id', $user->id)
-            ->where('date', $targetDate)
+            ->where('date', $todayDate)
             ->first();
 
         return response()->json([
             'attendance' => $attendance,
             'userShiftSchedules' => $schedules,
             'config' => $config,
-            'date_context' => $targetDate
+            'date_context' => $todayDate
         ]);
     }
 

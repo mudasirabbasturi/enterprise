@@ -10,3 +10,8 @@ requires_approval
 removed table leave_policies 
 
 remove leave policies permissions
+
+remove break_start and break_end from user_attendances table
+add break column as json array in user_attendances table
+
+

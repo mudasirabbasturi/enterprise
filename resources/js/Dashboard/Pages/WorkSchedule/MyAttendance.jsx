@@ -77,12 +77,16 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         let workMins = end.diff(start, 'minute');
         if (workMins < 0) workMins += 1440;
 
-        if (break_start && break_end) {
-            const bStart = dayjs(`2000-01-01 ${break_start}`);
-            const bEnd = dayjs(`2000-01-01 ${break_end}`);
-            let breakMins = bEnd.diff(bStart, 'minute');
-            if (breakMins < 0) breakMins += 1440;
-            workMins -= breakMins;
+        if (record.break && Array.isArray(record.break)) {
+            record.break.forEach(b => {
+                if (b.break_start && b.break_end) {
+                    const bStart = dayjs(`2000-01-01 ${b.break_start}`);
+                    const bEnd = dayjs(`2000-01-01 ${b.break_end}`);
+                    let breakMins = bEnd.diff(bStart, 'minute');
+                    if (breakMins < 0) breakMins += 1440;
+                    workMins -= breakMins;
+                }
+            });
         }
         return workMins > 0 ? workMins : 0;
     };
@@ -206,10 +210,16 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         const isAllowed = await validateIpAccess();
         if (!isAllowed) return;
 
+        const currentBreaks = Array.isArray(record.break) ? [...record.break] : [];
+        currentBreaks.push({
+            break_start: dayjs().format('HH:mm:ss'),
+            break_end: null
+        });
+
         setLoading(true);
         axios.put(route('users-attendance.update', record.id), {
             ...record,
-            break_start: dayjs().format('HH:mm:ss'),
+            break: currentBreaks,
             worked_from: workedFrom,
         }).then(() => {
             api.success({ message: "Break Started" });
@@ -224,10 +234,15 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         const isAllowed = await validateIpAccess();
         if (!isAllowed) return;
 
+        const currentBreaks = Array.isArray(record.break) ? [...record.break] : [];
+        if (currentBreaks.length > 0) {
+            currentBreaks[currentBreaks.length - 1].break_end = dayjs().format('HH:mm:ss');
+        }
+
         setLoading(true);
         axios.put(route('users-attendance.update', record.id), {
             ...record,
-            break_end: dayjs().format('HH:mm:ss'),
+            break: currentBreaks,
             worked_from: workedFrom,
         }).then(() => {
             api.success({ message: "Break Ended" });
@@ -463,16 +478,23 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
             cellRenderer: (params) => params.value ? <Tag color="cyan">{params.value}</Tag> : "-"
         },
         {
-            headerName: "Break Start",
-            field: "break_start",
-            minWidth: 110,
-            cellRenderer: (params) => params.value ? <Tag color="orange">{params.value}</Tag> : "-"
-        },
-        {
-            headerName: "Break End",
-            field: "break_end",
-            minWidth: 110,
-            cellRenderer: (params) => params.value ? <Tag color="orange">{params.value}</Tag> : "-"
+            headerName: "Breaks",
+            field: "break",
+            minWidth: 150,
+            cellRenderer: (params) => {
+                const breaks = params.value;
+                if (!Array.isArray(breaks) || breaks.length === 0) return "-";
+
+                return (
+                    <div className="d-flex align-items-center gap-1 flex-wrap">
+                        {breaks.map((b, idx) => (
+                            <Tag color="orange" key={idx} className="m-0 text-nowrap">
+                                {b.break_start || '...'} to {b.break_end || '...'}
+                            </Tag>
+                        ))}
+                    </div>
+                );
+            }
         },
         {
             headerName: "Required Hours",
@@ -864,9 +886,11 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                                                 : <small className="text-muted fst-italic">—</small>}
                                         </div>
                                         <div className="d-flex align-items-center gap-1">
-                                            <small className="text-muted">Break:</small>
-                                            {currentActionRecord.break_start
-                                                ? <Tag color="orange">{currentActionRecord.break_start} → {currentActionRecord.break_end || '…'}</Tag>
+                                            <small className="text-muted">Breaks:</small>
+                                            {Array.isArray(currentActionRecord.break) && currentActionRecord.break.length > 0
+                                                ? currentActionRecord.break.map((b, idx) => (
+                                                    <Tag color="orange" key={idx}>{b.break_start} → {b.break_end || '…'}</Tag>
+                                                ))
                                                 : <small className="text-muted fst-italic">—</small>}
                                         </div>
                                         <div className="d-flex align-items-center gap-1">
@@ -877,39 +901,72 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                                         </div>
                                     </div>
                                 ) : !currentActionRecord.check_in ? (
-                                    <button
-                                        className="btn btn-success w-100 py-2 d-flex align-items-center justify-content-center"
-                                        disabled={loading}
-                                        onClick={() => {
-                                            handleCheckIn(currentActionRecord.date);
-                                        }}
-                                    >
-                                        <LoginOutlined className="me-2" /> Check In
-                                    </button>
+                                    (() => {
+                                        const dayName = dayjs(currentActionRecord.date).format('dddd');
+                                        const schedule = (userShiftSchedules || []).find(s => s.day === dayName);
+                                        let isTooEarly = false;
+                                        let earlyMessage = '';
+
+                                        if (schedule && schedule.shift && currentActionRecord.date === dayjs().format('YYYY-MM-DD')) {
+                                            const earlyBufferMins = parseFloat(config?.attendance_early_checkin_max_hours || 2) * 60;
+                                            const shiftStart = dayjs(`${currentActionRecord.date} ${schedule.shift.start_time}`);
+                                            
+                                            if (dayjs().isBefore(shiftStart.subtract(earlyBufferMins, 'minute'))) {
+                                                isTooEarly = true;
+                                                earlyMessage = `Too early! You can only check in up to ${config?.attendance_early_checkin_max_hours || 2} hours before your shift starts (${schedule.shift.start_time}).`;
+                                            }
+                                        }
+
+                                        if (isTooEarly) {
+                                            return (
+                                                <div className="text-center py-2">
+                                                    <Alert type="warning" message={earlyMessage} showIcon />
+                                                </div>
+                                            );
+                                        }
+
+                                        return (
+                                            <button
+                                                className="btn btn-success w-100 py-2 d-flex align-items-center justify-content-center"
+                                                disabled={loading}
+                                                onClick={() => {
+                                                    handleCheckIn(currentActionRecord.date);
+                                                }}
+                                            >
+                                                <LoginOutlined className="me-2" /> Check In
+                                            </button>
+                                        );
+                                    })()
                                 ) : !currentActionRecord.check_out ? (
                                     <>
                                         <div className="row g-2 mb-2">
-                                            <div className="col-6">
-                                                <button
-                                                    className="btn btn-warning w-100 py-2"
-                                                    disabled={!!currentActionRecord.break_start || loading}
-                                                    onClick={() => {
-                                                        handleBreakStart(currentActionRecord);
-                                                    }}
-                                                >
-                                                    Break Start
-                                                </button>
-                                            </div>
-                                            <div className="col-6">
-                                                <button
-                                                    className="btn btn-warning w-100 py-2"
-                                                    disabled={!currentActionRecord.break_start || !!currentActionRecord.break_end || loading}
-                                                    onClick={() => {
-                                                        handleBreakEnd(currentActionRecord);
-                                                    }}
-                                                >
-                                                    Break End
-                                                </button>
+                                            <div className="col-12">
+                                                {(() => {
+                                                    const breaks = Array.isArray(currentActionRecord.break) ? currentActionRecord.break : [];
+                                                    const activeBreak = breaks.length > 0 && !breaks[breaks.length - 1].break_end;
+
+                                                    if (activeBreak) {
+                                                        return (
+                                                            <button
+                                                                className="btn btn-warning w-100 py-2 d-flex align-items-center justify-content-center gap-2"
+                                                                disabled={loading}
+                                                                onClick={() => handleBreakEnd(currentActionRecord)}
+                                                            >
+                                                                End Current Break
+                                                            </button>
+                                                        );
+                                                    } else {
+                                                        return (
+                                                            <button
+                                                                className="btn btn-outline-warning w-100 py-2 d-flex align-items-center justify-content-center gap-2"
+                                                                disabled={loading}
+                                                                onClick={() => handleBreakStart(currentActionRecord)}
+                                                            >
+                                                                Start New Break
+                                                            </button>
+                                                        );
+                                                    }
+                                                })()}
                                             </div>
                                         </div>
                                         <button
@@ -1205,6 +1262,25 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                                                 return ips.length > 0 ? ips.join(', ') : 'No specific IPs configured';
                                             } catch (e) { return 'N/A'; }
                                         })()}
+                                    </li>
+                                </ul>
+                            </Card>
+                        </div>
+
+                        <div className="col-md-12">
+                            <Card size="small" title={<Text strong>Salary & Overtime Calculations</Text>} className="h-100 border-0 shadow-sm bg-light">
+                                <ul className="ps-3 mb-0 small">
+                                    <li className="mb-2">
+                                        <Text strong>Hourly Rate (240 Divisor):</Text> Your base hourly rate is calculated dynamically as <Text code>Basic Salary / 30 / 8</Text>. All unconfigured deductions directly refer to this rate.
+                                    </li>
+                                    <li className="mb-2">
+                                        <Text strong>Office Overtime:</Text> Additional hours worked from the office beyond your shift duration are paid at <Text strong className="text-success">2.5x</Text> your base hourly rate.
+                                    </li>
+                                    <li className="mb-2">
+                                        <Text strong>Home Overtime:</Text> Additional hours worked from home beyond your shift duration are paid at <Text strong className="text-success">2x</Text> your base hourly rate.
+                                    </li>
+                                    <li>
+                                        <Text strong>Manual Hours:</Text> Any approved manual hours are merged into your daily regular hours. If your total daily logged time exceeds your required shift duration, the excess automatically counts as Overtime.
                                     </li>
                                 </ul>
                             </Card>

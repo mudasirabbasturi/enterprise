@@ -35,7 +35,8 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
     const fetchTodayAttendance = useCallback(async () => {
         setFetching(true);
         try {
-            const response = await axios.get(route('get-today-attendance'));
+            const clientDate = dayjs().format('YYYY-MM-DD');
+            const response = await axios.get(route('get-today-attendance', { client_date: clientDate }));
             const { attendance, userShiftSchedules, config, date_context } = response.data;
 
             setConfig(config);
@@ -68,20 +69,9 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
 
     useEffect(() => {
         if (open) {
-            if (initialRecord) {
-                setCurrentActionRecord(initialRecord);
-                setWorkedFrom(initialRecord.worked_from || 'office');
-                if (!config || !userShiftSchedules) {
-                    axios.get(route('get-today-attendance')).then(res => {
-                        if (!config) setConfig(res.data.config);
-                        if (!userShiftSchedules) setUserShiftSchedules(res.data.userShiftSchedules);
-                    });
-                }
-            } else {
-                fetchTodayAttendance();
-            }
+            fetchTodayAttendance();
         }
-    }, [open, initialRecord, fetchTodayAttendance]);
+    }, [open, fetchTodayAttendance]);
 
     const formatManualTime = (timeStr) => {
         if (!timeStr) return null;
@@ -99,12 +89,16 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
         let workMins = end.diff(start, 'minute');
         if (workMins < 0) workMins += 1440;
 
-        if (break_start && break_end) {
-            const bStart = dayjs(`2000-01-01 ${break_start}`);
-            const bEnd = dayjs(`2000-01-01 ${break_end}`);
-            let breakMins = bEnd.diff(bStart, 'minute');
-            if (breakMins < 0) breakMins += 1440;
-            workMins -= breakMins;
+        if (record.break && Array.isArray(record.break)) {
+            record.break.forEach(b => {
+                if (b.break_start && b.break_end) {
+                    const bStart = dayjs(`2000-01-01 ${b.break_start}`);
+                    const bEnd = dayjs(`2000-01-01 ${b.break_end}`);
+                    let breakMins = bEnd.diff(bStart, 'minute');
+                    if (breakMins < 0) breakMins += 1440;
+                    workMins -= breakMins;
+                }
+            });
         }
         return workMins > 0 ? workMins : 0;
     };
@@ -170,11 +164,11 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
             worked_from: workedFrom,
         }).then(() => {
             api.success({ message: "Checked In Successfully" });
+            fetchTodayAttendance();
             if (onSuccess) onSuccess();
-            else router.reload();
         }).catch(err => {
             api.error({ message: "Check In Failed", description: err.response?.data?.message || "Internal Error" });
-        }).finally(() => setLoading(true)); // Keep loading true until success closes modal or reloads
+        }).finally(() => setLoading(false));
     };
 
     const handleCheckOut = async (record) => {
@@ -188,47 +182,58 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
             worked_from: workedFrom,
         }).then(() => {
             api.success({ message: "Checked Out Successfully" });
+            fetchTodayAttendance();
             if (onSuccess) onSuccess();
-            else router.reload();
         }).catch(err => {
             api.error({ message: "Check Out Failed", description: err.response?.data?.message || "Internal Error" });
-        }).finally(() => setLoading(true));
+        }).finally(() => setLoading(false));
     };
 
     const handleBreakStart = async (record) => {
         const isAllowed = await validateIpAccess();
         if (!isAllowed) return;
 
+        const currentBreaks = Array.isArray(record.break) ? [...record.break] : [];
+        currentBreaks.push({
+            break_start: dayjs().format('HH:mm:ss'),
+            break_end: null
+        });
+
         setLoading(true);
         axios.put(route('users-attendance.update', record.id), {
             ...record,
-            break_start: dayjs().format('HH:mm:ss'),
+            break: currentBreaks,
             worked_from: workedFrom,
         }).then(() => {
             api.success({ message: "Break Started" });
+            fetchTodayAttendance();
             if (onSuccess) onSuccess();
-            else router.reload();
         }).catch(err => {
             api.error({ message: "Failed", description: err.response?.data?.message });
-        }).finally(() => setLoading(true));
+        }).finally(() => setLoading(false));
     };
 
     const handleBreakEnd = async (record) => {
         const isAllowed = await validateIpAccess();
         if (!isAllowed) return;
 
+        const currentBreaks = Array.isArray(record.break) ? [...record.break] : [];
+        if (currentBreaks.length > 0) {
+            currentBreaks[currentBreaks.length - 1].break_end = dayjs().format('HH:mm:ss');
+        }
+
         setLoading(true);
         axios.put(route('users-attendance.update', record.id), {
             ...record,
-            break_end: dayjs().format('HH:mm:ss'),
+            break: currentBreaks,
             worked_from: workedFrom,
         }).then(() => {
             api.success({ message: "Break Ended" });
+            fetchTodayAttendance();
             if (onSuccess) onSuccess();
-            else router.reload();
         }).catch(err => {
             api.error({ message: "Failed", description: err.response?.data?.message });
-        }).finally(() => setLoading(true));
+        }).finally(() => setLoading(false));
     };
 
     const handleSaveManualHours = async () => {
@@ -251,11 +256,11 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
             manual_hours_save: true,
         }).then(response => {
             api.success({ message: "Outside Hours Saved" });
+            fetchTodayAttendance();
             if (onSuccess) onSuccess();
-            else router.reload();
         }).catch(err => {
             api.error({ message: "Failed", description: err.response?.data?.message || "Failed to save hours" });
-        }).finally(() => setLoading(true));
+        }).finally(() => setLoading(false));
     };
 
     const handleSaveAllChanges = async () => {
@@ -268,13 +273,13 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
         })
             .then(response => {
                 api.success({ message: "Attendance Updated Successfully" });
+                fetchTodayAttendance();
                 if (onSuccess) onSuccess();
-                else router.reload();
             })
             .catch(err => {
                 api.error({ message: "Update Failed", description: err.response?.data?.message });
             })
-            .finally(() => setLoading(true));
+            .finally(() => setLoading(false));
     };
 
     return (
@@ -329,8 +334,12 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
                                         {currentActionRecord.check_in ? <Tag color="cyan">{currentActionRecord.check_in}</Tag> : <small className="text-muted fst-italic">—</small>}
                                     </div>
                                     <div className="d-flex align-items-center gap-1">
-                                        <small className="text-muted">Break:</small>
-                                        {currentActionRecord.break_start ? <Tag color="orange">{currentActionRecord.break_start} → {currentActionRecord.break_end || '…'}</Tag> : <small className="text-muted fst-italic">—</small>}
+                                        <small className="text-muted">Breaks:</small>
+                                        {Array.isArray(currentActionRecord.break) && currentActionRecord.break.length > 0
+                                            ? currentActionRecord.break.map((b, idx) => (
+                                                <Tag color="orange" key={idx}>{b.break_start} → {b.break_end || '…'}</Tag>
+                                            ))
+                                            : <small className="text-muted fst-italic">—</small>}
                                     </div>
                                     <div className="d-flex align-items-center gap-1">
                                         <small className="text-muted">Check Out:</small>
@@ -338,33 +347,72 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
                                     </div>
                                 </div>
                             ) : !currentActionRecord.check_in ? (
-                                <button
-                                    className="btn btn-success w-100 py-2 d-flex align-items-center justify-content-center"
-                                    disabled={loading}
-                                    onClick={() => handleCheckIn(currentActionRecord.date)}
-                                >
-                                    <LoginOutlined className="me-2" /> Check In
-                                </button>
+                                (() => {
+                                    const dayName = dayjs(currentActionRecord.date).format('dddd');
+                                    const schedule = (userShiftSchedules || []).find(s => s.day === dayName);
+                                    let isTooEarly = false;
+                                    let earlyMessage = '';
+
+                                    if (schedule && schedule.shift && currentActionRecord.date === dayjs().format('YYYY-MM-DD')) {
+                                        const earlyBufferMins = parseFloat(config?.attendance_early_checkin_max_hours || 2) * 60;
+                                        const shiftStart = dayjs(`${currentActionRecord.date} ${schedule.shift.start_time}`);
+                                        
+                                        if (dayjs().isBefore(shiftStart.subtract(earlyBufferMins, 'minute'))) {
+                                            isTooEarly = true;
+                                            earlyMessage = `Too early! You can only check in up to ${config?.attendance_early_checkin_max_hours || 2} hours before your shift starts (${schedule.shift.start_time}).`;
+                                        }
+                                    }
+
+                                    if (isTooEarly) {
+                                        return (
+                                            <div className="text-center py-2">
+                                                <Tag color="warning" className="w-100 py-2" style={{ whiteSpace: 'normal', height: 'auto' }}>
+                                                    {earlyMessage}
+                                                </Tag>
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <button
+                                            className="btn btn-success w-100 py-2 d-flex align-items-center justify-content-center"
+                                            disabled={loading}
+                                            onClick={() => handleCheckIn(currentActionRecord.date)}
+                                        >
+                                            <LoginOutlined className="me-2" /> Check In
+                                        </button>
+                                    );
+                                })()
                             ) : !currentActionRecord.check_out ? (
                                 <>
                                     <div className="row g-2 mb-2">
-                                        <div className="col-6">
-                                            <button
-                                                className="btn btn-warning w-100 py-2"
-                                                disabled={!!currentActionRecord.break_start || loading}
-                                                onClick={() => handleBreakStart(currentActionRecord)}
-                                            >
-                                                Break Start
-                                            </button>
-                                        </div>
-                                        <div className="col-6">
-                                            <button
-                                                className="btn btn-warning w-100 py-2"
-                                                disabled={!currentActionRecord.break_start || !!currentActionRecord.break_end || loading}
-                                                onClick={() => handleBreakEnd(currentActionRecord)}
-                                            >
-                                                Break End
-                                            </button>
+                                        <div className="col-12">
+                                            {(() => {
+                                                const breaks = Array.isArray(currentActionRecord.break) ? currentActionRecord.break : [];
+                                                const activeBreak = breaks.length > 0 && !breaks[breaks.length - 1].break_end;
+                                            
+                                                if (activeBreak) {
+                                                    return (
+                                                        <button
+                                                            className="btn btn-warning w-100 py-2 d-flex align-items-center justify-content-center gap-2"
+                                                            disabled={loading}
+                                                            onClick={() => handleBreakEnd(currentActionRecord)}
+                                                        >
+                                                            End Current Break
+                                                        </button>
+                                                    );
+                                                } else {
+                                                    return (
+                                                        <button
+                                                            className="btn btn-outline-warning w-100 py-2 d-flex align-items-center justify-content-center gap-2"
+                                                            disabled={loading}
+                                                            onClick={() => handleBreakStart(currentActionRecord)}
+                                                        >
+                                                            Start New Break
+                                                        </button>
+                                                    );
+                                                }
+                                            })()}
                                         </div>
                                     </div>
                                     <button

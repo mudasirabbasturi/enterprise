@@ -20,8 +20,7 @@ return new class extends Migration
             $table->ipAddress('check_in_ip')->nullable();
             $table->ipAddress('check_out_ip')->nullable();
             $table->enum('worked_from', ['home', 'office'])->default('office');
-            $table->time('break_start')->nullable();
-            $table->time('break_end')->nullable();
+            $table->json('break')->nullable();
             $table->time('total_regular_hours')->nullable();
             $table->json('total_outside_hours')->nullable();
             $table->string('status')->default('no action'); // present, late, absent, manual, no action

@@ -175,13 +175,11 @@ const SalarySheet =
                 let presentDays = 0;
                 let absentHours = 0;
                 let undertimeHours = 0;
-                let overtimeHours = 0;
+                let homeOvertimeHours = 0;
+                let officeOvertimeHours = 0;
                 let approvedLeaveDays = 0;
                 let absentDays = 0;
                 let requiredDays = 0;
-                let manualHomeMins = 0;
-                let manualOfficeMins = 0;
-                let regularHomeMins = 0;
 
                 let assignedShiftNames = [];
                 let hasMatchedAnyShift = false;
@@ -204,6 +202,21 @@ const SalarySheet =
                         const leaveEnd = dayjs(leave.end_date);
                         return dateObj.isSameOrAfter(leaveStart, 'day') && dateObj.isSameOrBefore(leaveEnd, 'day');
                     });
+
+                    let dayNetWorkedMinsHome = 0;
+                    let dayNetWorkedMinsOffice = 0;
+                    const att = userAttendances.find(a => a.date === dateStr);
+
+                    // Manual Outside Hours Calculation (Approved only)
+                    if (att && Array.isArray(att.total_outside_hours)) {
+                        att.total_outside_hours.forEach(m => {
+                            if (m.status === 'approved' || m.status === 'Approved') {
+                                const mins = getMinutes(m.manual_hours);
+                                if (m.work_from === 'home') dayNetWorkedMinsHome += mins;
+                                else dayNetWorkedMinsOffice += mins;
+                            }
+                        });
+                    }
 
                     // Match shift for the day: 
                     // Priority 1: User-specific assignment for this range
@@ -232,8 +245,9 @@ const SalarySheet =
                         const shiftDur = getDuration(shift.start_time, shift.end_time) - (shift.total_break_minutes || 0);
                         totalRequiredMinutes += shiftDur;
 
-                        const att = userAttendances.find(a => a.date === dateStr);
-                        if (att && att.status === 'present') {
+                        let isPresent = (att && att.status === 'present');
+
+                        if (isPresent) {
                             presentDays++;
 
                             // Missing Attendance Detection (Present but missing check-in or out)
@@ -243,20 +257,9 @@ const SalarySheet =
 
                             // Rule: If check_out is missing, user does not count any hours
                             const workedDur = (att.check_in && att.check_out) ? getDuration(att.check_in, att.check_out) : 0;
-                            // Rule: Do not count/subtract break duration
-                            const netWorked = workedDur;
-
-                            totalActualWorkedMinutes += netWorked;
-
-                            if (netWorked < shiftDur) {
-                                undertimeHours += (shiftDur - netWorked) / 60;
-                            } else if (netWorked > shiftDur) {
-                                overtimeHours += (netWorked - shiftDur) / 60;
-                            }
-
-                            if (att.worked_from === 'home') {
-                                regularHomeMins += netWorked;
-                            }
+                            
+                            if (att.worked_from === 'home') dayNetWorkedMinsHome += workedDur;
+                            else dayNetWorkedMinsOffice += workedDur;
 
                             // Late calculation (Dynamic grace from config)
                             if (att.check_in) {
@@ -272,20 +275,40 @@ const SalarySheet =
                             absentDays++;
                             absentHours += shiftDur / 60;
                         }
-                    }
 
-                    // Manual Outside Hours Calculation (Approved only) - regardless of shift
-                    const att_manual = userAttendances.find(a => a.date === dateStr);
-                    if (att_manual && Array.isArray(att_manual.total_outside_hours)) {
-                        att_manual.total_outside_hours.forEach(m => {
-                            if (m.status !== 'approved' && m.status !== 'Approved') return;
-                            const mins = getMinutes(m.manual_hours);
-                            if (m.work_from === 'home') {
-                                manualHomeMins += mins;
-                            } else {
-                                manualOfficeMins += mins;
-                            }
-                        });
+                        const totalDayWorkedMins = dayNetWorkedMinsHome + dayNetWorkedMinsOffice;
+                        totalActualWorkedMinutes += totalDayWorkedMins;
+
+                        // Calculate Overtime / Undertime
+                        if (isPresent && totalDayWorkedMins < shiftDur) {
+                            undertimeHours += (shiftDur - totalDayWorkedMins) / 60;
+                        } else if (totalDayWorkedMins > shiftDur) {
+                            // Distribute excess to overtime
+                            let remainingShiftDur = shiftDur;
+                            let remainingOfficeMins = dayNetWorkedMinsOffice;
+                            let deductOffice = Math.min(remainingOfficeMins, remainingShiftDur);
+                            remainingOfficeMins -= deductOffice;
+                            remainingShiftDur -= deductOffice;
+                            
+                            let remainingHomeMins = dayNetWorkedMinsHome;
+                            let deductHome = Math.min(remainingHomeMins, remainingShiftDur);
+                            remainingHomeMins -= deductHome;
+                            remainingShiftDur -= deductHome;
+
+                            officeOvertimeHours += remainingOfficeMins / 60;
+                            homeOvertimeHours += remainingHomeMins / 60;
+                        } else if (!isPresent && totalDayWorkedMins > 0) {
+                            // Absent but had manual hours -> treat manual hours as overtime
+                            officeOvertimeHours += dayNetWorkedMinsOffice / 60;
+                            homeOvertimeHours += dayNetWorkedMinsHome / 60;
+                        }
+
+                    } else {
+                        // User has no shift on this day, or is on leave
+                        const totalDayWorkedMins = dayNetWorkedMinsHome + dayNetWorkedMinsOffice;
+                        totalActualWorkedMinutes += totalDayWorkedMins;
+                        officeOvertimeHours += dayNetWorkedMinsOffice / 60;
+                        homeOvertimeHours += dayNetWorkedMinsHome / 60;
                     }
                 }
 
@@ -300,26 +323,20 @@ const SalarySheet =
                 const totalRequiredHours = finalRequiredMinutes / 60;
                 const totalWorkedHours = totalActualWorkedMinutes / 60;
 
-                // CRITICAL CHANGE: hourlyRate is now based on baseSalary (Basic Salary) instead of grossSalary
-                const hourlyRate = baseSalary / (Math.max(1, totalRequiredHours));
+                // Dynamic Rates Calculation Strategy
+                const hourlyRate = baseSalary / (30 * 8); // Strict 240 divisor
                 const undertimeRate = parseFloat(config?.undertime_penalty_per_hour) || hourlyRate;
                 const absentRate = parseFloat(config?.absent_penalty_rate) || hourlyRate;
-                const overtimeRate = parseFloat(config?.overtime_bonus_per_hour) || 0;
+                
+                const homeOvertimeRate = hourlyRate * 2.0;
+                const officeOvertimeRate = hourlyRate * 2.5;
 
                 const absentDeduction = absentHours * absentRate;
                 const undertimeDeduction = undertimeHours * undertimeRate;
-                const overtimeBonus = overtimeHours * overtimeRate;
-
-                // New Extra Earnings Calculation
-                const manualHomeRate = parseFloat(config?.manual_outside_home_rate || 0);
-                const manualOfficeRate = parseFloat(config?.manual_outside_office_rate || 0);
-                const regularHomeRate = parseFloat(config?.regular_home_rate || 0);
-
-                const manualHomeEarnings = (manualHomeMins / 60) * manualHomeRate;
-                const manualOfficeEarnings = (manualOfficeMins / 60) * manualOfficeRate;
-                const regularHomeBonus = (regularHomeMins / 60) * regularHomeRate;
-
-                const totalExtraEarnings = manualHomeEarnings + manualOfficeEarnings + regularHomeBonus;
+                
+                const homeOvertimeBonus = homeOvertimeHours * homeOvertimeRate;
+                const officeOvertimeBonus = officeOvertimeHours * officeOvertimeRate;
+                const totalOvertimeBonus = homeOvertimeBonus + officeOvertimeBonus;
 
                 // Late Penalty Calculation
                 const lateGraceCount = parseInt(config?.late_grace_count || 0);
@@ -365,7 +382,7 @@ const SalarySheet =
 
                 const hasNoShift = !hasMatchedAnyShift;
                 const totalDeductions = hasNoShift ? 0 : (absentDeduction + undertimeDeduction + latePenaltyDeduction + missingAttendancePenaltyDeduction + totalManualPenalty + totalTax + deductionTotal);
-                const netPay = hasNoShift ? 0 : Math.max(0, grossSalary + overtimeBonus + totalExtraEarnings + bonusTotal + manualPointsTotal + projectPointsAmount - totalDeductions);
+                const netPay = hasNoShift ? 0 : Math.max(0, grossSalary + totalOvertimeBonus + bonusTotal + manualPointsTotal + projectPointsAmount - totalDeductions);
 
                 const payment = payments.find(p => p.user_id === user.id);
 
@@ -392,11 +409,9 @@ const SalarySheet =
                     breakdown: {
                         benefits: [
                             { label: 'Approved Leaves', count: approvedLeaveDays, amount: 0, unit: 'd' },
-                            { label: 'Overtime Bonus', count: overtimeHours.toFixed(2), rate: overtimeRate, amount: overtimeBonus, unit: 'hrs', status: 'Bonus' },
+                            { label: 'Home Overtime Bonus', count: homeOvertimeHours.toFixed(2), rate: homeOvertimeRate, amount: homeOvertimeBonus, unit: 'hrs', status: 'Bonus' },
+                            { label: 'Office Overtime Bonus', count: officeOvertimeHours.toFixed(2), rate: officeOvertimeRate, amount: officeOvertimeBonus, unit: 'hrs', status: 'Bonus' },
                             { label: 'Project Points', count: userProjectPoints, rate: pointRate, amount: projectPointsAmount, unit: 'pts', status: 'Bonus' },
-                            { label: 'Manual Hours (Home)', count: (manualHomeMins / 60).toFixed(2), rate: manualHomeRate, amount: manualHomeEarnings, unit: 'hrs', status: 'Bonus' },
-                            { label: 'Manual Hours (Office)', count: (manualOfficeMins / 60).toFixed(2), rate: manualOfficeRate, amount: manualOfficeEarnings, unit: 'hrs', status: 'Bonus' },
-                            { label: 'Regular Shift (Home)', count: (regularHomeMins / 60).toFixed(2), rate: regularHomeRate, amount: regularHomeBonus, unit: 'hrs', status: 'Bonus' },
                             ...userAdjustments.filter(a => a.type === 'bonus' || a.type === 'points').map((a, i) => ({
                                 label: a.label,
                                 amount: a.type === 'points' ? (parseFloat(a.amount) * pointRate) : parseFloat(a.amount),
@@ -421,8 +436,8 @@ const SalarySheet =
                     undertime_deduction: undertimeDeduction,
                     late_penalty_deduction: latePenaltyDeduction,
                     missing_attendance_penalty_deduction: missingAttendancePenaltyDeduction,
-                    overtime_bonus: overtimeBonus,
-                    total_extra_earnings: totalExtraEarnings,
+                    overtime_bonus: totalOvertimeBonus,
+                    total_extra_earnings: 0,
                     manual_penalty: totalManualPenalty,
                     bonus_total: bonusTotal,
                     adjustment_deduction: deductionTotal,
@@ -1121,25 +1136,7 @@ const SalarySheet =
                         <Divider orientation="left" className="m-0 mb-3"><Text strong type="secondary" style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Rate & Bonus Settings</Text></Divider>
 
                         <div className="row g-3 mb-4">
-                            <div className="col-md-6">
-                                <Card size="small" className="bg-light border-0 shadow-sm h-100" bodyStyle={{ padding: '15px' }}>
-                                    <Form.Item
-                                        name="overtime_bonus_per_hour"
-                                        label={
-                                            <Space>
-                                                <DollarOutlined /> Overtime Rate
-                                                <Tooltip title="Hourly rate for overtime. If empty, defaults to (Total Basic Salary / Required Hours) * Overtime Hours.">
-                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
-                                                </Tooltip>
-                                            </Space>
-                                        }
-                                        extra="PKR per overtime hour"
-                                    >
-                                        <InputNumber className="w-100" min={0} placeholder="e.g. 500" />
-                                    </Form.Item>
-                                </Card>
-                            </div>
-                            <div className="col-md-6">
+                            <div className="col-md-12">
                                 <Card size="small" className="bg-light border-0 shadow-sm h-100" bodyStyle={{ padding: '15px' }}>
                                     <Form.Item
                                         name="project_point_rate"
@@ -1151,59 +1148,6 @@ const SalarySheet =
                                 </Card>
                             </div>
                         </div>
-
-                        <Card size="small" className="border-primary-subtle bg-primary-subtle bg-opacity-10 mb-4" bodyStyle={{ padding: '15px' }}>
-                            <div className="row g-3">
-                                <div className="col-md-6">
-                                    <Form.Item
-                                        name="manual_outside_office_rate"
-                                        label={
-                                            <Space>
-                                                <ApartmentOutlined /> Manual (Office) Rate
-                                                <Tooltip title="Rate for manual hours from office. If empty, defaults to (Basic Salary / Required Hours).">
-                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
-                                                </Tooltip>
-                                            </Space>
-                                        }
-                                        extra="PKR per hour from Office"
-                                    >
-                                        <InputNumber className="w-100" min={0} placeholder="e.g. 600" />
-                                    </Form.Item>
-                                </div>
-                                <div className="col-md-6">
-                                    <Form.Item
-                                        name="manual_outside_home_rate"
-                                        label={
-                                            <Space>
-                                                <HomeOutlined /> Manual (Home) Rate
-                                                <Tooltip title="Rate for manual hours from home. If empty, defaults to (Basic Salary / Required Hours).">
-                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
-                                                </Tooltip>
-                                            </Space>
-                                        }
-                                        extra="PKR per hour from Home"
-                                    >
-                                        <InputNumber className="w-100" min={0} placeholder="e.g. 500" />
-                                    </Form.Item>
-                                </div>
-                                <div className="col-12 mt-0">
-                                    <Form.Item
-                                        name="regular_home_rate"
-                                        label={
-                                            <Space>
-                                                <HomeOutlined /> Regular (Home) Rate
-                                                <Tooltip title="Bonus/Rate for regular shift hours worked from home. If empty, defaults to (Basic Salary / Required Hours).">
-                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
-                                                </Tooltip>
-                                            </Space>
-                                        }
-                                        extra="PKR per hour for regular shift hours from Home"
-                                    >
-                                        <InputNumber className="w-100" min={0} placeholder="e.g. 400" />
-                                    </Form.Item>
-                                </div>
-                            </div>
-                        </Card>
 
                         <Divider orientation="left" className="m-0 mb-3"><Text strong type="secondary" style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Penalty & Deduction Settings</Text></Divider>
 
