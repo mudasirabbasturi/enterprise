@@ -15,3 +15,24 @@ remove break_start and break_end from user_attendances table
 add break column as json array in user_attendances table
 
 
+remove Columns from user_attendances table
+check_in
+check_out
+check_in_ip
+check_out_ip
+worked_from
+break
+
+total_regular_hours
+total_outside_hours
+
+and add one json clock 
+
+
+removed custom_salary from employee_salaries table
+
+add new migration 
+
+add permission View Final Sheet
+
+add more enum paid inside table payroll_payments and by default it is pending

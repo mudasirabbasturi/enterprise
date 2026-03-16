@@ -177,6 +177,7 @@ class PermissionSeeder extends Seeder
             // ['model' => 'Holiday', 'type' => 'route', 'name' => 'Delete Holiday'],
             //    ['model' => 'EmployeeSalary', 'type' => 'route', 'name' => 'View Salary Setup'],
             //    ['model' => 'PayrollPayment', 'type' => 'route', 'name' => 'View Salary Sheets'],
+            //    ['model' => 'PayrollPayment', 'type' => 'route', 'name' => 'View Final Sheet'],
             //    ['model' => 'PayrollTaxRule', 'type' => 'route', 'name' => 'View Tax Management'],
             //    ['model' => 'SalaryPackage', 'type' => 'route', 'name' => 'View Salary Packages'],
             //    ['model' => 'PayrollPenalty', 'type' => 'route', 'name' => 'View Penalty Management'],
@@ -184,16 +185,16 @@ class PermissionSeeder extends Seeder
 
         foreach ($permissions as $perm) {
             DB::table('permissions')->updateOrInsert(
-                [
-                    'model' => $perm['model'],
-                    'type' => $perm['type'],
-                    'name' => $perm['name'],
-                ],
-                [
-                    'notes' => 'Permission for ' . $perm['name'],
-                    'updated_at' => now(),
-                    'created_at' => now(),
-                ]
+            [
+                'model' => $perm['model'],
+                'type' => $perm['type'],
+                'name' => $perm['name'],
+            ],
+            [
+                'notes' => 'Permission for ' . $perm['name'],
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
             );
         }
     }

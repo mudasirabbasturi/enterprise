@@ -14,7 +14,6 @@ const SalarySetup = ({ assignments, users, packages, taxRules }) => {
     const [editingAssignment, setEditingAssignment] = useState(null);
     const [selectedPackageId, setSelectedPackageId] = useState(null);
     const [selectedUserIds, setSelectedUserIds] = useState([]);
-    const [customSalary, setCustomSalary] = useState(0);
     const [loading, setLoading] = useState(false);
     const [form] = Form.useForm();
     const [bulkForm] = Form.useForm();
@@ -38,7 +37,6 @@ const SalarySetup = ({ assignments, users, packages, taxRules }) => {
             headerName: "Base Salary",
             field: "package.base_salary",
             flex: 1,
-            valueGetter: params => params.data.custom_salary || params.data.package.base_salary,
             valueFormatter: params => `Rs. ${params.value?.toLocaleString()}`
         },
         {
@@ -65,7 +63,7 @@ const SalarySetup = ({ assignments, users, packages, taxRules }) => {
             flex: 1,
             headerClass: 'fw-bold',
             valueGetter: params => {
-                const base = parseFloat(params.data.custom_salary || params.data.package.base_salary || 0);
+                const base = parseFloat(params.data.package.base_salary || 0);
                 const allowances = (params.data.package.allowances || []).reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
                 return base + allowances;
             },
@@ -96,11 +94,9 @@ const SalarySetup = ({ assignments, users, packages, taxRules }) => {
     const handleEdit = (assignment) => {
         setEditingAssignment(assignment);
         setSelectedPackageId(assignment.package_id);
-        setCustomSalary(assignment.custom_salary || assignment.package.base_salary);
         form.setFieldsValue({
             user_id: assignment.user_id,
             package_id: assignment.package_id,
-            custom_salary: assignment.custom_salary
         });
         setIsModalOpen(true);
     };
@@ -201,7 +197,7 @@ const SalarySetup = ({ assignments, users, packages, taxRules }) => {
 
     const calculationPreview = useMemo(() => {
         if (!currentPackage) return null;
-        const base = parseFloat(customSalary || currentPackage.base_salary || 0);
+        const base = parseFloat(currentPackage.base_salary || 0);
         const allowanceItems = (currentPackage.allowances || []).map(a => ({
             ...a,
             amount: parseFloat(a.amount || 0)
@@ -218,7 +214,7 @@ const SalarySetup = ({ assignments, users, packages, taxRules }) => {
         });
 
         return { base, allowanceItems, totalAllowances, gross, taxes, totalTax, net: gross - totalTax };
-    }, [currentPackage, customSalary]);
+    }, [currentPackage]);
 
     return (
         <>
@@ -245,7 +241,6 @@ const SalarySetup = ({ assignments, users, packages, taxRules }) => {
                             icon={<PlusOutlined />}
                             onClick={() => {
                                 setSelectedPackageId(null);
-                                setCustomSalary(0);
                                 bulkForm.resetFields();
                                 setSelectedUserIds([]);
                                 setIsBulkModalOpen(true);
@@ -259,7 +254,6 @@ const SalarySetup = ({ assignments, users, packages, taxRules }) => {
                             onClick={() => {
                                 setEditingAssignment(null);
                                 setSelectedPackageId(null);
-                                setCustomSalary(0);
                                 form.resetFields();
                                 setIsModalOpen(true);
                             }}
@@ -305,31 +299,16 @@ const SalarySetup = ({ assignments, users, packages, taxRules }) => {
                     )}
 
                     <div className="row">
-                        <div className="col-md-6">
+                        <div className="col-md-12">
                             <Form.Item name="package_id" label="Salary Package" rules={[{ required: true }]}>
                                 <Select
                                     placeholder="Select package"
                                     onChange={(val) => {
                                         setSelectedPackageId(val);
-                                        const pkg = packages.find(p => p.id === val);
-                                        if (pkg) {
-                                            setCustomSalary(pkg.base_salary);
-                                            form.setFieldsValue({ custom_salary: pkg.base_salary });
-                                        }
                                     }}
                                 >
                                     {packages.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
                                 </Select>
-                            </Form.Item>
-                        </div>
-                        <div className="col-md-6">
-                            <Form.Item name="custom_salary" label="Base Salary Override">
-                                <InputNumber
-                                    style={{ width: '100%' }}
-                                    min={0}
-                                    onChange={setCustomSalary}
-                                    placeholder="Leave 0 to use package default"
-                                />
                             </Form.Item>
                         </div>
                     </div>
@@ -388,31 +367,16 @@ const SalarySetup = ({ assignments, users, packages, taxRules }) => {
             >
                 <Form form={bulkForm} layout="vertical" onFinish={handleBulkAssign}>
                     <div className="row">
-                        <div className="col-md-6">
+                        <div className="col-md-12">
                             <Form.Item name="package_id" label="Salary Package" rules={[{ required: true }]}>
                                 <Select
                                     placeholder="Select package"
                                     onChange={(val) => {
                                         setSelectedPackageId(val);
-                                        const pkg = packages.find(p => p.id === val);
-                                        if (pkg) {
-                                            setCustomSalary(pkg.base_salary);
-                                            bulkForm.setFieldsValue({ custom_salary: pkg.base_salary });
-                                        }
                                     }}
                                 >
                                     {packages.map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
                                 </Select>
-                            </Form.Item>
-                        </div>
-                        <div className="col-md-6">
-                            <Form.Item name="custom_salary" label="Base Salary Override">
-                                <InputNumber
-                                    style={{ width: '100%' }}
-                                    min={0}
-                                    onChange={setCustomSalary}
-                                    placeholder="Leave 0 to use package default"
-                                />
                             </Form.Item>
                         </div>
                     </div>

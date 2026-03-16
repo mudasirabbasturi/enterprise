@@ -1,0 +1,18 @@
+[
+    {
+        "work_from": "office",
+        "check_in": "09:44:34",
+        "break": {
+            "break_start": "09:45:02",
+            "break_end": "09:44:53",
+            "break_start_2": "09:45:02",
+            "break_end_2": "09:44:53",
+            "break_start_3": "09:45:02",
+            "break_end_3": "09:44:53",
+            "break_start_4": "09:45:02",
+            "break_end_4": "09:44:53"
+        },
+        "check_out": "09:45:18",
+        "status": "approved"
+    }
+]

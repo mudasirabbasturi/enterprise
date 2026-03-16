@@ -31,7 +31,6 @@ class SalarySetupController extends Controller
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id|unique:employee_salaries,user_id',
             'package_id' => 'required|exists:salary_packages,id',
-            'custom_salary' => 'nullable|numeric|min:0'
         ], [
             'user_id.unique' => 'This user already has a salary package assigned. Please edit the existing assignment instead.'
         ]);
@@ -46,11 +45,9 @@ class SalarySetupController extends Controller
             'user_ids' => 'required|array',
             'user_ids.*' => 'exists:users,id',
             'package_id' => 'required|exists:salary_packages,id',
-            'custom_salary' => 'nullable|numeric|min:0'
         ]);
 
         $packageId = $validated['package_id'];
-        $customSalary = $validated['custom_salary'] ?? 0;
         $userIds = $validated['user_ids'];
 
         $count = 0;
@@ -60,7 +57,6 @@ class SalarySetupController extends Controller
                 EmployeeSalary::create([
                     'user_id' => $userId,
                     'package_id' => $packageId,
-                    'custom_salary' => $customSalary
                 ]);
                 $count++;
             }
@@ -74,7 +70,6 @@ class SalarySetupController extends Controller
         $assignment = EmployeeSalary::findOrFail($id);
         $validated = $request->validate([
             'package_id' => 'required|exists:salary_packages,id',
-            'custom_salary' => 'nullable|numeric|min:0'
         ]);
 
         $assignment->update($validated);

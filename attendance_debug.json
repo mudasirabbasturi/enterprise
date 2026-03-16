@@ -1,0 +1,882 @@
+[
+    {
+        "id": 121,
+        "user_id": 58,
+        "date": "2026-02-02",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "17:55:12",
+                "break": {
+                    "break_start": "21:10:00",
+                    "break_end": "21:35:00"
+                },
+                "check_out": "00:28:11",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 122,
+        "user_id": 65,
+        "date": "2026-02-02",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:05:44",
+                "break": {
+                    "break_start": "21:30:00",
+                    "break_end": "21:55:00"
+                },
+                "check_out": "00:20:10",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 123,
+        "user_id": 58,
+        "date": "2026-02-03",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:02:20",
+                "break": {
+                    "break_start": "21:15:00",
+                    "break_end": "21:40:00"
+                },
+                "check_out": "00:31:42",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 124,
+        "user_id": 65,
+        "date": "2026-02-03",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "17:58:19",
+                "break": {
+                    "break_start": "21:00:00",
+                    "break_end": "21:25:00"
+                },
+                "check_out": "00:15:02",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 125,
+        "user_id": 58,
+        "date": "2026-02-04",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:10:00",
+                "break": {
+                    "break_start": "21:20:00",
+                    "break_end": "21:50:00"
+                },
+                "check_out": "00:22:00",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 126,
+        "user_id": 65,
+        "date": "2026-02-04",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "17:50:10",
+                "break": {
+                    "break_start": "21:05:00",
+                    "break_end": "21:30:00"
+                },
+                "check_out": "00:35:12",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 127,
+        "user_id": 58,
+        "date": "2026-02-05",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:03:01",
+                "break": {
+                    "break_start": "21:12:00",
+                    "break_end": "21:42:00"
+                },
+                "check_out": "00:30:22",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 128,
+        "user_id": 65,
+        "date": "2026-02-05",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:15:10",
+                "break": {
+                    "break_start": "21:40:00",
+                    "break_end": "22:05:00"
+                },
+                "check_out": "00:40:10",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 129,
+        "user_id": 58,
+        "date": "2026-02-06",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "17:59:30",
+                "break": {
+                    "break_start": "21:10:00",
+                    "break_end": "21:30:00"
+                },
+                "check_out": "00:18:44",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 130,
+        "user_id": 65,
+        "date": "2026-02-06",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:06:14",
+                "break": {
+                    "break_start": "21:25:00",
+                    "break_end": "21:50:00"
+                },
+                "check_out": "00:27:01",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 131,
+        "user_id": 58,
+        "date": "2026-02-09",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:00:40",
+                "break": {
+                    "break_start": "21:15:00",
+                    "break_end": "21:40:00"
+                },
+                "check_out": "00:29:10",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 132,
+        "user_id": 65,
+        "date": "2026-02-09",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "17:54:10",
+                "break": {
+                    "break_start": "21:00:00",
+                    "break_end": "21:20:00"
+                },
+                "check_out": "00:10:05",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 133,
+        "user_id": 58,
+        "date": "2026-02-10",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:07:22",
+                "break": {
+                    "break_start": "21:22:00",
+                    "break_end": "21:50:00"
+                },
+                "check_out": "00:33:00",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 134,
+        "user_id": 65,
+        "date": "2026-02-10",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:02:01",
+                "break": {
+                    "break_start": "21:18:00",
+                    "break_end": "21:38:00"
+                },
+                "check_out": "00:22:40",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 135,
+        "user_id": 58,
+        "date": "2026-02-11",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "17:56:33",
+                "break": {
+                    "break_start": "21:10:00",
+                    "break_end": "21:35:00"
+                },
+                "check_out": "00:24:00",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 136,
+        "user_id": 65,
+        "date": "2026-02-11",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:04:14",
+                "break": {
+                    "break_start": "21:30:00",
+                    "break_end": "21:55:00"
+                },
+                "check_out": "00:37:20",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 137,
+        "user_id": 58,
+        "date": "2026-02-12",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:12:05",
+                "break": {
+                    "break_start": "21:40:00",
+                    "break_end": "22:05:00"
+                },
+                "check_out": "00:34:19",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 138,
+        "user_id": 65,
+        "date": "2026-02-12",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "17:59:50",
+                "break": {
+                    "break_start": "21:15:00",
+                    "break_end": "21:40:00"
+                },
+                "check_out": "00:28:55",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 139,
+        "user_id": 58,
+        "date": "2026-02-13",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:01:44",
+                "break": {
+                    "break_start": "21:18:00",
+                    "break_end": "21:48:00"
+                },
+                "check_out": "00:26:30",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 140,
+        "user_id": 65,
+        "date": "2026-02-13",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:10:00",
+                "break": {
+                    "break_start": "21:35:00",
+                    "break_end": "22:00:00"
+                },
+                "check_out": "00:41:10",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 141,
+        "user_id": 58,
+        "date": "2026-02-16",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:00:01",
+                "break": {
+                    "break_start": "21:12:00",
+                    "break_end": "21:40:00"
+                },
+                "check_out": "00:30:00",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 142,
+        "user_id": 65,
+        "date": "2026-02-16",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "17:53:40",
+                "break": {
+                    "break_start": "21:05:00",
+                    "break_end": "21:35:00"
+                },
+                "check_out": "00:15:00",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 143,
+        "user_id": 58,
+        "date": "2026-02-17",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:04:44",
+                "break": {
+                    "break_start": "21:30:00",
+                    "break_end": "21:55:00"
+                },
+                "check_out": "00:33:12",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 144,
+        "user_id": 65,
+        "date": "2026-02-17",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:09:10",
+                "break": {
+                    "break_start": "21:40:00",
+                    "break_end": "22:05:00"
+                },
+                "check_out": "00:36:50",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 145,
+        "user_id": 58,
+        "date": "2026-02-18",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "18:02:00",
+                "break": {
+                    "break_start": "21:18:00",
+                    "break_end": "21:45:00"
+                },
+                "check_out": "00:28:30",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 146,
+        "user_id": 65,
+        "date": "2026-02-18",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "17:58:10",
+                "break": {
+                    "break_start": "21:10:00",
+                    "break_end": "21:35:00"
+                },
+                "check_out": "00:18:11",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 147,
+        "user_id": 58,
+        "date": "2026-02-19",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "20:10:00",
+                "break": {
+                    "break_start": "23:10:00",
+                    "break_end": "23:35:00"
+                },
+                "check_out": "02:40:00",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 148,
+        "user_id": 65,
+        "date": "2026-02-19",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "20:20:10",
+                "break": {
+                    "break_start": "23:30:00",
+                    "break_end": "23:55:00"
+                },
+                "check_out": "02:50:10",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 149,
+        "user_id": 58,
+        "date": "2026-02-20",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "20:15:30",
+                "break": {
+                    "break_start": "23:20:00",
+                    "break_end": "23:45:00"
+                },
+                "check_out": "02:44:50",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 150,
+        "user_id": 65,
+        "date": "2026-02-20",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "20:25:00",
+                "break": {
+                    "break_start": "23:40:00",
+                    "break_end": "00:05:00"
+                },
+                "check_out": "02:55:00",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 151,
+        "user_id": 58,
+        "date": "2026-02-23",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "20:05:44",
+                "break": {
+                    "break_start": "23:10:00",
+                    "break_end": "23:40:00"
+                },
+                "check_out": "02:30:11",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 152,
+        "user_id": 65,
+        "date": "2026-02-23",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "20:18:10",
+                "break": {
+                    "break_start": "23:25:00",
+                    "break_end": "23:55:00"
+                },
+                "check_out": "02:47:00",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 153,
+        "user_id": 58,
+        "date": "2026-02-24",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "20:12:11",
+                "break": {
+                    "break_start": "23:18:00",
+                    "break_end": "23:45:00"
+                },
+                "check_out": "02:42:22",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 154,
+        "user_id": 65,
+        "date": "2026-02-24",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "20:30:00",
+                "break": {
+                    "break_start": "23:40:00",
+                    "break_end": "00:05:00"
+                },
+                "check_out": "02:58:00",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 155,
+        "user_id": 58,
+        "date": "2026-02-25",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "20:15:10",
+                "break": {
+                    "break_start": "23:22:00",
+                    "break_end": "23:50:00"
+                },
+                "check_out": "02:46:10",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 156,
+        "user_id": 65,
+        "date": "2026-02-25",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "20:10:55",
+                "break": {
+                    "break_start": "23:18:00",
+                    "break_end": "23:45:00"
+                },
+                "check_out": "02:35:55",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 157,
+        "user_id": 58,
+        "date": "2026-02-26",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "20:20:10",
+                "break": {
+                    "break_start": "23:30:00",
+                    "break_end": "23:55:00"
+                },
+                "check_out": "02:50:00",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 158,
+        "user_id": 65,
+        "date": "2026-02-26",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "20:14:44",
+                "break": {
+                    "break_start": "23:20:00",
+                    "break_end": "23:45:00"
+                },
+                "check_out": "02:42:20",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 159,
+        "user_id": 58,
+        "date": "2026-02-27",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "20:05:00",
+                "break": {
+                    "break_start": "23:15:00",
+                    "break_end": "23:40:00"
+                },
+                "check_out": "02:33:10",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    },
+    {
+        "id": 160,
+        "user_id": 65,
+        "date": "2026-02-27",
+        "clock": [
+            {
+                "work_from": "office",
+                "check_in": "20:22:20",
+                "break": {
+                    "break_start": "23:35:00",
+                    "break_end": "00:00:00"
+                },
+                "check_out": "02:52:30",
+                "status": "approved"
+            }
+        ],
+        "status": "marked",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null,
+        "deleted_at": null
+    }
+]

@@ -15,14 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained('users')->cascadeOnUpdate()->cascadeOnDelete();
             $table->date('date');
-            $table->time('check_in')->nullable();
-            $table->time('check_out')->nullable();
-            $table->ipAddress('check_in_ip')->nullable();
-            $table->ipAddress('check_out_ip')->nullable();
-            $table->enum('worked_from', ['home', 'office'])->default('office');
-            $table->json('break')->nullable();
-            $table->time('total_regular_hours')->nullable();
-            $table->json('total_outside_hours')->nullable();
+            $table->json('clock')->nullable();
             $table->string('status')->default('no action'); // present, late, absent, manual, no action
             $table->text('notes')->nullable(); // Any notes or extra info
             $table->timestamps();

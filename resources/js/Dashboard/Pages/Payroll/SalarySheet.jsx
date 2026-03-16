@@ -8,7 +8,7 @@ import { calc } from 'antd/es/theme/internal';
 const { Text, Title } = Typography;
 
 const SalarySheet =
-    ({ users, attendances, penalties, payments, config, selectedMonth, selectedYear, leaveRequests, adjustments, projectPoints, shifts, monthlyShiftAssignments, holidays }) => {
+    ({ users, attendances, penalties, payments, config, selectedMonth, selectedYear, selectedBatchId: propBatchId, leaveRequests, adjustments, projectPoints, shifts, monthlyShiftAssignments, holidays }) => {
         const [api, contextHolder] = notification.useNotification();
         const [modal, modalContextHolder] = Modal.useModal();
         const gridRef = useRef();
@@ -23,11 +23,18 @@ const SalarySheet =
         const [shiftForm] = Form.useForm();
         const [appliedShifts, setAppliedShifts] = useState(monthlyShiftAssignments || []);
         const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
+        const [isSnapshotLoading, setIsSnapshotLoading] = useState(false);
 
         // Sync local state when prop changes (e.g. month change)
         useEffect(() => {
             setAppliedShifts(monthlyShiftAssignments || []);
         }, [monthlyShiftAssignments]);
+
+        useEffect(() => {
+            if (month !== selectedMonth || year !== selectedYear) {
+                handleFilter();
+            }
+        }, [month, year]);
         const watchedAdjustments = Form.useWatch('manual_adjustments', form);
         const watchedGroups = Form.useWatch('groups', shiftForm);
 
@@ -181,7 +188,7 @@ const SalarySheet =
                 let absentDays = 0;
                 let requiredDays = 0;
 
-                let assignedShiftNames = [];
+                let assignedShiftDetails = [];
                 let hasMatchedAnyShift = false;
 
                 for (let d = 1; d <= lastDayOfMonth; d++) {
@@ -218,7 +225,7 @@ const SalarySheet =
                         });
                     }
 
-                    // Match shift for the day: 
+                    // Match shift for the day:
                     // Priority 1: User-specific assignment for this range
                     // Priority 2: Global monthly assignment for this range
                     let shiftRange = appliedShifts.find(s => d >= s.start_day && d <= s.end_day && s.user_id === user.id);
@@ -230,8 +237,11 @@ const SalarySheet =
                     if (shiftRange) {
                         hasMatchedAnyShift = true;
                         shift = shifts.find(s => s.id === shiftRange.shift_id);
-                        if (shift && !assignedShiftNames.includes(shift.name)) {
-                            assignedShiftNames.push(shift.name);
+                        if (shift) {
+                            const detail = `${shift.name}: ${shift.start_time} - ${shift.end_time}`;
+                            if (!assignedShiftDetails.includes(detail)) {
+                                assignedShiftDetails.push(detail);
+                            }
                         }
                     }
 
@@ -245,26 +255,32 @@ const SalarySheet =
                         const shiftDur = getDuration(shift.start_time, shift.end_time) - (shift.total_break_minutes || 0);
                         totalRequiredMinutes += shiftDur;
 
-                        let isPresent = (att && att.status === 'present');
+                        let isPresent = (att && (att.status === 'present' || att.status === 'marked'));
 
                         if (isPresent) {
                             presentDays++;
 
+                            // Extract check_in/check_out from the clock array
+                            const clockEntry = Array.isArray(att.clock) && att.clock.length > 0 ? att.clock[0] : null;
+                            const checkIn = clockEntry?.check_in || att.check_in;
+                            const checkOut = clockEntry?.check_out || att.check_out;
+                            const workedFrom = clockEntry?.work_from || att.worked_from || 'office';
+
                             // Missing Attendance Detection (Present but missing check-in or out)
-                            if (!att.check_in || !att.check_out) {
+                            if (!checkIn || !checkOut) {
                                 totalMissingAttendanceDays++;
                             }
 
                             // Rule: If check_out is missing, user does not count any hours
-                            const workedDur = (att.check_in && att.check_out) ? getDuration(att.check_in, att.check_out) : 0;
-                            
-                            if (att.worked_from === 'home') dayNetWorkedMinsHome += workedDur;
+                            const workedDur = (checkIn && checkOut) ? getDuration(checkIn, checkOut) : 0;
+
+                            if (workedFrom === 'home') dayNetWorkedMinsHome += workedDur;
                             else dayNetWorkedMinsOffice += workedDur;
 
                             // Late calculation (Dynamic grace from config)
-                            if (att.check_in) {
+                            if (checkIn) {
                                 const sTotal = getMinutes(shift.start_time);
-                                const aTotal = getMinutes(att.check_in);
+                                const aTotal = getMinutes(checkIn);
                                 const lateGraceMins = parseInt(config?.attendance_late_grace_minutes || 0);
                                 if (aTotal > (sTotal + lateGraceMins)) {
                                     totalLateDays++;
@@ -289,7 +305,7 @@ const SalarySheet =
                             let deductOffice = Math.min(remainingOfficeMins, remainingShiftDur);
                             remainingOfficeMins -= deductOffice;
                             remainingShiftDur -= deductOffice;
-                            
+
                             let remainingHomeMins = dayNetWorkedMinsHome;
                             let deductHome = Math.min(remainingHomeMins, remainingShiftDur);
                             remainingHomeMins -= deductHome;
@@ -316,7 +332,7 @@ const SalarySheet =
                 let finalRequiredMinutes = totalRequiredMinutes;
                 let finalRequiredDays = requiredDays;
                 if (finalRequiredMinutes === 0) {
-                    finalRequiredDays = parseFloat(config?.working_days_override) || calculatedWorkingDays;
+                    finalRequiredDays = calculatedWorkingDays;
                     finalRequiredMinutes = finalRequiredDays * 8 * 60;
                 }
 
@@ -325,15 +341,15 @@ const SalarySheet =
 
                 // Dynamic Rates Calculation Strategy
                 const hourlyRate = baseSalary / (30 * 8); // Strict 240 divisor
-                const undertimeRate = parseFloat(config?.undertime_penalty_per_hour) || hourlyRate;
-                const absentRate = parseFloat(config?.absent_penalty_rate) || hourlyRate;
-                
+                const undertimeRate = hourlyRate;
+                const absentRate = hourlyRate;
+
                 const homeOvertimeRate = hourlyRate * 2.0;
                 const officeOvertimeRate = hourlyRate * 2.5;
 
                 const absentDeduction = absentHours * absentRate;
                 const undertimeDeduction = undertimeHours * undertimeRate;
-                
+
                 const homeOvertimeBonus = homeOvertimeHours * homeOvertimeRate;
                 const officeOvertimeBonus = officeOvertimeHours * officeOvertimeRate;
                 const totalOvertimeBonus = homeOvertimeBonus + officeOvertimeBonus;
@@ -344,11 +360,9 @@ const SalarySheet =
                 const taxableLateDays = Math.max(0, totalLateDays - lateGraceCount);
                 const latePenaltyDeduction = taxableLateDays * latePenaltyPerDay;
 
-                // Missing Attendance Penalty Calculation
-                const missingAttendanceGraceCount = parseInt(config?.missing_attendance_grace_count || 0);
-                const missingAttendancePenaltyPerDay = parseFloat(config?.missing_attendance_penalty_per_day || 0);
-                const taxableMissingAttendanceDays = Math.max(0, totalMissingAttendanceDays - missingAttendanceGraceCount);
-                const missingAttendancePenaltyDeduction = taxableMissingAttendanceDays * missingAttendancePenaltyPerDay;
+                // Missing Attendance Penalty Calculation (Deactivated as requested)
+                const taxableMissingAttendanceDays = 0;
+                const missingAttendancePenaltyDeduction = 0;
 
                 // Manual Penalties
                 const userPenalties = penalties.filter(p => p.user_id === user.id);
@@ -381,8 +395,10 @@ const SalarySheet =
                 const deductionTotal = userAdjustments.filter(a => a.type === 'deduction').reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
 
                 const hasNoShift = !hasMatchedAnyShift;
-                const totalDeductions = hasNoShift ? 0 : (absentDeduction + undertimeDeduction + latePenaltyDeduction + missingAttendancePenaltyDeduction + totalManualPenalty + totalTax + deductionTotal);
-                const netPay = hasNoShift ? 0 : Math.max(0, grossSalary + totalOvertimeBonus + bonusTotal + manualPointsTotal + projectPointsAmount - totalDeductions);
+                // User objectives: Isolation of adjustments from main grid.
+                // We keep standard calculations based on attendance, overtime and points.
+                const totalDeductions = hasNoShift ? 0 : (absentDeduction + undertimeDeduction + latePenaltyDeduction + missingAttendancePenaltyDeduction + totalManualPenalty + totalTax);
+                const netPay = hasNoShift ? 0 : Math.max(0, grossSalary + totalOvertimeBonus + manualPointsTotal + projectPointsAmount - totalDeductions);
 
                 const payment = payments.find(p => p.user_id === user.id);
 
@@ -391,7 +407,7 @@ const SalarySheet =
                     base_salary: baseSalary,
                     gross_salary: hasNoShift ? 0 : grossSalary,
                     shift_group: userGroupMap[user.id] || "No Group Assigned",
-                    assigned_shift: assignedShiftNames.length > 0 ? assignedShiftNames.join(", ") : "No Shift Assigned",
+                    assigned_shift: assignedShiftDetails.length > 0 ? assignedShiftDetails.join(" / ") : "No Shift Assigned",
                     has_no_shift: hasNoShift,
                     present_days: presentDays,
                     leave_days: approvedLeaveDays,
@@ -425,7 +441,6 @@ const SalarySheet =
                             { label: 'Absence Penalty', count: absentHours.toFixed(2), rate: absentRate, amount: absentDeduction, unit: 'hrs' },
                             { label: 'Undertime Penalty', count: undertimeHours.toFixed(2), rate: undertimeRate, amount: undertimeDeduction, unit: 'hrs' },
                             { label: 'Late Arrival Penalty (Per Day)', count: taxableLateDays, rate: latePenaltyPerDay, amount: latePenaltyDeduction, unit: 'days' },
-                            { label: 'Missing Break/Attendance Penalty (Per Incident)', count: taxableMissingAttendanceDays, rate: missingAttendancePenaltyPerDay, amount: missingAttendancePenaltyDeduction, unit: 'incidents' },
                             ...manualPenaltiesBreakdown.map((p, i) => ({ label: `Manual Penalty: ${p.type}`, reason: p.reason, amount: p.amount, key: `manual-${i}` })),
                             ...userAdjustments.filter(a => a.type === 'deduction').map((a, i) => ({ label: a.label, reason: a.reason, amount: parseFloat(a.amount), key: `adj-d-${i}` }))
                         ].filter(p => p.amount > 0),
@@ -434,9 +449,11 @@ const SalarySheet =
 
                     absent_deduction: absentDeduction,
                     undertime_deduction: undertimeDeduction,
+                    less_hours_penalty: absentDeduction + undertimeDeduction,
                     late_penalty_deduction: latePenaltyDeduction,
                     missing_attendance_penalty_deduction: missingAttendancePenaltyDeduction,
                     overtime_bonus: totalOvertimeBonus,
+                    overtime_hours: homeOvertimeHours + officeOvertimeHours,
                     total_extra_earnings: 0,
                     manual_penalty: totalManualPenalty,
                     bonus_total: bonusTotal,
@@ -444,7 +461,10 @@ const SalarySheet =
                     total_tax: totalTax,
                     total_deductions: totalDeductions,
                     net_pay: netPay,
-                    payment_status: payment ? 'Paid' : 'Pending',
+                    payment_status: payment ? payment.status : 'Pending',
+                    payment_method: payment ? payment.payment_method : null,
+                    payment_date: payment ? payment.payment_date : null,
+                    reference: payment ? payment.reference : null,
                     payment_details: payment,
                     raw_adjustments: userAdjustments,
                     point_rate: pointRate,
@@ -454,150 +474,158 @@ const SalarySheet =
             }).filter(Boolean);
         }, [users, attendances, penalties, payments, adjustments, config, leaveRequests, month, year, appliedShifts, shifts, holidays]);
 
-        const columnDefs = useMemo(() => [
-            { headerName: "Group", field: "shift_group", rowGroup: true, hide: true },
-            { headerName: "Employee", field: "name", pinned: 'left', width: 200 },
-            {
-                headerName: "Emp. Status",
-                field: "status",
-                width: 110,
-                cellRenderer: params => (
-                    <Tag color={params.value === 'active' ? 'success' : 'error'}>
-                        {params.value ? params.value.charAt(0).toUpperCase() + params.value.slice(1) : 'N/A'}
-                    </Tag>
-                )
-            },
-            {
-                headerName: "Assigned Shift",
-                field: "assigned_shift",
-                width: 140,
-                cellRenderer: params => <Tag color="processing">{params.value}</Tag>
-            },
-            {
-                headerName: "Required/Worked Hrs",
-                valueGetter: params => `${params.data.total_required_hours?.toFixed(1)} / ${params.data.total_worked_hours?.toFixed(1)}`,
-                cellRenderer: params => (
-                    <div className="text-center">
-                        <span className="text-primary">{params.data.total_required_hours?.toFixed(1)}</span>
-                        <span className="mx-1">/</span>
-                        <span className="text-success">{params.data.total_worked_hours?.toFixed(1)}</span>
-                    </div>
-                ),
-                width: 160,
-                filter: false,
-                sortable: false,
-                cellClass: 'fw-bold',
-            },
-            {
-                headerName: "Basic Salary",
-                field: "base_salary",
-                width: 120,
-                valueFormatter: params => (params.value || 0).toLocaleString(),
-                filter: false,
-                sortable: false
-            },
-            {
-                headerName: "Gross Salary",
-                field: "gross_salary",
-                width: 120,
-                valueFormatter: params => (params.value || 0).toLocaleString(),
-                filter: false,
-                sortable: false
-            },
-            {
-                headerName: "Overtime",
-                field: "overtime_bonus",
-                width: 100,
-                cellClass: 'text-success',
-                valueFormatter: params => `+ ${Math.round(params.value || 0).toLocaleString()} `,
-                filter: false,
-                sortable: false
-            },
-            {
-                headerName: "Points/Earn",
-                valueGetter: params => `${params.data.project_points} / ${Math.round(params.data.project_points_amount || 0)}`,
-                cellRenderer: params => (
-                    <div className="text-success">
-                        <span>{params.data.project_points}</span>
-                        <span className="mx-1">/</span>
-                        <span>{Math.round(params.data.project_points_amount || 0).toLocaleString()}</span>
-                    </div>
-                ),
-                width: 130,
-                filter: false,
-                sortable: false,
-                cellClass: 'fw-bold'
-            },
-            {
-                headerName: "Deductions",
-                children: [
-                    {
-                        headerName: "Taxes",
-                        field: "total_tax",
-                        minWidth: 150,
-                        flex: 3,
-                        filter: false,
-                        sortable: false,
-                        cellRenderer: params => {
-                            const taxes = params.data.breakdown?.taxes || [];
-                            if (taxes.length === 0) return <Text type="secondary">No Tax</Text>;
-                            return (
-                                <div style={{ fontSize: '12px', lineHeight: '1.2', display: 'flex', flexWrap: 'nowrap', gap: '4px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                                    {taxes.map((t, i) => (
-                                        <Tag key={i} color="red" style={{ fontSize: '10px', margin: 0, flexShrink: 0 }}>
-                                            {t.name}: {Math.round(t.amount).toLocaleString()}
-                                        </Tag>
-                                    ))}
-                                </div>
-                            );
-                        }
-                    },
-                    { headerName: "Undertime", field: "undertime_deduction", width: 110, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
-                    { headerName: "Abs Pen", field: "absent_deduction", width: 110, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
-                    { headerName: "Manual Pen", field: "manual_penalty", width: 120, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
-                ]
-            },
-            {
-                headerName: "Final Payout",
-                children: [
-                    {
-                        headerName: "Net Pay",
-                        field: "net_pay",
-                        cellClass: 'fw-bold text-success',
-                        valueFormatter: params => `Rs. ${Math.round(params.value || 0).toLocaleString()}`,
-                        width: 140,
-                        filter: false,
-                        sortable: false, pinned: 'right',
-                    },
-                    {
-                        headerName: "Status",
-                        field: "payment_status",
-                        width: 110,
-                        filter: false,
-                        sortable: false, pinned: 'right',
-                        cellRenderer: params => (
-                            <Tag color={params.value === 'Paid' ? 'success' : 'warning'}>{params.value}</Tag>
-                        )
-                    },
-                    {
-                        headerName: "Actions",
-                        colId: 'actions',
-                        pinned: 'right',
-                        width: 100,
-                        suppressSizeToFit: true,
-                        filter: false,
-                        sortable: false,
-                        cellRenderer: params => (
-                            <div className="d-flex gap-2 align-items-center h-100">
-                                {params.data.payment_status === 'Pending' ? (
-                                    <Button
-                                        type="text"
-                                        className="text-success p-0"
-                                        icon={<CheckCircleOutlined style={{ fontSize: '18px' }} />}
-                                        onClick={() => handlePay(params.data)}
-                                    />
-                                ) : (
-                                    <Tooltip title="View/Edit Payment">
+        const columnDefs = useMemo(() => {
+            return [
+                { headerName: "Group", field: "shift_group", rowGroup: true, hide: true },
+                {
+                    headerName: "Employee",
+                    field: "name",
+                    pinned: 'left',
+                    width: 200,
+                    flex: 1
+                },
+                {
+                    headerName: "Emp. Status",
+                    field: "status",
+                    width: 110,
+                    cellRenderer: params => (
+                        <Tag color={params.value === 'active' ? 'success' : 'error'}>
+                            {params.value ? params.value.charAt(0).toUpperCase() + params.value.slice(1) : 'N/A'}
+                        </Tag>
+                    )
+                },
+                {
+                    headerName: "Assigned Shift",
+                    field: "assigned_shift",
+                    width: 250,
+                    cellRenderer: params => <Tag color="processing" style={{ whiteSpace: 'normal', height: 'auto', padding: '4px 8px' }}>{params.value}</Tag>
+                },
+                {
+                    headerName: "Required Hrs",
+                    field: "total_required_hours",
+                    valueFormatter: params => params.value?.toFixed(1),
+                    width: 110,
+                    cellClass: 'text-primary fw-bold text-center',
+                    filter: false,
+                    sortable: false
+                },
+                {
+                    headerName: "Recorded Hrs",
+                    field: "total_worked_hours",
+                    valueFormatter: params => params.value?.toFixed(1),
+                    width: 110,
+                    cellClass: 'text-success fw-bold text-center',
+                    filter: false,
+                    sortable: false
+                },
+                {
+                    headerName: "Basic Salary",
+                    field: "base_salary",
+                    width: 120,
+                    valueFormatter: params => Math.round(params.value || 0).toLocaleString(),
+                    filter: false,
+                    sortable: false
+                },
+                {
+                    headerName: "Gross Salary",
+                    field: "gross_salary",
+                    width: 120,
+                    valueFormatter: params => Math.round(params.value || 0).toLocaleString(),
+                    filter: false,
+                    sortable: false
+                },
+                {
+                    headerName: "Overtime",
+                    field: "overtime_hours",
+                    width: 100,
+                    cellClass: 'text-success fw-bold',
+                    valueFormatter: params => `${(params.value || 0).toFixed(1)} hrs`,
+                    filter: false,
+                    sortable: false
+                },
+                {
+                    headerName: "Points/Earn",
+                    valueGetter: params => `${params.data.project_points} / ${Math.round(params.data.project_points_amount || 0)}`,
+                    cellRenderer: params => (
+                        <div className="text-success">
+                            <span>{params.data.project_points}</span>
+                            <span className="mx-1">/</span>
+                            <span>{Math.round(params.data.project_points_amount || 0).toLocaleString()}</span>
+                        </div>
+                    ),
+                    width: 130,
+                    filter: false,
+                    sortable: false,
+                    cellClass: 'fw-bold'
+                },
+                {
+                    headerName: "Deductions",
+                    children: [
+                        {
+                            headerName: "Taxes",
+                            field: "total_tax",
+                            minWidth: 150,
+                            flex: 3,
+                            filter: false,
+                            sortable: false,
+                            cellRenderer: params => {
+                                const taxes = params.data.breakdown?.taxes || [];
+                                if (taxes.length === 0) return <Text type="secondary">No Tax</Text>;
+                                return (
+                                    <div style={{ fontSize: '12px', lineHeight: '1.2', display: 'flex', flexWrap: 'nowrap', gap: '4px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                        {taxes.map((t, i) => (
+                                            <Tag key={i} color="red" style={{ fontSize: '10px', margin: 0, flexShrink: 0 }}>
+                                                {t.name}: {Math.round(t.amount).toLocaleString()}
+                                            </Tag>
+                                        ))}
+                                    </div>
+                                );
+                            }
+                        },
+                        { headerName: "Less Hours Pen", field: "less_hours_penalty", width: 130, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
+                        { headerName: "Manual Pen", field: "manual_penalty", width: 120, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
+                    ]
+                },
+                {
+                    headerName: "Final Payout",
+                    children: [
+                        {
+                            headerName: "Net Pay",
+                            field: "net_pay",
+                            cellClass: 'fw-bold text-success',
+                            valueFormatter: params => `Rs. ${Math.round(params.value || 0).toLocaleString()}`,
+                            width: 140,
+                            filter: false,
+                            sortable: false, pinned: 'right',
+                        },
+                        {
+                            headerName: "Status",
+                            field: "payment_status",
+                            width: 110,
+                            filter: false,
+                            sortable: false, pinned: 'right',
+                            cellRenderer: params => {
+                                const status = params.value?.toLowerCase();
+                                const colorMap = {
+                                    'paid': 'success',
+                                    'processed': 'processing',
+                                    'pending': 'warning',
+                                    'failed': 'error'
+                                };
+                                return <Tag color={colorMap[status] || 'default'}>{params.value ? params.value.charAt(0).toUpperCase() + params.value.slice(1) : 'Pending'}</Tag>
+                            }
+                        },
+                        {
+                            headerName: "Actions",
+                            colId: 'actions',
+                            pinned: 'right',
+                            width: 100,
+                            suppressSizeToFit: true,
+                            filter: false,
+                            sortable: false,
+                            cellRenderer: params => (
+                                <div className="d-flex gap-2 align-items-center h-100">
+                                    <Tooltip title="Edit / Process Payment">
                                         <Button
                                             type="text"
                                             className="text-primary p-0"
@@ -605,13 +633,13 @@ const SalarySheet =
                                             onClick={() => handlePay(params.data, params.data.payment_details)}
                                         />
                                     </Tooltip>
-                                )}
-                            </div>
-                        )
-                    }
-                ]
-            }
-        ], []);
+                                </div>
+                            )
+                        }
+                    ]
+                }
+            ];
+        }, [rowData]);
 
         const handlePay = (user, payment = null) => {
             setSelectedUser({ ...user, existing_payment: payment });
@@ -629,7 +657,8 @@ const SalarySheet =
                 payment_date: payment ? dayjs(payment.payment_date) : dayjs(),
                 manual_adjustments: existingAdjustments,
                 reference: payment ? payment.reference : '',
-                notes: payment ? payment.notes : ''
+                notes: payment ? payment.notes : '',
+                status: payment ? payment.status : 'pending'
             });
             setIsPayModalOpen(true);
         };
@@ -672,9 +701,31 @@ const SalarySheet =
         const handleFilter = () => {
             router.get(route('salary-sheets.index'), { month, year }, {
                 preserveState: true,
-                preserveScroll: true
+                preserveScroll: true,
+                only: ['users', 'attendances', 'penalties', 'payments', 'monthlyShiftAssignments', 'leaveRequests', 'adjustments', 'projectPoints', 'selectedMonth', 'selectedYear', 'shifts', 'holidays', 'config']
             });
         };
+
+        const handleGenerateSnapshot = () => {
+            modal.confirm({
+                title: 'Generate Final Sheet Snapshot',
+                content: `This will save a permanent record of the current payroll data for ${monthOptions.find(m => m.value === month)?.label} ${year}. This record will be archived as a "Final Sheet". Continue?`,
+                onOk: () => {
+                    setLoading(true);
+                    router.post(route('salary-sheets.snapshots.store'), {
+                        month,
+                        year,
+                        data: rowData.filter(row => !row.has_no_shift) // Exclude users with no assigned shifts
+                    }, {
+                        onSuccess: () => {
+                            api.success({ message: 'Success', description: 'Snapshot generated successfully' });
+                        },
+                        onFinish: () => setLoading(false)
+                    });
+                }
+            });
+        };
+
 
         const handleConfigSubmit = (values) => {
             setLoading(true);
@@ -721,7 +772,7 @@ const SalarySheet =
                 gross_salary: selectedUser.gross_salary,
                 overtime_bonus: selectedUser.overtime_bonus,
                 total_extra_earnings: selectedUser.total_extra_earnings,
-                total_deductions: (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.late_penalty_deduction + selectedUser.missing_attendance_penalty_deduction + selectedUser.total_tax + deductionTotal + selectedUser.manual_penalty),
+                total_deductions: (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.late_penalty_deduction + selectedUser.total_tax + deductionTotal + selectedUser.manual_penalty),
                 net_pay: netPayCalculated,
                 payment_date: values.payment_date.format('YYYY-MM-DD'),
             };
@@ -783,7 +834,14 @@ const SalarySheet =
                         <div className="d-flex gap-2">
                             <Select value={month} onChange={setMonth} options={monthOptions} style={{ width: 130 }} />
                             <Select value={year} onChange={setYear} options={yearOptions} style={{ width: 100 }} />
-                            <Button type="primary" onClick={handleFilter}>Filter</Button>
+                            <Button
+                                icon={<CheckCircleFilled />}
+                                className="bg-primary text-white border-primary"
+                                onClick={handleGenerateSnapshot}
+                                loading={loading}
+                            >
+                                Generate Final Sheet
+                            </Button>
                             <Button
                                 icon={<CalendarOutlined />}
                                 className="bg-info text-white border-info"
@@ -794,11 +852,6 @@ const SalarySheet =
                             >
                                 Define Shifts
                             </Button>
-                            <Dropdown menu={{ items: exportItems, onClick: ({ key }) => onExport(key) }} placement="bottomRight">
-                                <Button icon={<DownloadOutlined />} className="bg-success text-white border-success">
-                                    Export
-                                </Button>
-                            </Dropdown>
                             <Button
                                 icon={<SettingOutlined />}
                                 onClick={() => {
@@ -839,7 +892,7 @@ const SalarySheet =
                                     pagination={true}
                                     paginationPageSize={100}
                                     groupDisplayType="groupRows"
-                                    groupDefaultExpanded={1}
+                                    isGroupOpenByDefault={params => params.key !== 'No Group Assigned'}
                                     autoSizeStrategy={{
                                         type: 'fitGridWidth',
                                         defaultMinWidth: 100
@@ -861,168 +914,22 @@ const SalarySheet =
                     <Form form={form} layout="vertical" onFinish={submitPayment}>
                         {selectedUser && (
                             <div className="payment-modal-content">
-                                <div className="print-only mb-4 text-center" style={{ display: 'none' }}>
-                                    <Title level={2} style={{ margin: 0 }}>Payment Slip: {selectedUser?.name}</Title>
-                                    <Text type="secondary" style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                                        {monthOptions.find(m => m.value === month).label} {year}
-                                    </Text>
-                                    <Divider style={{ margin: '15px 0' }} />
-                                </div>
-
-                                <Card className="border-0 bg-light mb-4" bodyStyle={{ padding: '15px' }}>
-                                    <Divider orientation="left" style={{ margin: '0 0 15px 0' }}>
-                                        <Text type="secondary" strong style={{ fontSize: '11px', textTransform: 'uppercase' }}>Attendance Summary</Text>
-                                    </Divider>
-                                    <div className="row g-3 text-center">
-                                        <div className="col-md-3 border-end">
-                                            <div className="bg-white p-2 rounded shadow-sm border">
-                                                <Title level={5} className="m-0 text-secondary">{selectedUser.required_days} Days</Title>
-                                                <Text type="secondary" style={{ fontSize: '10px' }}>Schedule Required</Text>
+                                {/* Status & Method at Top */}
+                                <div className="mb-4">
+                                    <Card size="small" className="border-0 shadow-sm" style={{ background: '#f0f7ff' }}>
+                                        <div className="row g-3">
+                                            <div className="col-md-3">
+                                                <Form.Item name="status" label="Payment Status" rules={[{ required: true }]} style={{ marginBottom: 0 }}>
+                                                    <Select>
+                                                        <Select.Option value="pending">Pending</Select.Option>
+                                                        <Select.Option value="processed">Processed</Select.Option>
+                                                        <Select.Option value="paid">Paid</Select.Option>
+                                                        <Select.Option value="failed">Failed</Select.Option>
+                                                    </Select>
+                                                </Form.Item>
                                             </div>
-                                        </div>
-                                        <div className="col-md-3 border-end">
-                                            <div className="bg-white p-2 rounded shadow-sm border">
-                                                <Title level={5} className="m-0 text-primary">{selectedUser.present_days} Days</Title>
-                                                <Text type="secondary" style={{ fontSize: '10px' }}>Actual Presence</Text>
-                                            </div>
-                                        </div>
-                                        <div className="col-md-3 border-end">
-                                            <div className="bg-white p-2 rounded shadow-sm border">
-                                                <Title level={5} className="m-0 text-danger">{selectedUser.absent_days} Abs / {selectedUser.late_days} L</Title>
-                                                <Text type="secondary" style={{ fontSize: '10px' }}>Deficits & Lates</Text>
-                                            </div>
-                                        </div>
-                                        <div className="col-md-3">
-                                            <div className="bg-white p-2 rounded shadow-sm border">
-                                                <Title level={5} className="m-0 text-success">{selectedUser.project_points} Pts</Title>
-                                                <Text type="secondary" style={{ fontSize: '10px' }}>Points Earned</Text>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-3 bg-white p-3 rounded border shadow-sm" style={{ fontSize: '12px' }}>
-                                        <div className="row">
-                                            <div className="col-6 border-end">
-                                                <div className="d-flex justify-content-between mb-1">
-                                                    <Text type="secondary">Productive Hours:</Text>
-                                                    <Text strong>{selectedUser.total_worked_hours.toFixed(1)} / {selectedUser.total_required_hours.toFixed(0)} Hrs</Text>
-                                                </div>
-                                                <div className="d-flex justify-content-between">
-                                                    <Text type="secondary">Undertime:</Text>
-                                                    <Text strong className="text-danger">-{selectedUser.undertime_hours.toFixed(1)} Hrs</Text>
-                                                </div>
-                                            </div>
-                                            <div className="col-6 ps-3">
-                                                <div className="d-flex justify-content-between mb-1">
-                                                    <Text type="secondary">Approved Leaves:</Text>
-                                                    <Text strong>{selectedUser.leave_days} Days</Text>
-                                                </div>
-                                                <div className="d-flex justify-content-between">
-                                                    <Text type="secondary">Missing In/Out:</Text>
-                                                    <Text strong className="text-danger">{selectedUser.missing_attendance_days} Days</Text>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </Card>
-
-                                <div className="row g-4">
-                                    <div className="col-md-7">
-                                        <div className="breakdown-sections">
-                                            {/* Earnings */}
-                                            <Divider orientation="left" style={{ marginTop: 0 }}>Earnings & Bonuses</Divider>
-                                            <div className="mb-3">
-                                                <div className="d-flex justify-content-between align-items-center mb-2 px-2">
-                                                    <Text>Basic Gross Salary</Text>
-                                                    <Text strong>Rs. {selectedUser.gross_salary.toLocaleString()}</Text>
-                                                </div>
-                                                {selectedUser.breakdown.benefits.map((b, idx) => (
-                                                    <div key={`benefit-${idx}`} className="d-flex justify-content-between align-items-center mb-1 px-2">
-                                                        <Text style={{ fontSize: '13px' }}>
-                                                            <CheckCircleFilled className="text-success me-2" />
-                                                            {b.label}
-                                                            {b.count > 0 && <small className="text-muted ms-1">({b.count}{b.unit})</small>}
-                                                        </Text>
-                                                        <Text strong className="text-success">
-                                                            {b.label === 'Approved Leaves' ? 'Covered' : `+ Rs. ${b.amount.toLocaleString()}`}
-                                                        </Text>
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                            {/* Deductions */}
-                                            <Divider orientation="left">Penalties & Deductions</Divider>
-                                            <div className="mb-3">
-                                                {selectedUser.breakdown.penalties.map((p, idx) => (
-                                                    <div key={`penalty-${idx}`} className="d-flex justify-content-between align-items-center mb-1 px-2">
-                                                        <Text style={{ fontSize: '13px' }}>
-                                                            <CheckCircleFilled className="text-danger me-2" />
-                                                            {p.label}
-                                                            {p.count > 0 && <small className="text-muted ms-1">({p.count}{p.unit} × {p.rate.toLocaleString()})</small>}
-                                                        </Text>
-                                                        <Text strong className="text-danger">- Rs. {p.amount.toLocaleString()}</Text>
-                                                    </div>
-                                                ))}
-                                                {selectedUser.breakdown.taxes.map((t, idx) => (
-                                                    <div key={`tax-${idx}`} className="d-flex justify-content-between align-items-center mb-1 px-2">
-                                                        <Text style={{ fontSize: '13px' }}>
-                                                            <CheckCircleFilled className="text-danger me-2" />
-                                                            {t.name} <small className="text-muted">({t.rate})</small>
-                                                        </Text>
-                                                        <Text strong className="text-danger">- Rs. {t.amount.toLocaleString()}</Text>
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                            {/* Manual Adjustment Display */}
-                                            {((watchedAdjustments?.length || 0) > 0) && (
-                                                <>
-                                                    <Divider orientation="left">Manual Adjustments</Divider>
-                                                    <div className="mb-3">
-                                                        {watchedAdjustments.map((a, idx) => a && (
-                                                            <div key={`watch-adj-${idx}`} className="d-flex justify-content-between align-items-center mb-1 px-2">
-                                                                <Text style={{ fontSize: '13px' }}>
-                                                                    <CheckCircleFilled className={a.type === 'bonus' ? 'text-success' : 'text-danger'} style={{ marginRight: '8px' }} />
-                                                                    {a.label || 'Adjustment'}
-                                                                </Text>
-                                                                <Text strong className={a.type === 'bonus' ? "text-success" : "text-danger"}>
-                                                                    {a.type === 'bonus' ? '+' : '-'} Rs. {(parseFloat(a.amount) || 0).toLocaleString()}
-                                                                </Text>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="col-md-5">
-                                        <Card className="shadow-sm border-primary" headStyle={{ borderBottom: '1px solid #e6f7ff', background: '#e6f7ff' }} title={<Text strong>Summary & Payment</Text>}>
-                                            <div className="mb-4 text-center py-3 bg-light rounded border">
-                                                <Text type="secondary" className="text-uppercase" style={{ fontSize: '10px', letterSpacing: '1px' }}>Net Payable Amount</Text>
-                                                <Title level={2} className="m-0 text-success">
-                                                    Rs. {Math.round(
-                                                        selectedUser.gross_salary +
-                                                        selectedUser.overtime_bonus +
-                                                        selectedUser.total_extra_earnings +
-                                                        selectedUser.project_points_amount +
-                                                        (watchedAdjustments?.filter(a => a?.type === 'bonus').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0) -
-                                                        (
-                                                            selectedUser.absent_deduction +
-                                                            selectedUser.undertime_deduction +
-                                                            selectedUser.late_penalty_deduction +
-                                                            selectedUser.missing_attendance_penalty_deduction +
-                                                            selectedUser.manual_penalty +
-                                                            selectedUser.total_tax +
-                                                            (watchedAdjustments?.filter(a => a?.type === 'deduction').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0)
-                                                        )
-                                                    ).toLocaleString()}
-                                                </Title>
-                                                <Text type="secondary" style={{ fontSize: '12px' }}>{monthOptions.find(m => m.value === month).label} {year}</Text>
-                                            </div>
-
-                                            <div className="payment-fields">
-                                                <Form.Item name="payment_method" label="Payment Method" rules={[{ required: true }]}>
+                                            <div className="col-md-3">
+                                                <Form.Item name="payment_method" label="Method" rules={[{ required: true }]} style={{ marginBottom: 0 }}>
                                                     <Select placeholder="Select Method">
                                                         <Select.Option value="bank_transfer">Bank Transfer</Select.Option>
                                                         <Select.Option value="cash">Cash</Select.Option>
@@ -1030,15 +937,168 @@ const SalarySheet =
                                                         <Select.Option value="digital_wallet">Digital Wallet</Select.Option>
                                                     </Select>
                                                 </Form.Item>
-                                                <Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]}>
+                                            </div>
+                                            <div className="col-md-3">
+                                                <Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]} style={{ marginBottom: 0 }}>
                                                     <DatePicker style={{ width: '100%' }} />
                                                 </Form.Item>
-                                                <Form.Item name="reference" label="Ref / Transaction ID">
-                                                    <Input placeholder="Optional reference code" />
+                                            </div>
+                                            <div className="col-md-3">
+                                                <Form.Item name="reference" label="Ref / Transaction ID" style={{ marginBottom: 0 }}>
+                                                    <Input placeholder="Reference code" />
                                                 </Form.Item>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                </div>
+                                {/* Print Header (Hidden on Screen) */}
+                                <div className="print-header mb-4 text-center" style={{ display: 'none' }}>
+                                    <Title level={2} style={{ margin: 0 }}>PAYROLL SLIP</Title>
+                                    <Text strong style={{ fontSize: '18px' }}>{selectedUser.name}</Text>
+                                    <br />
+                                    <Text type="secondary">{monthOptions.find(m => m.value === month).label} {year}</Text>
+                                    <Divider style={{ margin: '15px 0' }} />
+                                </div>
+
+                                <div className="row g-4">
+                                    {/* Attendance Section */}
+                                    <div className="col-12">
+                                        <Card size="small" className="border-0 bg-light" bodyStyle={{ padding: '20px' }}>
+                                            <Divider orientation="left" style={{ margin: '0 0 20px 0' }}>
+                                                <Text type="secondary" strong style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                                    <CalendarOutlined className="me-2" /> Attendance & Hours Breakdown
+                                                </Text>
+                                            </Divider>
+                                            <div className="row g-3 text-center">
+                                                <div className="col-md-3 border-end">
+                                                    <div className="p-3">
+                                                        <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '8px' }}>Required Days</Text>
+                                                        <Title level={4} className="m-0 text-secondary">{selectedUser.required_days} Days</Title>
+                                                    </div>
+                                                </div>
+                                                <div className="col-md-3 border-end">
+                                                    <div className="p-3">
+                                                        <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '8px' }}>Present / Leaves</Text>
+                                                        <Title level={4} className="m-0 text-primary">{selectedUser.present_days} / {selectedUser.leave_days} d</Title>
+                                                    </div>
+                                                </div>
+                                                <div className="col-md-3 border-end">
+                                                    <div className="p-3">
+                                                        <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '8px' }}>Deficit Hours</Text>
+                                                        <Title level={4} className="m-0 text-danger">{selectedUser.undertime_hours?.toFixed(1) || 0} Hrs</Title>
+                                                    </div>
+                                                </div>
+                                                <div className="col-md-3">
+                                                    <div className="p-3">
+                                                        <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '8px' }}>Overtime</Text>
+                                                        <Title level={4} className="m-0 text-success">{selectedUser.overtime_hours?.toFixed(1) || 0} Hrs</Title>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-3 px-3 py-2 bg-white rounded border border-dashed">
+                                                <div className="row text-center" style={{ fontSize: '12px' }}>
+                                                    <div className="col-4 border-end">
+                                                        <Text type="secondary">Required Hrs: </Text>
+                                                        <Text strong>{selectedUser.total_required_hours?.toFixed(1) || 0}</Text>
+                                                    </div>
+                                                    <div className="col-4 border-end">
+                                                        <Text type="secondary">Recorded Hrs: </Text>
+                                                        <Text strong className="text-primary">{selectedUser.total_worked_hours?.toFixed(1) || 0}</Text>
+                                                    </div>
+                                                    <div className="col-4">
+                                                        <Text type="secondary">Shift: </Text>
+                                                        <Text strong style={{ fontSize: '10px' }}>{selectedUser.assigned_shift}</Text>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </Card>
                                     </div>
+
+                                    {/* Earnings Section */}
+                                    <div className="col-md-7">
+                                        <Card size="small" className="h-100 border-0 shadow-sm" headStyle={{ borderBottom: '1px solid #f0f0f0', background: '#fafafa' }} title={<Space><DollarOutlined className="text-success" /> Earnings & Bonuses</Space>}>
+                                            <div className="p-2">
+                                                <div className="d-flex justify-content-between mb-2">
+                                                    <Text>Basic Gross Salary</Text>
+                                                    <Text strong>Rs. {Math.round(selectedUser.gross_salary || 0).toLocaleString()}</Text>
+                                                </div>
+                                                {(selectedUser.breakdown?.benefits || []).map((b, i) => (
+                                                    <div key={`b-${i}`} className="d-flex justify-content-between mb-2 px-2 py-1 rounded-pill bg-success-subtle" style={{ fontSize: '12px' }}>
+                                                        <Text><CheckCircleFilled className="text-success me-2" />{b.label} {b.count > 0 && <small>({b.count} {b.unit})</small>}</Text>
+                                                        <Text strong className="text-success">+ Rs. {Math.round(b.amount || 0).toLocaleString()}</Text>
+                                                    </div>
+                                                ))}
+                                                {selectedUser.project_points_amount > 0 && (
+                                                    <div className="d-flex justify-content-between mb-2 px-2 py-1 rounded-pill bg-success-subtle" style={{ fontSize: '12px' }}>
+                                                        <Text><CheckCircleFilled className="text-success me-2" />Project Points Bonus</Text>
+                                                        <Text strong className="text-success">+ Rs. {Math.round(selectedUser.project_points_amount).toLocaleString()}</Text>
+                                                    </div>
+                                                )}
+                                                {selectedUser.overtime_bonus > 0 && (
+                                                    <div className="d-flex justify-content-between mb-2 px-2 py-1 rounded-pill bg-success-subtle" style={{ fontSize: '12px' }}>
+                                                        <Text><CheckCircleFilled className="text-success me-2" />Overtime Bonus</Text>
+                                                        <Text strong className="text-success">+ Rs. {Math.round(selectedUser.overtime_bonus).toLocaleString()}</Text>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </Card>
+                                    </div>
+
+                                    {/* Deductions Section */}
+                                    <div className="col-md-5">
+                                        <Card size="small" className="h-100 border-0 shadow-sm" headStyle={{ borderBottom: '1px solid #f0f0f0', background: '#fafafa' }} title={<Space><WalletOutlined className="text-danger" /> Deductions</Space>}>
+                                            <div className="p-2">
+                                                {(selectedUser.breakdown?.penalties || []).map((p, i) => (
+                                                    <div key={`p-${i}`} className="d-flex justify-content-between mb-2 px-2 py-1 rounded-pill bg-danger-subtle" style={{ fontSize: '12px' }}>
+                                                        <Text><CheckCircleFilled className="text-danger me-2" />{p.label}</Text>
+                                                        <Text strong className="text-danger">- Rs. {Math.round(p.amount || 0).toLocaleString()}</Text>
+                                                    </div>
+                                                ))}
+                                                {(selectedUser.breakdown?.taxes || []).map((t, i) => (
+                                                    <div key={`t-${i}`} className="d-flex justify-content-between mb-2 px-2 py-1 rounded-pill bg-danger-subtle" style={{ fontSize: '12px' }}>
+                                                        <Text><CheckCircleFilled className="text-danger me-2" />{t.name} <small>({t.rate})</small></Text>
+                                                        <Text strong className="text-danger">- Rs. {Math.round(t.amount || 0).toLocaleString()}</Text>
+                                                    </div>
+                                                ))}
+                                                {selectedUser.manual_penalty > 0 && (
+                                                    <div className="d-flex justify-content-between mb-2 px-2 py-1 rounded-pill bg-danger-subtle" style={{ fontSize: '12px' }}>
+                                                        <Text><CheckCircleFilled className="text-danger me-2" />Adjustment Deductions</Text>
+                                                        <Text strong className="text-danger">- Rs. {Math.round(selectedUser.manual_penalty).toLocaleString()}</Text>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </Card>
+                                    </div>
+
+                                    {/* Net Payable Summary */}
+                                    <div className="col-12">
+                                        <Card size="small" className="border-0 shadow-sm" style={{ background: '#f6ffed' }}>
+                                            <div className="text-center py-2">
+                                                <Text type="secondary" className="text-uppercase" style={{ fontSize: '10px', letterSpacing: '1px' }}>Net Payable Amount</Text>
+                                                <Title level={2} className="m-0 text-success">
+                                                    Rs. {Math.round(
+                                                        selectedUser.gross_salary +
+                                                        (selectedUser.overtime_bonus || 0) +
+                                                        (selectedUser.total_extra_earnings || 0) +
+                                                        (selectedUser.project_points_amount || 0) +
+                                                        (watchedAdjustments?.filter(a => a?.type === 'bonus').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0) -
+                                                        (
+                                                            (selectedUser.absent_deduction || 0) +
+                                                            (selectedUser.undertime_deduction || 0) +
+                                                            (selectedUser.late_penalty_deduction || 0) +
+                                                            (selectedUser.missing_attendance_penalty_deduction || 0) +
+                                                            (selectedUser.manual_penalty || 0) +
+                                                            (selectedUser.total_tax || 0) +
+                                                            (watchedAdjustments?.filter(a => a?.type === 'deduction').reduce((acc, curr) => acc + (parseFloat(curr?.amount) || 0), 0) || 0)
+                                                        )
+                                                    ).toLocaleString()}
+                                                </Title>
+                                                <Text type="secondary" style={{ fontSize: '12px' }}>{monthOptions.find(m => m.value === month).label} {year}</Text>
+                                            </div>
+                                        </Card>
+                                    </div>
+
                                 </div>
                             </div>
                         )}
@@ -1088,7 +1148,6 @@ const SalarySheet =
                         </Form.Item>
 
                         <div className="text-end border-top pt-3 d-flex justify-content-end gap-2 no-print">
-                            <Button size="large" icon={<PrinterOutlined />} onClick={handlePrint}>Print Slip</Button>
                             {selectedUser?.existing_payment && (
                                 <Button
                                     danger
@@ -1104,12 +1163,13 @@ const SalarySheet =
                                 </Button>
                             )}
                             <Button size="large" onClick={() => setIsPayModalOpen(false)}>Cancel</Button>
-                            <Button size="large" type="primary" htmlType="submit" loading={loading} icon={<DollarOutlined />}>
-                                {selectedUser?.existing_payment ? 'Update Payment' : 'Process & Release Payment'}
+                            <Button size="large" type="primary" htmlType="submit" loading={loading} icon={<CheckCircleOutlined />}>
+                                Update
                             </Button>
                         </div>
                     </Form>
                 </Modal>
+
 
                 <Modal
                     title={<Space><SettingOutlined className="text-primary" /> Payroll Global Settings</Space>}
@@ -1151,42 +1211,9 @@ const SalarySheet =
 
                         <Divider orientation="left" className="m-0 mb-3"><Text strong type="secondary" style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Penalty & Deduction Settings</Text></Divider>
 
-                        <div className="row g-3 mb-4">
-                            <div className="col-md-6">
-                                <Form.Item
-                                    name="absent_penalty_rate"
-                                    label={
-                                        <Space>
-                                            Absent Penalty (PKR/hr)
-                                            <Tooltip title="Penalty for full day absence. If empty, defaults to (Basic Salary / Required Hours) * Shift Hours.">
-                                                <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
-                                            </Tooltip>
-                                        </Space>
-                                    }
-                                >
-                                    <InputNumber className="w-100" min={0} placeholder="e.g. 1000" />
-                                </Form.Item>
-                            </div>
-                            <div className="col-md-6">
-                                <Form.Item
-                                    name="undertime_penalty_per_hour"
-                                    label={
-                                        <Space>
-                                            Undertime Penalty (PKR/hr)
-                                            <Tooltip title="Penalty for leaving early or starting late. If empty, defaults to (Basic Salary / Required Hours) * Undertime Hours.">
-                                                <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
-                                            </Tooltip>
-                                        </Space>
-                                    }
-                                >
-                                    <InputNumber className="w-100" min={0} placeholder="e.g. 200" />
-                                </Form.Item>
-                            </div>
-                        </div>
-
                         <Card size="small" className="bg-light border-0 mb-4" bodyStyle={{ padding: '15px' }}>
                             <div className="row g-3">
-                                <div className="col-md-4">
+                                <div className="col-12 col-md-4">
                                     <Form.Item
                                         name="attendance_late_grace_minutes"
                                         label={
@@ -1202,7 +1229,7 @@ const SalarySheet =
                                         <InputNumber className="w-100" min={0} placeholder="e.g. 15" />
                                     </Form.Item>
                                 </div>
-                                <div className="col-md-4">
+                                <div className="col-12 col-md-4">
                                     <Form.Item
                                         name="late_grace_count"
                                         label={
@@ -1218,7 +1245,7 @@ const SalarySheet =
                                         <InputNumber className="w-100" min={0} />
                                     </Form.Item>
                                 </div>
-                                <div className="col-md-4">
+                                <div className="col-12 col-md-4">
                                     <Form.Item
                                         name="late_penalty_per_day"
                                         label={
@@ -1234,55 +1261,8 @@ const SalarySheet =
                                         <InputNumber className="w-100" min={0} />
                                     </Form.Item>
                                 </div>
-                                <div className="col-md-6">
-                                    <Form.Item
-                                        name="missing_attendance_grace_count"
-                                        label={
-                                            <Space>
-                                                Missing Grace
-                                                <Tooltip title="Number of 'Missing Break-outs' allowed per month. If you forget to 'End Break', a penalty applies after this grace.">
-                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
-                                                </Tooltip>
-                                            </Space>
-                                        }
-                                        extra="Break rules grace"
-                                    >
-                                        <InputNumber className="w-100" min={0} />
-                                    </Form.Item>
-                                </div>
-                                <div className="col-md-6">
-                                    <Form.Item
-                                        name="missing_attendance_penalty_per_day"
-                                        label={
-                                            <Space>
-                                                Missing Penalty
-                                                <Tooltip title="Penalty amount (e.g. PKR 300) applied if more than missing grace breaks occur.">
-                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
-                                                </Tooltip>
-                                            </Space>
-                                        }
-                                        extra="PKR / incident"
-                                    >
-                                        <InputNumber className="w-100" min={0} />
-                                    </Form.Item>
-                                </div>
                             </div>
                         </Card>
-
-                        <Form.Item
-                            name="working_days_override"
-                            label={
-                                <Space>
-                                    Working Days Override
-                                    <Tooltip title="Overrides the system's calculated working days. If empty, the system counts Monday to Friday as working days.">
-                                        <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
-                                    </Tooltip>
-                                </Space>
-                            }
-                            extra={`Systems calculation (Mon-Fri): ${calculatedWorkingDays} days`}
-                        >
-                            <InputNumber className="w-100" min={0} />
-                        </Form.Item>
 
                         <div className="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
                             <Button size="large" onClick={() => setIsConfigModalOpen(false)}>Cancel</Button>

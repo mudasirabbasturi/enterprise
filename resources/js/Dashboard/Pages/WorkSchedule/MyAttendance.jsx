@@ -68,27 +68,51 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
     }, []);
 
     const getHoursMins = (record) => {
-        const { check_in, check_out, break_start, break_end } = record;
-        if (!check_in || !check_out) return 0;
+        if (!record.clock || !Array.isArray(record.clock)) return 0;
+        let totalMins = 0;
 
-        const start = dayjs(`2000-01-01 ${check_in}`);
-        const end = dayjs(`2000-01-01 ${check_out}`);
+        record.clock.forEach(entry => {
+            const { check_in, check_out, break: breakObj } = entry;
+            if (!check_in || !check_out) return;
 
-        let workMins = end.diff(start, 'minute');
-        if (workMins < 0) workMins += 1440;
+            const start = dayjs(`2000-01-01 ${check_in}`);
+            const end = dayjs(`2000-01-01 ${check_out}`);
 
-        if (record.break && Array.isArray(record.break)) {
-            record.break.forEach(b => {
-                if (b.break_start && b.break_end) {
-                    const bStart = dayjs(`2000-01-01 ${b.break_start}`);
-                    const bEnd = dayjs(`2000-01-01 ${b.break_end}`);
-                    let breakMins = bEnd.diff(bStart, 'minute');
-                    if (breakMins < 0) breakMins += 1440;
-                    workMins -= breakMins;
-                }
-            });
+            let workMins = end.diff(start, 'minute');
+            if (workMins < 0) workMins += 1440;
+
+            if (breakObj) {
+                workMins -= getBreakMinsForSegment(breakObj);
+            }
+            totalMins += Math.max(0, workMins);
+        });
+        return totalMins;
+    };
+
+    const getBreakMinsForSegment = (breakObj) => {
+        if (!breakObj) return 0;
+        let total = 0;
+        // First break
+        if (breakObj.break_start && breakObj.break_end) {
+            const s = dayjs(`2000-01-01 ${breakObj.break_start}`);
+            const e = dayjs(`2000-01-01 ${breakObj.break_end}`);
+            let diff = e.diff(s, 'minute');
+            if (diff < 0) diff += 1440;
+            total += diff;
         }
-        return workMins > 0 ? workMins : 0;
+        // Subsequent breaks
+        let i = 2;
+        while (breakObj[`break_start_${i}`]) {
+            if (breakObj[`break_end_${i}`]) {
+                const s = dayjs(`2000-01-01 ${breakObj[`break_start_${i}`]}`);
+                const e = dayjs(`2000-01-01 ${breakObj[`break_end_${i}`]}`);
+                let diff = e.diff(s, 'minute');
+                if (diff < 0) diff += 1440;
+                total += diff;
+            }
+            i++;
+        }
+        return total;
     };
 
     const calculateHours = (record) => {
@@ -97,6 +121,25 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         const hrs = Math.floor(workMins / 60);
         const mins = Math.round(workMins % 60);
         return `${hrs}h ${mins}m`;
+    };
+
+    const getBreakMins = (record) => {
+        if (!record.clock || !Array.isArray(record.clock)) return 0;
+        let totalBreakMins = 0;
+        record.clock.forEach(entry => {
+            if (entry.break) {
+                totalBreakMins += getBreakMinsForSegment(entry.break);
+            }
+        });
+        return totalBreakMins;
+    };
+
+    const formatBreakDuration = (record) => {
+        const mins = getBreakMins(record);
+        if (mins <= 0) return "0h 0m";
+        const hrs = Math.floor(mins / 60);
+        const rem = Math.round(mins % 60);
+        return `${hrs}h ${rem}m`;
     };
 
     const formatManualTime = (timeStr) => {
@@ -128,16 +171,8 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         return formatMinsToHrs(totalMins);
     };
 
-    const validateIpAccess = async (type = 'regular') => {
-        let needsCheck = false;
-        if (type === 'regular') {
-            needsCheck = workedFrom === 'office';
-        } else {
-            const entries = currentActionRecord?.total_outside_hours || [];
-            needsCheck = entries.some(e => (e.work_from || 'office') === 'office');
-        }
-
-        if (!user.ip_restriction || !needsCheck) return true;
+    const validateIpAccess = async () => {
+        if (!user.ip_restriction || workedFrom === 'home') return true;
 
         try {
             const response = await axios.get(route('get-current-ip'));
@@ -152,7 +187,7 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
             if (!allowedIps.includes(currentIp)) {
                 api.error({
                     message: "Access Denied",
-                    description: `Your current IP (${currentIp}) is not authorized for ${type === 'manual' ? 'manual' : 'regular'} office attendance.`,
+                    description: `Your current IP (${currentIp}) is not authorized for office attendance.`,
                     placement: "topRight"
                 });
                 return false;
@@ -168,90 +203,33 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         }
     };
 
-    const handleCheckIn = async (date) => {
+    const handleAction = async (record, type) => {
         const isAllowed = await validateIpAccess();
         if (!isAllowed) return;
 
         setLoading(true);
-        axios.post(route('users-attendance.store'), {
+        const url = (record.isPlaceholder && type === 'check_in') ? route('users-attendance.store') : route('users-attendance.update', record.id);
+        const method = (record.isPlaceholder && type === 'check_in') ? 'post' : 'put';
+
+        axios[method](url, {
             user_id: user.id,
-            date: date,
-            status: 'present',
-            check_in: dayjs().format('HH:mm:ss'),
-            worked_from: workedFrom,
+            date: record.date,
+            type: type,
+            work_from: workedFrom,
+            status: (!record.status || ['Not Marked', 'Weekend', 'Holiday'].includes(record.status)) ? 'Marked' : record.status,
         }).then(() => {
-            api.success({ message: "Checked In Successfully" });
+            api.success({ message: `Success: ${type.replace('_', ' ').toUpperCase()}` });
             setIsActionModalOpen(false);
             router.reload({ only: ['attendances'] });
         }).catch(err => {
-            api.error({ message: "Check In Failed", description: err.response?.data?.message || "Internal Error" });
+            api.error({ message: "Action Failed", description: err.response?.data?.message || "Internal Error" });
         }).finally(() => setLoading(false));
     };
 
-    const handleCheckOut = async (record) => {
-        const isAllowed = await validateIpAccess();
-        if (!isAllowed) return;
-
-        setLoading(true);
-        axios.put(route('users-attendance.update', record.id), {
-            ...record,
-            check_out: dayjs().format('HH:mm:ss'),
-            worked_from: workedFrom, // Ensure latest workedFrom is sent
-        }).then(() => {
-            api.success({ message: "Checked Out Successfully" });
-            setIsActionModalOpen(false);
-            router.reload({ only: ['attendances'] });
-        }).catch(err => {
-            api.error({ message: "Check Out Failed", description: err.response?.data?.message || "Internal Error" });
-        }).finally(() => setLoading(false));
-    };
-
-    const handleBreakStart = async (record) => {
-        const isAllowed = await validateIpAccess();
-        if (!isAllowed) return;
-
-        const currentBreaks = Array.isArray(record.break) ? [...record.break] : [];
-        currentBreaks.push({
-            break_start: dayjs().format('HH:mm:ss'),
-            break_end: null
-        });
-
-        setLoading(true);
-        axios.put(route('users-attendance.update', record.id), {
-            ...record,
-            break: currentBreaks,
-            worked_from: workedFrom,
-        }).then(() => {
-            api.success({ message: "Break Started" });
-            setIsActionModalOpen(false);
-            router.reload({ only: ['attendances'] });
-        }).catch(err => {
-            api.error({ message: "Failed", description: err.response?.data?.message });
-        }).finally(() => setLoading(false));
-    };
-
-    const handleBreakEnd = async (record) => {
-        const isAllowed = await validateIpAccess();
-        if (!isAllowed) return;
-
-        const currentBreaks = Array.isArray(record.break) ? [...record.break] : [];
-        if (currentBreaks.length > 0) {
-            currentBreaks[currentBreaks.length - 1].break_end = dayjs().format('HH:mm:ss');
-        }
-
-        setLoading(true);
-        axios.put(route('users-attendance.update', record.id), {
-            ...record,
-            break: currentBreaks,
-            worked_from: workedFrom,
-        }).then(() => {
-            api.success({ message: "Break Ended" });
-            setIsActionModalOpen(false);
-            router.reload({ only: ['attendances'] });
-        }).catch(err => {
-            api.error({ message: "Failed", description: err.response?.data?.message });
-        }).finally(() => setLoading(false));
-    };
+    const handleCheckIn = (date) => handleAction({ date, isPlaceholder: true }, 'check_in');
+    const handleCheckOut = (record) => handleAction(record, 'check_out');
+    const handleBreakStart = (record) => handleAction(record, 'break_start');
+    const handleBreakEnd = (record) => handleAction(record, 'break_end');
 
     // Main Grid Columns (Months)
     const columnDefs = useMemo(() => [
@@ -261,14 +239,9 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
             cellClass: "fw-bold text-primary text-nowrap"
         },
         {
-            headerName: "Present",
+            headerName: "Marked",
             field: "present",
             cellClass: "text-success fw-bold text-center text-nowrap",
-        },
-        {
-            headerName: "Absent",
-            field: "absent",
-            cellClass: "text-danger fw-bold text-center text-nowrap",
         },
         {
             headerName: "Leave",
@@ -277,26 +250,19 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
             cellClass: "text-info fw-bold text-center text-nowrap",
             cellRenderer: (params) => <Tag color="blue">{params.value}</Tag>
         },
+        // {
+        //     headerName: "Required Duration (Excl. Break)",
+        //     field: "totalRequiredMinutes",
+        //     minWidth: 150,
+        //     cellClass: "text-center text-nowrap",
+        //     cellRenderer: (params) => {
+        //         return <Tag color="orange">{formatMinsToHrs(params.value)}</Tag>;
+        //     }
+        // },
         {
-            headerName: "Required Regular Hours",
-            field: "totalRequiredMinutes",
-            minWidth: 120,
-            cellClass: "text-center text-nowrap",
-            cellRenderer: (params) => {
-                if (params.value === 0) return <Tag color="default">Shift N/A</Tag>;
-                return <Tag color="orange">{formatMinsToHrs(params.value)}</Tag>;
-            }
-        },
-        {
-            headerName: "Total Regular Hours",
+            headerName: "Recorded Duration",
             field: "totalRegularMinutes",
             cellRenderer: (params) => <Tag color="geekblue">{formatMinsToHrs(params.value)}</Tag>,
-            cellClass: "text-center text-nowrap"
-        },
-        {
-            headerName: "Total Outside Hours",
-            field: "totalOutsideMinutes",
-            cellRenderer: (params) => <Tag color="magenta">{formatMinsToHrs(params.value)}</Tag>,
             cellClass: "text-center text-nowrap"
         },
         {
@@ -341,7 +307,7 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
             const monthAttendances = attendances.filter(a =>
                 a.date.startsWith(`${filterYear}-${monthStr}`)
             );
-            const present = monthAttendances.filter(a => ['present', 'late'].includes(a.status)).length;
+            const markedCount = monthAttendances.filter(a => a.status === 'Marked').length;
             const absent = monthAttendances.filter(a => a.status === 'absent').length;
 
             // Calculate total approved leave days in this month
@@ -372,14 +338,14 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                 const schedule = (userShiftSchedules || []).find(s => s.day === dayName);
                 if (schedule && schedule.shift) {
                     let dayReqMins = 0;
-                    if (schedule.shift.duration) {
-                        dayReqMins = parseInt(schedule.shift.duration);
-                    } else if (schedule.shift.start_time && schedule.shift.end_time) {
+                    if (schedule.shift.start_time && schedule.shift.end_time) {
                         const start = dayjs(`2000-01-01 ${schedule.shift.start_time}`);
                         const end = dayjs(`2000-01-01 ${schedule.shift.end_time}`);
                         let diff = end.diff(start, 'minute');
                         if (diff < 0) diff += 1440;
                         dayReqMins = diff;
+                    } else if (schedule.shift.duration) {
+                        dayReqMins = parseInt(schedule.shift.duration);
                     }
 
                     // Subtract break time
@@ -389,18 +355,14 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
             });
 
             const totalRegularMinutes = monthAttendances.reduce((acc, curr) => {
-                if (curr.total_regular_hours) {
-                    const [h, m] = curr.total_regular_hours.split(':').map(Number);
-                    return acc + (h * 60) + m;
-                }
                 return acc + getHoursMins(curr);
             }, 0);
 
-            const totalOutsideMinutes = monthAttendances.reduce((acc, curr) => {
-                return acc + sumOutsideHoursMins(curr.total_outside_hours);
+            const totalBreakMinutes = monthAttendances.reduce((acc, curr) => {
+                return acc + getBreakMins(curr);
             }, 0);
 
-            return { monthName: m, monthIndex: i, present, absent, leaveCount, totalRequiredMinutes, totalRegularMinutes, totalOutsideMinutes };
+            return { monthName: m, monthIndex: i, present: markedCount, absent, leaveCount, totalRequiredMinutes, totalRegularMinutes, totalBreakMinutes };
         });
     }, [attendances, filterYear, leaveRequests, userShiftSchedules]);
 
@@ -410,7 +372,8 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
             headerName: "Date",
             field: "date",
             minWidth: 120,
-            cellClass: "fw-medium"
+            cellClass: "fw-medium",
+
         },
         {
             headerName: "Day",
@@ -422,230 +385,176 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         },
         {
             headerName: "Office Status",
-            field: "status",
+            field: "isOffDay",
             minWidth: 130,
             cellRenderer: (params) => {
-                const isClosed = params.value === 'Weekend' || params.value === 'Holiday';
-                return <Tag color={isClosed ? 'error' : 'success'}>
-                    {isClosed ? 'Office Closed' : 'Office Open'}
+                const isOffDay = params.value;
+                return <Tag color={isOffDay ? 'error' : 'success'}>
+                    {isOffDay ? 'Office Closed' : 'Office Open'}
                 </Tag>;
             }
         },
         {
             headerName: "Status",
-            field: "status",
             minWidth: 200,
             cellRenderer: (params) => {
-                const { status, check_in, total_outside_hours } = params.data;
-
-                const isMarked = status === 'present' || status === 'late' || status === 'absent';
-                const isClosed = status === 'Weekend' || status === 'Holiday';
+                const { status, clock, isOffDay, offDayType } = params.data;
+                const isMarked = status === 'Marked' || (Array.isArray(clock) && clock.length > 0);
                 const isLeave = status === 'On Leave' || status === 'leave';
 
                 if (isMarked) {
-                    const hasRegular = !!check_in;
-                    const hasManual = Array.isArray(total_outside_hours) && total_outside_hours.length > 0;
-
-                    return (
-                        <div className="d-flex align-items-center gap-2">
-                            <Tag color="success" className="m-0">MARKED</Tag>
-                            <div className="d-flex align-items-center gap-1 border-start ps-2" style={{ fontSize: '11px' }}>
-                                <span className="d-flex align-items-center gap-1">
-                                    {hasRegular ? <CheckOutlined style={{ color: '#52c41a' }} /> : <CloseCircleFilled style={{ color: '#ff4d4f' }} />}
-                                    <span className="text-muted">Reg</span>
-                                </span>
-                                <span className="text-muted mx-1">/</span>
-                                <span className="d-flex align-items-center gap-1">
-                                    {hasManual ? <CheckOutlined style={{ color: '#52c41a' }} /> : <CloseCircleFilled style={{ color: '#ff4d4f' }} />}
-                                    <span className="text-muted">Man</span>
-                                </span>
-                            </div>
-                        </div>
-                    );
+                    const markedText = isOffDay ? `${offDayType} / MARKED` : 'MARKED';
+                    return <Tag color="success">{markedText}</Tag>;
                 }
-
                 if (isLeave) return <Tag color="blue">LEAVE</Tag>;
-                if (isClosed) return <Tag color="default">{status.toUpperCase()}</Tag>;
-                if (status === 'Not Marked') return <Tag color="processing">NOT MARKED</Tag>;
-
-                return <Tag>{status?.toUpperCase() || '-'}</Tag>;
+                if (isOffDay) return <Tag color="default">{offDayType.toUpperCase()}</Tag>;
+                return <Tag color="processing">{status?.toUpperCase() || 'NOT MARKED'}</Tag>;
             }
         },
+        // {
+        //     headerName: "Required Duration (Excl. Break)",
+        //     minWidth: 150,
+        //     cellRenderer: (params) => {
+        //         const dayName = dayjs(params.data.date).format('dddd');
+        //         const schedule = (userShiftSchedules || []).find(s => s.day === dayName);
+        //         if (schedule && schedule.shift) {
+        //             let reqMins = 0;
+        //             if (schedule.shift.start_time && schedule.shift.end_time) {
+        //                 const start = dayjs(`2000-01-01 ${schedule.shift.start_time}`);
+        //                 const end = dayjs(`2000-01-01 ${schedule.shift.end_time}`);
+        //                 let diff = end.diff(start, 'minute');
+        //                 if (diff < 0) diff += 1440;
+        //                 reqMins = diff;
+        //             } else if (schedule.shift.duration) {
+        //                 reqMins = parseInt(schedule.shift.duration);
+        //             }
+        //             const breakMins = parseInt(schedule.shift.total_break_minutes || 0);
+        //             return <Tag color="orange">{formatMinsToHrs(Math.max(0, reqMins - breakMins))}</Tag>;
+        //         }
+        //         return "-";
+        //     }
+        // },
         {
-            headerName: "Check In",
-            field: "check_in",
-            minWidth: 100,
-            cellRenderer: (params) => params.value ? <Tag color="cyan">{params.value}</Tag> : "-"
-        },
-        {
-            headerName: "Breaks",
-            field: "break",
-            minWidth: 150,
-            cellRenderer: (params) => {
-                const breaks = params.value;
-                if (!Array.isArray(breaks) || breaks.length === 0) return "-";
-
-                return (
-                    <div className="d-flex align-items-center gap-1 flex-wrap">
-                        {breaks.map((b, idx) => (
-                            <Tag color="orange" key={idx} className="m-0 text-nowrap">
-                                {b.break_start || '...'} to {b.break_end || '...'}
-                            </Tag>
-                        ))}
-                    </div>
-                );
-            }
-        },
-        {
-            headerName: "Required Hours",
-            field: "date",
-            minWidth: 130,
-            cellRenderer: (params) => {
-                const dayName = dayjs(params.value).format('dddd');
-                const schedule = (userShiftSchedules || []).find(s => s.day === dayName);
-                if (schedule && schedule.shift) {
-                    let totalMins = 0;
-                    if (schedule.shift.duration) {
-                        totalMins = parseInt(schedule.shift.duration);
-                    } else if (schedule.shift.start_time && schedule.shift.end_time) {
-                        const start = dayjs(`2000-01-01 ${schedule.shift.start_time}`);
-                        const end = dayjs(`2000-01-01 ${schedule.shift.end_time}`);
-                        let diff = end.diff(start, 'minute');
-                        if (diff < 0) diff += 1440;
-                        totalMins = diff;
-                    }
-
-                    // Subtract break time
-                    const breakMins = parseInt(schedule.shift.total_break_minutes || 0);
-                    const netMins = Math.max(0, totalMins - breakMins);
-
-                    return <Tag color="orange">{formatMinsToHrs(netMins)}</Tag>;
-                }
-                return <Tag color="default">Shift N/A</Tag>;
-            }
-        },
-        {
-            headerName: "Regular Hours",
-            field: "total_regular_hours",
+            headerName: "Recorded Duration",
+            field: "clock",
             minWidth: 120,
             cellRenderer: (params) => {
-                const manual = params.value;
                 const calculated = calculateHours(params.data);
-                const display = (manual ? formatManualTime(manual) : null) || calculated || "-";
-                return <Tag color="geekblue">{display}</Tag>;
+                return <Tag color="geekblue">{calculated || "-"}</Tag>;
             }
         },
         {
-            headerName: "Outside Hours",
-            field: "total_outside_hours",
-            minWidth: 180,
+            headerName: "Break Duration",
+            field: "clock",
+            minWidth: 120,
             cellRenderer: (params) => {
-                const entries = params.value;
-                if (!Array.isArray(entries) || entries.length === 0) return "-";
-
+                const calculated = formatBreakDuration(params.data);
+                return <Tag color="warning">{calculated || "-"}</Tag>;
+            }
+        },
+        {
+            headerName: "Details",
+            field: "clock",
+            minWidth: 300,
+            maxWidth: 300,
+            flex: 2,
+            pinned: "right",
+            cellRenderer: (params) => {
+                const clock = params.value;
+                if (!Array.isArray(clock) || clock.length === 0) return "-";
                 return (
-                    <div className="d-flex align-items-center gap-1">
-                        {entries.map((entry, idx) => (
-                            <span key={idx} className="d-flex align-items-center gap-1">
-                                <Tag color={entry.work_from === 'home' ? 'blue' : 'orange'} style={{ margin: 0 }} className="d-flex align-items-center gap-1">
-                                    {entry.work_from === 'home' ? <HomeOutlined style={{ fontSize: '12px' }} /> : <ApartmentOutlined style={{ fontSize: '12px' }} />}
-                                    {entry.manual_hours}
-                                </Tag>
-                                {idx < entries.length - 1 && <span className="text-muted">/</span>}
-                            </span>
-                        ))}
+                    <div className="d-flex flex-column gap-1 py-1">
+                        {clock.map((c, idx) => {
+                            const breakTags = [];
+                            if (c.break) {
+                                if (c.break.break_start) {
+                                    breakTags.push(<Tag color="warning" className="m-0" style={{ fontSize: '10px' }}>B: {c.break.break_start}</Tag>);
+                                    if (c.break.break_end) {
+                                        breakTags.push(<Tag color="warning" className="m-0" style={{ fontSize: '10px' }}>E: {c.break.break_end}</Tag>);
+                                    }
+                                }
+                                let i = 2;
+                                while (c.break[`break_start_${i}`]) {
+                                    breakTags.push(<Tag color="warning" className="m-0" style={{ fontSize: '10px' }}>B{i}: {c.break[`break_start_${i}`]}</Tag>);
+                                    if (c.break[`break_end_${i}`]) {
+                                        breakTags.push(<Tag color="warning" className="m-0" style={{ fontSize: '10px' }}>E{i}: {c.break[`break_end_${i}`]}</Tag>);
+                                    }
+                                    i++;
+                                }
+                            }
+
+                            return (
+                                <div key={idx} className="d-flex align-items-center gap-1 flex-wrap">
+                                    <Tag color={c.work_from === 'home' ? 'blue' : 'orange'} className="m-0" style={{ fontSize: '10px' }}>
+                                        {c.work_from === 'home' ? <HomeOutlined /> : <ApartmentOutlined />} {c.work_from.toUpperCase()}
+                                    </Tag>
+                                    <Tag color="cyan" className="m-0" style={{ fontSize: '10px' }}>{c.check_in}</Tag>
+                                    {breakTags}
+                                    {c.check_out && <Tag color="blue" className="m-0" style={{ fontSize: '10px' }}>{c.check_out}</Tag>}
+                                    {c.status === 'pending' && <Tag color="error" className="m-0" style={{ fontSize: '10px' }}>PENDING</Tag>}
+                                </div>
+                            );
+                        })}
                     </div>
                 );
             }
         },
-        {
-            headerName: "Check Out",
-            field: "check_out",
-            minWidth: 100,
-            flex: 1,
-            cellRenderer: (params) => params.value ? <Tag color="blue">{params.value}</Tag> : "-"
-        },
-        {
-            headerName: "Worked From",
-            field: "worked_from",
-            minWidth: 120,
-            cellRenderer: (params) => (
-                <Tag color={params.value === 'home' ? 'blue' : 'orange'}>
-                    {params.value ? params.value.toUpperCase() : 'OFFICE'}
-                </Tag>
-            )
-        },
-        {
-            headerName: "Check In IP",
-            field: "check_in_ip",
-            minWidth: 100,
-            cellRenderer: (params) => params.value ? <small className="font-monospace text-muted" style={{ fontSize: '10px' }}>{params.value}</small> : "-"
-        },
-        {
-            headerName: "Check Out IP",
-            field: "check_out_ip",
-            minWidth: 100,
-            cellRenderer: (params) => params.value ? <small className="font-monospace text-muted" style={{ fontSize: '10px' }}>{params.value}</small> : "-"
-        },
+
         {
             headerName: "Actions",
             width: 150,
-            minWidth: 180,
+            minWidth: 150,
             sortable: false,
             filter: false,
             pinned: "right",
             cellRenderer: (params) => {
-                const { status, date, isPlaceholder } = params.data;
+                const { status, date, clock } = params.data;
                 if (status === 'On Leave') return <Tag color="blue">ON LEAVE</Tag>;
 
                 const today = dayjs().format('YYYY-MM-DD');
+                const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
                 const isToday = date === today;
-                const isPast = dayjs(date).isBefore(today, 'day');
+                const isYesterday = date === yesterday;
                 const isFuture = dayjs(date).isAfter(today, 'day');
-                const isMarked = !isPlaceholder && status !== 'Not Marked';
-                const isWeekend = status === 'Weekend';
-                const isHoliday = status === 'Holiday';
-                const isOffDay = isWeekend || isHoliday;
-
-                const needsCheckOut = params.data.check_in && !params.data.check_out;
-
-                if (isMarked) {
-                    if (isToday || needsCheckOut) {
-                        return (
-                            <button
-                                className="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center w-100"
-                                onClick={() => {
-                                    setCurrentActionRecord(params.data);
-                                    setWorkedFrom(params.data.worked_from || 'office');
-                                    setIsActionModalOpen(true);
-                                }}
-                            >
-                                {needsCheckOut ? <LoginOutlined className="me-1" /> : <EditOutlined className="me-1" />}
-                                {needsCheckOut ? "Action" : "Edit"}
-                            </button>
-                        );
-                    }
-                    return <Tag color="success">MARKED</Tag>;
-                }
 
                 if (isFuture) return <small className="text-muted italic">Upcoming</small>;
 
-                if (isToday) {
-                    return (
-                        <button
-                            className={`btn btn-sm d-flex align-items-center justify-content-center w-100 ${isOffDay ? 'btn-outline-warning' : 'btn-success'}`}
-                            onClick={() => {
-                                setCurrentActionRecord(params.data);
-                                setWorkedFrom(params.data.worked_from || 'office');
-                                setIsActionModalOpen(true);
-                            }}
-                        >
-                            <PlusCircleOutlined className="me-1" /> {isOffDay ? 'Log Hours' : 'Mark'}
-                        </button>
-                    );
+                const lastEntry = Array.isArray(clock) && clock.length > 0 ? clock[clock.length - 1] : null;
+                const isRunning = lastEntry && !lastEntry.check_out;
+
+                // User Rule: Only today and yesterday are marking-enabled.
+                // Previous day (yesterday) is ONLY enabled if it has an open session (isRunning).
+                // All days older than yesterday are CLOSED.
+                const isOldPast = dayjs(date).isBefore(yesterday, 'day');
+
+                let isClosed = false;
+                if (isOldPast) {
+                    isClosed = true;
+                } else if (isYesterday) {
+                    // Yesterday is closed UNLESS there is an open session to finish
+                    if (!isRunning) {
+                        isClosed = true;
+                    }
+                }
+                // Today is never closed
+
+                if (isClosed) {
+                    return <Tag color="default">Attendance Closed</Tag>;
                 }
 
-                return <small className="text-muted italic">Closed</small>;
+                return (
+                    <button
+                        className={`btn btn-sm d-flex align-items-center justify-content-center w-100 ${isRunning ? 'btn-danger' : 'btn-primary'}`}
+                        onClick={() => {
+                            setCurrentActionRecord(params.data);
+                            setWorkedFrom(lastEntry?.work_from || 'office');
+                            setIsActionModalOpen(true);
+                        }}
+                    >
+                        {isRunning ? <LogoutOutlined className="me-1" /> : (isToday ? <PlusCircleOutlined className="me-1" /> : <EditOutlined className="me-1" />)}
+                        {isRunning ? "Running" : (isToday ? "Mark" : "Edit")}
+                    </button>
+                );
             }
         }
     ], [loading]);
@@ -704,20 +613,35 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
             if (existing) {
                 return {
                     ...existing,
-                    status: onLeave ? 'On Leave' : existing.status
+                    status: onLeave ? 'On Leave' : existing.status,
+                    isOffDay: !!holiday || !hasShift,
+                    offDayType: holiday ? 'Holiday' : (!hasShift ? 'Weekend' : null)
                 };
             }
 
             let status = 'Not Marked';
-            if (onLeave) status = 'On Leave';
-            else if (holiday) status = 'Holiday';
-            else if (!hasShift) status = 'Weekend';
+            let isOffDay = false;
+            let offDayType = null;
+
+            if (onLeave) {
+                status = 'On Leave';
+            } else if (holiday) {
+                status = 'Holiday';
+                isOffDay = true;
+                offDayType = 'Holiday';
+            } else if (!hasShift) {
+                status = 'Weekend';
+                isOffDay = true;
+                offDayType = 'Weekend';
+            }
 
             return {
                 user_id: user.id,
                 date: d,
                 status: status,
-                isPlaceholder: true
+                isPlaceholder: true,
+                isOffDay,
+                offDayType
             };
         }).sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix());
     }, [selectedMonthForAttendance, attendances, filterYear, getDaysInMonth, user.id, holidays]);
@@ -771,10 +695,13 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                             columnDefs={columnDefs}
                             defaultColDef={{
                                 ...defaultColDef,
-                                suppressMovable: true,
                                 cellClass: 'text-nowrap',
                                 wrapHeaderText: true,
                                 autoHeaderHeight: true,
+                            }}
+                            sideBar={{
+                                toolPanels: ['columns', 'filters'],
+                                defaultToolPanel: null
                             }}
                             autoSizeStrategy={{
                                 type: "fitCellContents",
@@ -794,7 +721,7 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                 open={isAttendanceGridModalOpen}
                 onCancel={() => setIsAttendanceGridModalOpen(false)}
                 footer={null}
-                width="90%"
+                width="100%"
                 style={{ top: 0 }}
                 centered
             >
@@ -804,12 +731,15 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                         columnDefs={detailColumnDefs}
                         defaultColDef={{
                             ...defaultColDef,
-                            suppressMovable: true,
                             cellClass: 'text-nowrap',
                             wrapHeaderText: true,
                             autoHeaderHeight: true,
                             wrapText: true,
                             autoHeight: true,
+                        }}
+                        sideBar={{
+                            toolPanels: ['columns', 'filters'],
+                            defaultToolPanel: null
                         }}
                         autoSizeStrategy={{
                             type: "fitCellContents",
@@ -842,330 +772,99 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                 onCancel={() => setIsActionModalOpen(false)}
                 footer={null}
                 centered
-                width={400}
+                width={450}
             >
                 {currentActionRecord && (
                     <div className="p-2">
                         <div className="mb-4 text-center">
-                            <Tag color="blue" className="px-3 py-1 mb-2" style={{ fontSize: '14px' }}>
+                            <Tag color="blue" className="px-3 py-1" style={{ fontSize: '14px' }}>
                                 Status: {currentActionRecord.status.toUpperCase()}
                             </Tag>
                         </div>
 
                         <div className="d-grid gap-3">
-                            <div className="row g-2">
-                                <div className="col-12 mb-2">
-                                    <label className="fw-bold small text-muted">Worked From</label>
-                                    <Select
-                                        defaultValue="office"
-                                        style={{ width: '100%' }}
-                                        value={workedFrom}
-                                        onChange={(val) => setWorkedFrom(val)}
-                                        options={[
-                                            { label: 'Office', value: 'office' },
-                                            { label: 'Home', value: 'home' }
-                                        ]}
-                                        disabled={(currentActionRecord.status === 'Weekend' || currentActionRecord.status === 'Holiday') && !currentActionRecord.check_in}
-                                    />
-                                </div>
+                            <div className="mb-3">
+                                <label className="fw-bold small text-muted d-block mb-1">Worked From</label>
+                                <Select
+                                    style={{ width: '100%' }}
+                                    value={workedFrom}
+                                    disabled={currentActionRecord?.date === dayjs().subtract(1, 'day').format('YYYY-MM-DD') || (currentActionRecord && (() => {
+                                        const clock = Array.isArray(currentActionRecord.clock) ? currentActionRecord.clock : [];
+                                        const lastEntry = clock.length > 0 ? clock[clock.length - 1] : null;
+                                        return lastEntry && !lastEntry.check_out;
+                                    })())}
+                                    onChange={(val) => setWorkedFrom(val)}
+                                    options={[
+                                        { label: 'Office', value: 'office' },
+                                        { label: 'Home', value: 'home' }
+                                    ]}
+                                />
+                                {workedFrom === 'home' && <Alert type="info" message="Home-based work will be marked as PENDING by default." className="mt-2" showIcon />}
                             </div>
 
-                            {/* Regular Attendance Section */}
-                            <div className={`border rounded p-3 ${(currentActionRecord.status === 'Weekend' || currentActionRecord.status === 'Holiday') ? 'bg-secondary-subtle opacity-75' : 'bg-light'}`}>
-                                <div className="d-flex justify-content-between align-items-center mb-2">
-                                    <label className="fw-bold small text-muted">Regular Attendance (Shift)</label>
-                                    {currentActionRecord.status === 'Weekend' && <Tag color="warning">Weekend – Read Only</Tag>}
-                                    {currentActionRecord.status === 'Holiday' && <Tag color="magenta">Holiday – Read Only</Tag>}
+                            <div className="border rounded p-3 bg-light">
+                                <div className="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 className="m-0 fw-bold">Daily Activities</h6>
+                                    <Tag color="cyan">{calculateHours(currentActionRecord)} total today</Tag>
                                 </div>
-                                {(currentActionRecord.status === 'Weekend' || currentActionRecord.status === 'Holiday') ? (
-                                    <div className="d-flex flex-wrap gap-2">
-                                        <div className="d-flex align-items-center gap-1">
-                                            <small className="text-muted">Check In:</small>
-                                            {currentActionRecord.check_in
-                                                ? <Tag color="cyan">{currentActionRecord.check_in}</Tag>
-                                                : <small className="text-muted fst-italic">—</small>}
-                                        </div>
-                                        <div className="d-flex align-items-center gap-1">
-                                            <small className="text-muted">Breaks:</small>
-                                            {Array.isArray(currentActionRecord.break) && currentActionRecord.break.length > 0
-                                                ? currentActionRecord.break.map((b, idx) => (
-                                                    <Tag color="orange" key={idx}>{b.break_start} → {b.break_end || '…'}</Tag>
-                                                ))
-                                                : <small className="text-muted fst-italic">—</small>}
-                                        </div>
-                                        <div className="d-flex align-items-center gap-1">
-                                            <small className="text-muted">Check Out:</small>
-                                            {currentActionRecord.check_out
-                                                ? <Tag color="blue">{currentActionRecord.check_out}</Tag>
-                                                : <small className="text-muted fst-italic">—</small>}
-                                        </div>
-                                    </div>
-                                ) : !currentActionRecord.check_in ? (
-                                    (() => {
-                                        const dayName = dayjs(currentActionRecord.date).format('dddd');
-                                        const schedule = (userShiftSchedules || []).find(s => s.day === dayName);
-                                        let isTooEarly = false;
-                                        let earlyMessage = '';
 
-                                        if (schedule && schedule.shift && currentActionRecord.date === dayjs().format('YYYY-MM-DD')) {
-                                            const earlyBufferMins = parseFloat(config?.attendance_early_checkin_max_hours || 2) * 60;
-                                            const shiftStart = dayjs(`${currentActionRecord.date} ${schedule.shift.start_time}`);
-                                            
-                                            if (dayjs().isBefore(shiftStart.subtract(earlyBufferMins, 'minute'))) {
-                                                isTooEarly = true;
-                                                earlyMessage = `Too early! You can only check in up to ${config?.attendance_early_checkin_max_hours || 2} hours before your shift starts (${schedule.shift.start_time}).`;
-                                            }
-                                        }
+                                <div className="d-grid gap-2">
+                                    {(() => {
+                                        const clock = Array.isArray(currentActionRecord.clock) ? currentActionRecord.clock : [];
+                                        const lastEntry = clock.length > 0 ? clock[clock.length - 1] : null;
+                                        const isRunning = lastEntry && !lastEntry.check_out;
 
-                                        if (isTooEarly) {
+                                        if (isRunning) {
+                                            const hasBreak = (() => {
+                                                const b = lastEntry.break;
+                                                if (!b) return false;
+                                                if (b.break_start && !b.break_end) return true;
+                                                let i = 2;
+                                                while (b[`break_start_${i}`]) {
+                                                    if (!b[`break_end_${i}`]) return true;
+                                                    i++;
+                                                }
+                                                return false;
+                                            })();
                                             return (
-                                                <div className="text-center py-2">
-                                                    <Alert type="warning" message={earlyMessage} showIcon />
-                                                </div>
+                                                <>
+                                                    <div className="alert alert-primary py-2 px-3 small d-flex justify-content-between align-items-center mb-2">
+                                                        <span>Ongoing: <strong>{lastEntry.check_in}</strong> ({lastEntry.work_from})</span>
+                                                        {lastEntry.status === 'pending' && <Tag color="error">PENDING</Tag>}
+                                                    </div>
+
+                                                    {hasBreak ? (
+                                                        <button className="btn btn-warning w-100 py-2 d-flex align-items-center justify-content-center" disabled={loading} onClick={() => handleBreakEnd(currentActionRecord)}>
+                                                            <LogoutOutlined className="me-2" /> End Break
+                                                        </button>
+                                                    ) : (
+                                                        <div className="row g-2">
+                                                            <div className="col-6">
+                                                                <button className="btn btn-outline-warning w-100 py-2 d-flex align-items-center justify-content-center" disabled={loading} onClick={() => handleBreakStart(currentActionRecord)}>
+                                                                    <LoginOutlined className="me-2" /> Start Break
+                                                                </button>
+                                                            </div>
+                                                            <div className="col-6">
+                                                                <button className="btn btn-danger w-100 py-2 d-flex align-items-center justify-content-center" disabled={loading} onClick={() => handleCheckOut(currentActionRecord)}>
+                                                                    <LogoutOutlined className="me-2" /> Check Out
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </>
                                             );
                                         }
 
                                         return (
-                                            <button
-                                                className="btn btn-success w-100 py-2 d-flex align-items-center justify-content-center"
-                                                disabled={loading}
-                                                onClick={() => {
-                                                    handleCheckIn(currentActionRecord.date);
-                                                }}
-                                            >
-                                                <LoginOutlined className="me-2" /> Check In
+                                            <button className="btn btn-success w-100 py-2 d-flex align-items-center justify-content-center" disabled={loading} onClick={() => handleCheckIn(currentActionRecord.date)}>
+                                                <LoginOutlined className="me-2" /> New Check In
                                             </button>
                                         );
-                                    })()
-                                ) : !currentActionRecord.check_out ? (
-                                    <>
-                                        <div className="row g-2 mb-2">
-                                            <div className="col-12">
-                                                {(() => {
-                                                    const breaks = Array.isArray(currentActionRecord.break) ? currentActionRecord.break : [];
-                                                    const activeBreak = breaks.length > 0 && !breaks[breaks.length - 1].break_end;
-
-                                                    if (activeBreak) {
-                                                        return (
-                                                            <button
-                                                                className="btn btn-warning w-100 py-2 d-flex align-items-center justify-content-center gap-2"
-                                                                disabled={loading}
-                                                                onClick={() => handleBreakEnd(currentActionRecord)}
-                                                            >
-                                                                End Current Break
-                                                            </button>
-                                                        );
-                                                    } else {
-                                                        return (
-                                                            <button
-                                                                className="btn btn-outline-warning w-100 py-2 d-flex align-items-center justify-content-center gap-2"
-                                                                disabled={loading}
-                                                                onClick={() => handleBreakStart(currentActionRecord)}
-                                                            >
-                                                                Start New Break
-                                                            </button>
-                                                        );
-                                                    }
-                                                })()}
-                                            </div>
-                                        </div>
-                                        <button
-                                            className="btn btn-danger w-100 py-2 d-flex align-items-center justify-content-center"
-                                            disabled={loading}
-                                            onClick={() => {
-                                                handleCheckOut(currentActionRecord);
-                                            }}
-                                        >
-                                            <LogoutOutlined className="me-2" /> Check Out
-                                        </button>
-                                    </>
-                                ) : (
-                                    <div className="text-center py-1">
-                                        <Tag color="blue">Regular Shift Completed</Tag>
-                                    </div>
-                                )}
+                                    })()}
+                                </div>
                             </div>
 
-                            {/* Outside Hours Section */}
-                            <div className="border rounded p-3">
-                                <label className="fw-bold small text-muted d-block mb-2">Manual Outside Hours</label>
 
-                                {Array.isArray(currentActionRecord.total_outside_hours) && currentActionRecord.total_outside_hours.map((entry, idx) => (
-                                    <div key={idx} className="bg-light p-2 rounded mb-3 border position-relative">
-                                        <div className="d-flex align-items-center justify-content-between mb-2">
-                                            <Tag color={entry.status === 'approved' ? 'success' : 'warning'} className="m-0 py-1 px-2 fw-bold" style={{ fontSize: '10px' }}>
-                                                {entry.status === 'approved' ? 'APPROVED' : 'PENDING'}
-                                            </Tag>
-                                            <div className="d-flex align-items-center gap-2">
-                                                <Select
-                                                    showSearch
-                                                    placeholder="HH"
-                                                    style={{ width: '70px' }}
-                                                    value={entry.manual_hours?.split(':')[0] || '00'}
-                                                    onChange={(val) => {
-                                                        const updated = [...currentActionRecord.total_outside_hours];
-                                                        const mm = entry.manual_hours?.split(':')[1] || '00';
-                                                        updated[idx] = { ...entry, manual_hours: `${val}:${mm}` };
-                                                        setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: updated });
-                                                    }}
-                                                    options={Array.from({ length: 24 }, (_, i) => ({
-                                                        label: i.toString().padStart(2, '0'),
-                                                        value: i.toString().padStart(2, '0')
-                                                    }))}
-                                                    disabled={entry.status === 'approved'}
-                                                />
-                                                <span className="fw-bold">:</span>
-                                                <Select
-                                                    showSearch
-                                                    placeholder="mm"
-                                                    style={{ width: '70px' }}
-                                                    value={entry.manual_hours?.split(':')[1] || '00'}
-                                                    onChange={(val) => {
-                                                        const updated = [...currentActionRecord.total_outside_hours];
-                                                        const hh = entry.manual_hours?.split(':')[0] || '00';
-                                                        updated[idx] = { ...entry, manual_hours: `${hh}:${val}` };
-                                                        setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: updated });
-                                                    }}
-                                                    options={Array.from({ length: 60 }, (_, i) => ({
-                                                        label: i.toString().padStart(2, '0'),
-                                                        value: i.toString().padStart(2, '0')
-                                                    }))}
-                                                    disabled={entry.status === 'approved'}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="d-flex align-items-center gap-2">
-                                            <Select
-                                                style={{ flex: 1 }}
-                                                value={entry.work_from || 'office'}
-                                                onChange={(val) => {
-                                                    const updated = [...currentActionRecord.total_outside_hours];
-                                                    updated[idx] = { ...entry, work_from: val };
-                                                    setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: updated });
-                                                }}
-                                                options={[
-                                                    { label: 'Office', value: 'office' },
-                                                    { label: 'Home', value: 'home' }
-                                                ]}
-                                                disabled={entry.status === 'approved'}
-                                            />
-                                            <button
-                                                className="btn btn-outline-danger btn-sm p-1 border-0"
-                                                onClick={() => {
-                                                    const updated = currentActionRecord.total_outside_hours.filter((_, i) => i !== idx);
-                                                    setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: updated });
-                                                }}
-                                                disabled={entry.status === 'approved'}
-                                            >
-                                                <DeleteOutlined />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-
-                                <div className="text-center mb-3">
-                                    <button
-                                        className="btn btn-outline-primary btn-sm w-100"
-                                        onClick={() => {
-                                            const entry = {
-                                                manual_hours: "00:00",
-                                                work_from: "office",
-                                                status: "pending"
-                                            };
-                                            const existing = Array.isArray(currentActionRecord.total_outside_hours) ? currentActionRecord.total_outside_hours : [];
-                                            setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: [...existing, entry] });
-                                        }}
-                                    >
-                                        <PlusCircleOutlined className="me-1" /> Add Manual Session
-                                    </button>
-                                </div>
-
-                                <button
-                                    className="btn btn-success w-100 py-2"
-                                    disabled={loading || !Array.isArray(currentActionRecord.total_outside_hours) || currentActionRecord.total_outside_hours.length === 0}
-                                    onClick={async () => {
-                                        const isAllowed = await validateIpAccess('manual');
-                                        if (!isAllowed) return;
-                                        setLoading(true);
-                                        const url = currentActionRecord.isPlaceholder ? route('users-attendance.store') : route('users-attendance.update', currentActionRecord.id);
-                                        const method = currentActionRecord.isPlaceholder ? 'post' : 'put';
-
-                                        let finalStatus = currentActionRecord.status;
-                                        if (currentActionRecord.status === 'Not Marked' || currentActionRecord.status === 'Weekend' || currentActionRecord.status === 'Holiday') {
-                                            finalStatus = 'present';
-                                        }
-
-                                        axios[method](url, {
-                                            ...currentActionRecord,
-                                            user_id: user.id,
-                                            status: finalStatus,
-                                            worked_from: workedFrom,
-                                            manual_hours_save: true,
-                                        }).then(response => {
-                                            api.success({ message: "Outside Hours Saved" });
-                                            setIsActionModalOpen(false);
-                                            router.reload({ only: ['attendances'] });
-                                        }).catch(err => {
-                                            api.error({ message: "Failed", description: err.response?.data?.message || "Failed to save hours" });
-                                        }).finally(() => setLoading(false));
-                                    }}
-                                >
-                                    Save All Outside Hours
-                                </button>
-                            </div>
-
-                            {/* Status Override for Edit Mode */}
-                            {(currentActionRecord.check_out || !dayjs(currentActionRecord.date).isSame(dayjs(), 'day')) && (
-                                <div className="border-top pt-3 mt-2">
-                                    <div className="mb-3">
-                                        <div className="mb-3">
-                                            <label className="fw-bold small text-muted d-block mb-1">Total Regular Hours (Read-only)</label>
-                                            <div className="bg-light border rounded px-3 py-2 fw-bold text-primary">
-                                                {currentActionRecord.total_regular_hours
-                                                    ? formatManualTime(currentActionRecord.total_regular_hours)
-                                                    : (calculateHours(currentActionRecord) || "-")}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* <div className="mb-3">
-                                        <label className="fw-bold small text-muted d-block mb-1">Status (Read-only)</label>
-                                        <Tag color={
-                                            currentActionRecord.status === 'present' ? 'success' :
-                                                currentActionRecord.status === 'absent' ? 'error' :
-                                                    currentActionRecord.status === 'late' ? 'warning' : 'default'
-                                        } className="px-3 py-1 fw-bold">
-                                            {currentActionRecord.status.toUpperCase()}
-                                        </Tag>
-                                    </div> */}
-
-                                    <button
-                                        className="btn btn-primary w-100 mt-2"
-                                        disabled={loading}
-                                        onClick={async () => {
-                                            const isAllowed = await validateIpAccess('regular');
-                                            if (!isAllowed) return;
-                                            setLoading(true);
-                                            axios.put(route('users-attendance.update', currentActionRecord.id), {
-                                                ...currentActionRecord,
-                                                worked_from: workedFrom
-                                            })
-                                                .then(response => {
-                                                    api.success({ message: "Attendance Updated Successfully" });
-                                                    setIsActionModalOpen(false);
-                                                    router.reload({ only: ['attendances'] });
-                                                })
-                                                .catch(err => {
-                                                    api.error({ message: "Update Failed", description: err.response?.data?.message });
-                                                })
-                                                .finally(() => setLoading(false));
-                                        }}
-                                    >
-                                        Save All Changes
-                                    </button>
-                                </div>
-                            )}
                         </div>
                     </div>
                 )}
@@ -1268,19 +967,13 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                         </div>
 
                         <div className="col-md-12">
-                            <Card size="small" title={<Text strong>Salary & Overtime Calculations</Text>} className="h-100 border-0 shadow-sm bg-light">
+                            <Card size="small" title={<Text strong>Salary Calculations</Text>} className="h-100 border-0 shadow-sm bg-light">
                                 <ul className="ps-3 mb-0 small">
                                     <li className="mb-2">
                                         <Text strong>Hourly Rate (240 Divisor):</Text> Your base hourly rate is calculated dynamically as <Text code>Basic Salary / 30 / 8</Text>. All unconfigured deductions directly refer to this rate.
                                     </li>
-                                    <li className="mb-2">
-                                        <Text strong>Office Overtime:</Text> Additional hours worked from the office beyond your shift duration are paid at <Text strong className="text-success">2.5x</Text> your base hourly rate.
-                                    </li>
-                                    <li className="mb-2">
-                                        <Text strong>Home Overtime:</Text> Additional hours worked from home beyond your shift duration are paid at <Text strong className="text-success">2x</Text> your base hourly rate.
-                                    </li>
                                     <li>
-                                        <Text strong>Manual Hours:</Text> Any approved manual hours are merged into your daily regular hours. If your total daily logged time exceeds your required shift duration, the excess automatically counts as Overtime.
+                                        <Text strong>Logged Time:</Text> Your salary is based on your completed required shift duration (net of breaks). Missing hours or undertime are deducted at your hourly rate.
                                     </li>
                                 </ul>
                             </Card>

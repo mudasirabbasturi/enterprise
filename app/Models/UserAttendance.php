@@ -9,21 +9,13 @@ class UserAttendance extends Model
     protected $fillable = [
         'user_id',
         'date',
-        'check_in',
-        'check_out',
-        'worked_from',
-        'check_in_ip',
-        'check_out_ip',
-        'break',
-        'total_regular_hours',
-        'total_outside_hours',
+        'clock',
         'status',
         'notes',
     ];
 
     protected $casts = [
-        'total_outside_hours' => 'json',
-        'break' => 'array',
+        'clock' => 'array',
     ];
 
     public function user()

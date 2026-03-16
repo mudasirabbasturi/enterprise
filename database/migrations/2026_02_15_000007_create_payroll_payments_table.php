@@ -4,8 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     public function up(): void
     {
         Schema::create('payroll_payments', function (Blueprint $table) {
@@ -20,7 +19,7 @@ return new class extends Migration
             $table->date('payment_date');
             $table->string('reference')->nullable();
             $table->text('notes')->nullable();
-            $table->enum('status', ['pending', 'processed', 'failed'])->default('processed');
+            $table->enum('status', ['pending', 'processed', 'failed', 'paid'])->default('processed');
             $table->timestamps();
 
             $table->unique(['user_id', 'month', 'year']);

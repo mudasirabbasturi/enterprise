@@ -9,7 +9,7 @@ class EmployeeSalary extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id', 'package_id', 'custom_salary'];
+    protected $fillable = ['user_id', 'package_id'];
 
     public function user()
     {

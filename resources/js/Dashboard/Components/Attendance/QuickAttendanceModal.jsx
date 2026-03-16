@@ -3,23 +3,14 @@ import {
     Modal,
     Tag,
     Select,
-    Button,
     notification,
     dayjs,
-    router,
     LoginOutlined,
     LogoutOutlined,
-    PlusCircleOutlined,
-    DeleteOutlined,
-    HomeOutlined,
-    ApartmentOutlined,
     EditOutlined,
-    Typography,
     Space,
     usePage
 } from "@shared/ui";
-
-const { Text } = Typography;
 
 const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialConfig = null, initialSchedules = null, onSuccess }) => {
     const { props } = usePage();
@@ -44,7 +35,9 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
 
             if (attendance) {
                 setCurrentActionRecord(attendance);
-                setWorkedFrom(attendance.worked_from || 'office');
+                const clock = Array.isArray(attendance.clock) ? attendance.clock : [];
+                const lastEntry = clock.length > 0 ? clock[clock.length - 1] : null;
+                setWorkedFrom(lastEntry?.work_from || 'office');
             } else {
                 const dayName = dayjs(date_context).format('dddd');
                 const hasShift = (userShiftSchedules || []).some(s => s.day === dayName);
@@ -56,8 +49,9 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
                     date: date_context,
                     status: status,
                     isPlaceholder: true,
-                    total_outside_hours: []
+                    clock: []
                 });
+                setWorkedFrom('office');
             }
         } catch (error) {
             console.error(error);
@@ -79,28 +73,50 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
         return `${h}h ${m}m`;
     };
 
-    const getHoursMins = (record) => {
-        const { check_in, check_out, break_start, break_end } = record;
-        if (!check_in || !check_out) return 0;
-
-        const start = dayjs(`2000-01-01 ${check_in}`);
-        const end = dayjs(`2000-01-01 ${check_out}`);
-
-        let workMins = end.diff(start, 'minute');
-        if (workMins < 0) workMins += 1440;
-
-        if (record.break && Array.isArray(record.break)) {
-            record.break.forEach(b => {
-                if (b.break_start && b.break_end) {
-                    const bStart = dayjs(`2000-01-01 ${b.break_start}`);
-                    const bEnd = dayjs(`2000-01-01 ${b.break_end}`);
-                    let breakMins = bEnd.diff(bStart, 'minute');
-                    if (breakMins < 0) breakMins += 1440;
-                    workMins -= breakMins;
-                }
-            });
+    const getBreakMinsForSegment = (breakObj) => {
+        if (!breakObj) return 0;
+        let total = 0;
+        if (breakObj.break_start && breakObj.break_end) {
+            const s = dayjs(`2000-01-01 ${breakObj.break_start}`);
+            const e = dayjs(`2000-01-01 ${breakObj.break_end}`);
+            let diff = e.diff(s, 'minute');
+            if (diff < 0) diff += 1440;
+            total += diff;
         }
-        return workMins > 0 ? workMins : 0;
+        let i = 2;
+        while (breakObj[`break_start_${i}`]) {
+            if (breakObj[`break_end_${i}`]) {
+                const s = dayjs(`2000-01-01 ${breakObj[`break_start_${i}`]}`);
+                const e = dayjs(`2000-01-01 ${breakObj[`break_end_${i}`]}`);
+                let diff = e.diff(s, 'minute');
+                if (diff < 0) diff += 1440;
+                total += diff;
+            }
+            i++;
+        }
+        return total;
+    };
+
+    const getHoursMins = (record) => {
+        if (!record.clock || !Array.isArray(record.clock)) return 0;
+        let totalMins = 0;
+
+        record.clock.forEach(entry => {
+            const { check_in, check_out, break: breakObj } = entry;
+            if (!check_in || !check_out) return;
+
+            const start = dayjs(`2000-01-01 ${check_in}`);
+            const end = dayjs(`2000-01-01 ${check_out}`);
+
+            let workMins = end.diff(start, 'minute');
+            if (workMins < 0) workMins += 1440;
+
+            if (breakObj) {
+                workMins -= getBreakMinsForSegment(breakObj);
+            }
+            totalMins += Math.max(0, workMins);
+        });
+        return totalMins;
     };
 
     const calculateHours = (record) => {
@@ -111,16 +127,33 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
         return `${hrs}h ${mins}m`;
     };
 
-    const validateIpAccess = async (type = 'regular') => {
-        let needsCheck = false;
-        if (type === 'regular') {
-            needsCheck = workedFrom === 'office';
-        } else {
-            const entries = currentActionRecord?.total_outside_hours || [];
-            needsCheck = entries.some(e => (e.work_from || 'office') === 'office');
-        }
+    const getBreakMins = (record) => {
+        if (!record.clock || !Array.isArray(record.clock)) return 0;
+        let totalBreakMins = 0;
+        record.clock.forEach(entry => {
+            if (entry.break) {
+                totalBreakMins += getBreakMinsForSegment(entry.break);
+            }
+        });
+        return totalBreakMins;
+    };
 
-        if (!user.ip_restriction || !needsCheck) return true;
+    const formatBreakDuration = (record) => {
+        const mins = getBreakMins(record);
+        if (mins <= 0) return "0h 0m";
+        const hrs = Math.floor(mins / 60);
+        const rem = Math.round(mins % 60);
+        return `${hrs}h ${rem}m`;
+    };
+
+    const formatMinsToHrs = (totalMins) => {
+        const hrs = Math.floor(totalMins / 60);
+        const mins = totalMins % 60;
+        return `${hrs}h ${mins}m`;
+    };
+
+    const validateIpAccess = async () => {
+        if (!user.ip_restriction || workedFrom === 'home') return true;
 
         try {
             const response = await axios.get(route('get-current-ip'));
@@ -135,7 +168,7 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
             if (!allowedIps.includes(currentIp)) {
                 api.error({
                     message: "Access Denied",
-                    description: `Your current IP (${currentIp}) is not authorized for ${type === 'manual' ? 'manual' : 'regular'} office attendance.`,
+                    description: `Your current IP (${currentIp}) is not authorized for office attendance.`,
                     placement: "topRight"
                 });
                 return false;
@@ -159,9 +192,9 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
         axios.post(route('users-attendance.store'), {
             user_id: user.id,
             date: date,
-            status: 'present',
+            type: 'check_in',
             check_in: dayjs().format('HH:mm:ss'),
-            worked_from: workedFrom,
+            work_from: workedFrom,
         }).then(() => {
             api.success({ message: "Checked In Successfully" });
             fetchTodayAttendance();
@@ -177,9 +210,11 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
 
         setLoading(true);
         axios.put(route('users-attendance.update', record.id), {
-            ...record,
+            user_id: user.id,
+            date: record.date,
+            type: 'check_out',
             check_out: dayjs().format('HH:mm:ss'),
-            worked_from: workedFrom,
+            work_from: workedFrom,
         }).then(() => {
             api.success({ message: "Checked Out Successfully" });
             fetchTodayAttendance();
@@ -193,17 +228,13 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
         const isAllowed = await validateIpAccess();
         if (!isAllowed) return;
 
-        const currentBreaks = Array.isArray(record.break) ? [...record.break] : [];
-        currentBreaks.push({
-            break_start: dayjs().format('HH:mm:ss'),
-            break_end: null
-        });
-
         setLoading(true);
         axios.put(route('users-attendance.update', record.id), {
-            ...record,
-            break: currentBreaks,
-            worked_from: workedFrom,
+            user_id: user.id,
+            date: record.date,
+            type: 'break_start',
+            break_start: dayjs().format('HH:mm:ss'),
+            work_from: workedFrom,
         }).then(() => {
             api.success({ message: "Break Started" });
             fetchTodayAttendance();
@@ -217,16 +248,13 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
         const isAllowed = await validateIpAccess();
         if (!isAllowed) return;
 
-        const currentBreaks = Array.isArray(record.break) ? [...record.break] : [];
-        if (currentBreaks.length > 0) {
-            currentBreaks[currentBreaks.length - 1].break_end = dayjs().format('HH:mm:ss');
-        }
-
         setLoading(true);
         axios.put(route('users-attendance.update', record.id), {
-            ...record,
-            break: currentBreaks,
-            worked_from: workedFrom,
+            user_id: user.id,
+            date: record.date,
+            type: 'break_end',
+            break_end: dayjs().format('HH:mm:ss'),
+            work_from: workedFrom,
         }).then(() => {
             api.success({ message: "Break Ended" });
             fetchTodayAttendance();
@@ -236,55 +264,9 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
         }).finally(() => setLoading(false));
     };
 
-    const handleSaveManualHours = async () => {
-        const isAllowed = await validateIpAccess('manual');
-        if (!isAllowed) return;
-        setLoading(true);
-        const url = currentActionRecord.isPlaceholder ? route('users-attendance.store') : route('users-attendance.update', currentActionRecord.id);
-        const method = currentActionRecord.isPlaceholder ? 'post' : 'put';
-
-        let finalStatus = currentActionRecord.status;
-        if (currentActionRecord.status === 'Not Marked' || currentActionRecord.status === 'Weekend' || currentActionRecord.status === 'Holiday') {
-            finalStatus = 'present';
-        }
-
-        axios[method](url, {
-            ...currentActionRecord,
-            user_id: user.id,
-            status: finalStatus,
-            worked_from: workedFrom,
-            manual_hours_save: true,
-        }).then(response => {
-            api.success({ message: "Outside Hours Saved" });
-            fetchTodayAttendance();
-            if (onSuccess) onSuccess();
-        }).catch(err => {
-            api.error({ message: "Failed", description: err.response?.data?.message || "Failed to save hours" });
-        }).finally(() => setLoading(false));
-    };
-
-    const handleSaveAllChanges = async () => {
-        const isAllowed = await validateIpAccess('regular');
-        if (!isAllowed) return;
-        setLoading(true);
-        axios.put(route('users-attendance.update', currentActionRecord.id), {
-            ...currentActionRecord,
-            worked_from: workedFrom
-        })
-            .then(response => {
-                api.success({ message: "Attendance Updated Successfully" });
-                fetchTodayAttendance();
-                if (onSuccess) onSuccess();
-            })
-            .catch(err => {
-                api.error({ message: "Update Failed", description: err.response?.data?.message });
-            })
-            .finally(() => setLoading(false));
-    };
-
     return (
         <Modal
-            title={<Space><EditOutlined /> Manage Attendance - {currentActionRecord?.date}</Space>}
+            title={<Space><EditOutlined /> Quick Attendance - {currentActionRecord?.date}</Space>}
             open={open}
             onCancel={onCancel}
             footer={null}
@@ -307,234 +289,88 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
                             <div className="col-12 mb-2">
                                 <label className="fw-bold small text-muted">Worked From</label>
                                 <Select
-                                    defaultValue="office"
                                     style={{ width: '100%' }}
                                     value={workedFrom}
+                                    disabled={currentActionRecord?.date === dayjs().subtract(1, 'day').format('YYYY-MM-DD') || (currentActionRecord && (() => {
+                                        const clock = Array.isArray(currentActionRecord.clock) ? currentActionRecord.clock : [];
+                                        const lastEntry = clock.length > 0 ? clock[clock.length - 1] : null;
+                                        return lastEntry && !lastEntry.check_out;
+                                    })())}
                                     onChange={(val) => setWorkedFrom(val)}
                                     options={[
                                         { label: 'Office', value: 'office' },
                                         { label: 'Home', value: 'home' }
                                     ]}
-                                    disabled={['Weekend', 'Holiday'].includes(currentActionRecord.status) && !currentActionRecord.check_in}
                                 />
                             </div>
                         </div>
 
-                        {/* Regular Attendance Section */}
-                        <div className={`border rounded p-3 ${['Weekend', 'Holiday'].includes(currentActionRecord.status) ? 'bg-secondary-subtle opacity-75' : 'bg-light'}`}>
-                            <div className="d-flex justify-content-between align-items-center mb-2">
-                                <label className="fw-bold small text-muted">Regular Attendance (Shift)</label>
-                                {currentActionRecord.status === 'Weekend' && <Tag color="warning">Weekend</Tag>}
-                                {currentActionRecord.status === 'Holiday' && <Tag color="magenta">Holiday</Tag>}
+                        <div className="border rounded p-3 bg-light">
+                            <div className="d-flex justify-content-between align-items-center mb-3">
+                                <h6 className="m-0 fw-bold">Daily Activities</h6>
+                                <Tag color="cyan">{calculateHours(currentActionRecord)} total</Tag>
                             </div>
-                            {['Weekend', 'Holiday'].includes(currentActionRecord.status) ? (
-                                <div className="d-flex flex-wrap gap-2">
-                                    <div className="d-flex align-items-center gap-1">
-                                        <small className="text-muted">Check In:</small>
-                                        {currentActionRecord.check_in ? <Tag color="cyan">{currentActionRecord.check_in}</Tag> : <small className="text-muted fst-italic">—</small>}
-                                    </div>
-                                    <div className="d-flex align-items-center gap-1">
-                                        <small className="text-muted">Breaks:</small>
-                                        {Array.isArray(currentActionRecord.break) && currentActionRecord.break.length > 0
-                                            ? currentActionRecord.break.map((b, idx) => (
-                                                <Tag color="orange" key={idx}>{b.break_start} → {b.break_end || '…'}</Tag>
-                                            ))
-                                            : <small className="text-muted fst-italic">—</small>}
-                                    </div>
-                                    <div className="d-flex align-items-center gap-1">
-                                        <small className="text-muted">Check Out:</small>
-                                        {currentActionRecord.check_out ? <Tag color="blue">{currentActionRecord.check_out}</Tag> : <small className="text-muted fst-italic">—</small>}
-                                    </div>
-                                </div>
-                            ) : !currentActionRecord.check_in ? (
-                                (() => {
-                                    const dayName = dayjs(currentActionRecord.date).format('dddd');
-                                    const schedule = (userShiftSchedules || []).find(s => s.day === dayName);
-                                    let isTooEarly = false;
-                                    let earlyMessage = '';
 
-                                    if (schedule && schedule.shift && currentActionRecord.date === dayjs().format('YYYY-MM-DD')) {
-                                        const earlyBufferMins = parseFloat(config?.attendance_early_checkin_max_hours || 2) * 60;
-                                        const shiftStart = dayjs(`${currentActionRecord.date} ${schedule.shift.start_time}`);
-                                        
-                                        if (dayjs().isBefore(shiftStart.subtract(earlyBufferMins, 'minute'))) {
-                                            isTooEarly = true;
-                                            earlyMessage = `Too early! You can only check in up to ${config?.attendance_early_checkin_max_hours || 2} hours before your shift starts (${schedule.shift.start_time}).`;
+                            <div className="d-grid gap-2">
+                                {(() => {
+                                    const clock = Array.isArray(currentActionRecord.clock) ? currentActionRecord.clock : [];
+                                    const lastEntry = clock.length > 0 ? clock[clock.length - 1] : null;
+                                    const isRunning = lastEntry && !lastEntry.check_out;
+
+                                    if (isRunning) {
+                                        let hasBreak = false;
+                                        if (lastEntry.break) {
+                                            if (lastEntry.break.break_start && !lastEntry.break.break_end) {
+                                                hasBreak = true;
+                                            } else {
+                                                let i = 2;
+                                                while (lastEntry.break[`break_start_${i}`]) {
+                                                    if (!lastEntry.break[`break_end_${i}`]) {
+                                                        hasBreak = true;
+                                                        break;
+                                                    }
+                                                    i++;
+                                                }
+                                            }
                                         }
-                                    }
 
-                                    if (isTooEarly) {
                                         return (
-                                            <div className="text-center py-2">
-                                                <Tag color="warning" className="w-100 py-2" style={{ whiteSpace: 'normal', height: 'auto' }}>
-                                                    {earlyMessage}
-                                                </Tag>
-                                            </div>
+                                            <>
+                                                <div className="alert alert-primary py-2 px-3 small d-flex justify-content-between align-items-center mb-2">
+                                                    <span>Ongoing: <strong>{lastEntry.check_in}</strong> ({lastEntry.work_from})</span>
+                                                    {lastEntry.status === 'pending' && <Tag color="error">PENDING</Tag>}
+                                                </div>
+
+                                                {hasBreak ? (
+                                                    <button className="btn btn-warning w-100 py-2 d-flex align-items-center justify-content-center" disabled={loading} onClick={() => handleBreakEnd(currentActionRecord)}>
+                                                        <LogoutOutlined className="me-2" /> End Break
+                                                    </button>
+                                                ) : (
+                                                    <div className="row g-2">
+                                                        <div className="col-6">
+                                                            <button className="btn btn-outline-warning w-100 py-2 d-flex align-items-center justify-content-center" disabled={loading} onClick={() => handleBreakStart(currentActionRecord)}>
+                                                                <LoginOutlined className="me-2" /> Start Break
+                                                            </button>
+                                                        </div>
+                                                        <div className="col-6">
+                                                            <button className="btn btn-danger w-100 py-2 d-flex align-items-center justify-content-center" disabled={loading} onClick={() => handleCheckOut(currentActionRecord)}>
+                                                                <LogoutOutlined className="me-2" /> Check Out
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </>
                                         );
                                     }
 
                                     return (
-                                        <button
-                                            className="btn btn-success w-100 py-2 d-flex align-items-center justify-content-center"
-                                            disabled={loading}
-                                            onClick={() => handleCheckIn(currentActionRecord.date)}
-                                        >
-                                            <LoginOutlined className="me-2" /> Check In
+                                        <button className="btn btn-success w-100 py-2 d-flex align-items-center justify-content-center" disabled={loading} onClick={() => handleCheckIn(currentActionRecord.date)}>
+                                            <LoginOutlined className="me-2" /> New Check In
                                         </button>
                                     );
-                                })()
-                            ) : !currentActionRecord.check_out ? (
-                                <>
-                                    <div className="row g-2 mb-2">
-                                        <div className="col-12">
-                                            {(() => {
-                                                const breaks = Array.isArray(currentActionRecord.break) ? currentActionRecord.break : [];
-                                                const activeBreak = breaks.length > 0 && !breaks[breaks.length - 1].break_end;
-                                            
-                                                if (activeBreak) {
-                                                    return (
-                                                        <button
-                                                            className="btn btn-warning w-100 py-2 d-flex align-items-center justify-content-center gap-2"
-                                                            disabled={loading}
-                                                            onClick={() => handleBreakEnd(currentActionRecord)}
-                                                        >
-                                                            End Current Break
-                                                        </button>
-                                                    );
-                                                } else {
-                                                    return (
-                                                        <button
-                                                            className="btn btn-outline-warning w-100 py-2 d-flex align-items-center justify-content-center gap-2"
-                                                            disabled={loading}
-                                                            onClick={() => handleBreakStart(currentActionRecord)}
-                                                        >
-                                                            Start New Break
-                                                        </button>
-                                                    );
-                                                }
-                                            })()}
-                                        </div>
-                                    </div>
-                                    <button
-                                        className="btn btn-danger w-100 py-2 d-flex align-items-center justify-content-center"
-                                        disabled={loading}
-                                        onClick={() => handleCheckOut(currentActionRecord)}
-                                    >
-                                        <LogoutOutlined className="me-2" /> Check Out
-                                    </button>
-                                </>
-                            ) : (
-                                <div className="text-center py-1">
-                                    <Tag color="blue">Regular Shift Completed</Tag>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Outside Hours Section */}
-                        <div className="border rounded p-3">
-                            <label className="fw-bold small text-muted d-block mb-2">Manual Outside Hours</label>
-                            {Array.isArray(currentActionRecord.total_outside_hours) && currentActionRecord.total_outside_hours.map((entry, idx) => (
-                                <div key={idx} className="bg-light p-2 rounded mb-3 border position-relative">
-                                    <div className="d-flex align-items-center justify-content-between mb-2">
-                                        <Tag color={entry.status === 'approved' ? 'success' : 'warning'} className="m-0 py-1 px-2 fw-bold" style={{ fontSize: '10px' }}>
-                                            {entry.status === 'approved' ? 'APPROVED' : 'PENDING'}
-                                        </Tag>
-                                        <div className="d-flex align-items-center gap-2">
-                                            <Select
-                                                showSearch
-                                                placeholder="HH"
-                                                style={{ width: '70px' }}
-                                                value={entry.manual_hours?.split(':')[0] || '00'}
-                                                onChange={(val) => {
-                                                    const updated = [...currentActionRecord.total_outside_hours];
-                                                    const mm = entry.manual_hours?.split(':')[1] || '00';
-                                                    updated[idx] = { ...entry, manual_hours: `${val}:${mm}` };
-                                                    setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: updated });
-                                                }}
-                                                options={Array.from({ length: 24 }, (_, i) => ({ label: i.toString().padStart(2, '0'), value: i.toString().padStart(2, '0') }))}
-                                                disabled={entry.status === 'approved'}
-                                            />
-                                            <span className="fw-bold">:</span>
-                                            <Select
-                                                showSearch
-                                                placeholder="mm"
-                                                style={{ width: '70px' }}
-                                                value={entry.manual_hours?.split(':')[1] || '00'}
-                                                onChange={(val) => {
-                                                    const updated = [...currentActionRecord.total_outside_hours];
-                                                    const hh = entry.manual_hours?.split(':')[0] || '00';
-                                                    updated[idx] = { ...entry, manual_hours: `${hh}:${val}` };
-                                                    setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: updated });
-                                                }}
-                                                options={Array.from({ length: 60 }, (_, i) => ({ label: i.toString().padStart(2, '0'), value: i.toString().padStart(2, '0') }))}
-                                                disabled={entry.status === 'approved'}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="d-flex align-items-center gap-2">
-                                        <Select
-                                            style={{ flex: 1 }}
-                                            value={entry.work_from || 'office'}
-                                            onChange={(val) => {
-                                                const updated = [...currentActionRecord.total_outside_hours];
-                                                updated[idx] = { ...entry, work_from: val };
-                                                setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: updated });
-                                            }}
-                                            options={[{ label: 'Office', value: 'office' }, { label: 'Home', value: 'home' }]}
-                                            disabled={entry.status === 'approved'}
-                                        />
-                                        <button
-                                            className="btn btn-outline-danger btn-sm p-1 border-0"
-                                            onClick={() => {
-                                                const updated = currentActionRecord.total_outside_hours.filter((_, i) => i !== idx);
-                                                setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: updated });
-                                            }}
-                                            disabled={entry.status === 'approved'}
-                                        >
-                                            <DeleteOutlined />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                            <div className="text-center mb-3">
-                                <button
-                                    className="btn btn-outline-primary btn-sm w-100"
-                                    onClick={() => {
-                                        const entry = { manual_hours: "00:00", work_from: "office", status: "pending" };
-                                        const existing = Array.isArray(currentActionRecord.total_outside_hours) ? currentActionRecord.total_outside_hours : [];
-                                        setCurrentActionRecord({ ...currentActionRecord, total_outside_hours: [...existing, entry] });
-                                    }}
-                                >
-                                    <PlusCircleOutlined className="me-1" /> Add Manual Session
-                                </button>
+                                })()}
                             </div>
-                            <button
-                                className="btn btn-success w-100 py-2"
-                                disabled={loading || !Array.isArray(currentActionRecord.total_outside_hours) || currentActionRecord.total_outside_hours.length === 0}
-                                onClick={handleSaveManualHours}
-                            >
-                                Save All Outside Hours
-                            </button>
                         </div>
-
-                        {/* Status Override for Edit Mode */}
-                        {(currentActionRecord.check_out || !dayjs(currentActionRecord.date).isSame(dayjs(), 'day')) && (
-                            <div className="border-top pt-3 mt-2">
-                                <div className="mb-3">
-                                    <label className="fw-bold small text-muted d-block mb-1">Total Regular Hours (Read-only)</label>
-                                    <div className="bg-light border rounded px-3 py-2 fw-bold text-primary">
-                                        {currentActionRecord.total_regular_hours ? formatManualTime(currentActionRecord.total_regular_hours) : (calculateHours(currentActionRecord) || "-")}
-                                    </div>
-                                </div>
-                                <button
-                                    className="btn btn-primary w-100 mt-2"
-                                    disabled={loading}
-                                    onClick={handleSaveAllChanges}
-                                >
-                                    Save All Changes
-                                </button>
-                            </div>
-                        )}
                     </div>
                 </div>
             ) : (

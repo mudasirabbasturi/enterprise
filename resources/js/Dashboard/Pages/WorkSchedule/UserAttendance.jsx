@@ -97,25 +97,58 @@ const UserAttendance =
         }, []);
 
         const calculateHoursMins = (record) => {
-            const { check_in, check_out, break: breaks } = record;
+            if (Array.isArray(record.clock) && record.clock.length > 0) {
+                return record.clock.reduce((total, c) => {
+                    if (!c.check_in || !c.check_out) return total;
+                    const s = dayjs(`2000-01-01 ${c.check_in}`);
+                    const e = dayjs(`2000-01-01 ${c.check_out}`);
+                    let diff = e.diff(s, 'minute');
+                    if (diff < 0) diff += 1440; // Handle night shifts
+
+                    if (c.break) {
+                        diff -= getBreakMinsForSegment(c.break);
+                    }
+                    return total + (diff > 0 ? diff : 0);
+                }, 0);
+            }
+
+            const { check_in, check_out, break: breakObj } = record;
             if (!check_in || !check_out) return 0;
             const s = dayjs(`2000-01-01 ${check_in}`);
             const e = dayjs(`2000-01-01 ${check_out}`);
             let diff = e.diff(s, 'minute');
             if (diff < 0) diff += 1440; // Handle night shifts
 
-            if (Array.isArray(breaks)) {
-                breaks.forEach(b => {
-                    if (b.break_start && b.break_end) {
-                        const bs = dayjs(`2000-01-01 ${b.break_start}`);
-                        const be = dayjs(`2000-01-01 ${b.break_end}`);
-                        let bDiff = be.diff(bs, 'minute');
-                        if (bDiff < 0) bDiff += 1440;
-                        diff -= bDiff;
-                    }
-                });
+            if (breakObj) {
+                diff -= getBreakMinsForSegment(breakObj);
             }
             return diff > 0 ? diff : 0;
+        };
+
+        const getBreakMinsForSegment = (breakObj) => {
+            if (!breakObj) return 0;
+            let total = 0;
+            // First break
+            if (breakObj.break_start && breakObj.break_end) {
+                const s = dayjs(`2000-01-01 ${breakObj.break_start}`);
+                const e = dayjs(`2000-01-01 ${breakObj.break_end}`);
+                let diff = e.diff(s, 'minute');
+                if (diff < 0) diff += 1440;
+                total += diff;
+            }
+            // Subsequent breaks
+            let i = 2;
+            while (breakObj[`break_start_${i}`]) {
+                if (breakObj[`break_end_${i}`]) {
+                    const s = dayjs(`2000-01-01 ${breakObj[`break_start_${i}`]}`);
+                    const e = dayjs(`2000-01-01 ${breakObj[`break_end_${i}`]}`);
+                    let diff = e.diff(s, 'minute');
+                    if (diff < 0) diff += 1440;
+                    total += diff;
+                }
+                i++;
+            }
+            return total;
         };
 
         const formatMins = (totalMins) => {
@@ -131,14 +164,27 @@ const UserAttendance =
             return (h * 60) + m;
         };
 
-        const sumOutsideHoursMins = (entries) => {
-            if (!entries || !Array.isArray(entries)) return 0;
-            return entries.reduce((acc, entry) => {
-                if (entry.manual_hours) {
-                    return acc + timeStringToMins(entry.manual_hours);
+        const getBreakMins = (record) => {
+            if (!record.clock || !Array.isArray(record.clock)) return 0;
+            let totalBreakMins = 0;
+            record.clock.forEach(entry => {
+                if (entry.break) {
+                    totalBreakMins += getBreakMinsForSegment(entry.break);
                 }
-                return acc;
-            }, 0);
+            });
+            return totalBreakMins;
+        };
+
+        const formatBreakDuration = (record) => {
+            const mins = getBreakMins(record);
+            return formatMins(mins);
+        };
+
+        const getRowStyle = (params) => {
+            if (params.data.date === dayjs().format('YYYY-MM-DD')) {
+                return { backgroundColor: '#e6f7ff' }; // Light blue highlight
+            }
+            return null;
         };
 
         const getShiftHoursForDay = (userId, date) => {
@@ -196,14 +242,14 @@ const UserAttendance =
                 ),
             },
             {
-                headerName: "Present",
-                field: "present",
+                headerName: "Marked",
+                field: "markedCount",
                 minWidth: 90,
                 cellClass: "text-success fw-bold text-center text-nowrap",
             },
             {
-                headerName: "Absent",
-                field: "absent",
+                headerName: "UnMarked",
+                field: "unmarkedCount",
                 minWidth: 90,
                 cellClass: "text-danger fw-bold text-center text-nowrap",
             },
@@ -214,29 +260,15 @@ const UserAttendance =
                 cellClass: "text-info fw-bold text-center text-nowrap",
                 cellRenderer: (params) => <Tag color="blue">{params.value}</Tag>
             },
+            // {
+            //     headerName: "Required Regular Hours",
+            //     field: "totalRequiredHours",
+            //     minWidth: 120,
+            //     cellClass: "text-center text-nowrap",
+            //     cellRenderer: (params) => <Tag color="orange">{params.value}</Tag>
+            // },
             {
-                headerName: "Required Regular Hours",
-                field: "totalRequiredHours",
-                minWidth: 120,
-                cellClass: "text-center text-nowrap",
-                cellRenderer: (params) => <Tag color="orange">{params.value}</Tag>
-            },
-            {
-                headerName: "Regular Hours",
-                field: "regularHours",
-                minWidth: 110,
-                cellClass: "fw-bold text-center text-nowrap",
-                cellRenderer: (params) => <Tag color="geekblue">{params.value}</Tag>
-            },
-            {
-                headerName: "Outside Hours",
-                field: "outsideHours",
-                minWidth: 110,
-                cellClass: "fw-bold text-center text-nowrap",
-                cellRenderer: (params) => <Tag color="magenta">{params.value}</Tag>
-            },
-            {
-                headerName: "Total Hours",
+                headerName: "Recorded Hours",
                 field: "totalHours",
                 minWidth: 110,
                 cellClass: "fw-bold text-center text-nowrap",
@@ -270,28 +302,42 @@ const UserAttendance =
                     a.date.startsWith(`${filterDate.year}-${monthStr}`)
                 );
 
-                const present = userRecs.filter(a => ['present', 'late'].includes(a.status)).length;
-                const absent = userRecs.filter(a => a.status === 'absent').length;
-
-                // Leave calculation
-                const userLeaves = (leaveRequests || []).filter(l => l.user_id === userId && l.status === 'approved');
+                // Consolidated Month Iteration
+                let markedCount = 0;
+                let unmarkedCount = 0;
                 let leaveCount = 0;
+                let totalRequiredMinutes = 0;
+
                 const daysInMonth = getDaysInMonth(filterDate.year, filterDate.month);
+                const userLeaves = (leaveRequests || []).filter(l => l.user_id === userId && l.status === 'approved');
+
                 daysInMonth.forEach(d => {
-                    const date = dayjs(d);
+                    const dateDayjs = dayjs(d);
+                    const dateStr = dateDayjs.format('YYYY-MM-DD');
+                    const dayName = dateDayjs.format('dddd');
+
+                    // 1. Is it marked? (Check-in on this date)
+                    const isMarked = userRecs.some(a => a.date === dateStr && Array.isArray(a.clock) && a.clock.length > 0);
+                    if (isMarked) {
+                        markedCount++;
+                    }
+
+                    // 2. Is it a leave?
                     const isLeave = userLeaves.some(l =>
-                        date.isSameOrAfter(dayjs(l.start_date), 'day') &&
-                        date.isSameOrBefore(dayjs(l.end_date), 'day')
+                        dateDayjs.isSameOrAfter(dayjs(l.start_date), 'day') &&
+                        dateDayjs.isSameOrBefore(dayjs(l.end_date), 'day')
                     );
                     if (isLeave) leaveCount++;
-                });
 
-                // Required Hours
-                let totalRequiredMinutes = 0;
-                daysInMonth.forEach(d => {
-                    const dayName = dayjs(d).format('dddd');
+                    // 3. Is it a holiday?
+                    const isHoliday = (holidays || []).some(h => dayjs(h.date).isSame(dateDayjs, 'day'));
+
+                    // 4. Required Hours & UnMarked Logic
                     const schedule = (user.user_shift_schedules || []).find(s => s.day === dayName);
-                    if (schedule && schedule.shift) {
+                    const hasShift = !!(schedule && schedule.shift);
+
+                    if (hasShift) {
+                        // Calculate Required Minutes
                         if (schedule.shift.duration) {
                             totalRequiredMinutes += parseInt(schedule.shift.duration);
                         } else if (schedule.shift.start_time && schedule.shift.end_time) {
@@ -301,26 +347,27 @@ const UserAttendance =
                             if (diff < 0) diff += 1440;
                             totalRequiredMinutes += diff;
                         }
+
+                        // UnMarked: Shift exists, but NOT marked, NOT holiday, and NOT leave
+                        if (!isMarked && !isHoliday && !isLeave) {
+                            unmarkedCount++;
+                        }
                     }
                 });
 
-                const totalRegMins = userRecs.reduce((acc, curr) => {
-                    return acc + (curr.total_regular_hours ? timeStringToMins(curr.total_regular_hours) : calculateHoursMins(curr));
-                }, 0);
 
-                const totalOutMins = userRecs.reduce((acc, curr) => {
-                    return acc + sumOutsideHoursMins(curr.total_outside_hours);
+                const totalRegMins = userRecs.reduce((acc, curr) => {
+                    return acc + calculateHoursMins(curr);
                 }, 0);
 
                 return {
                     ...user,
-                    present,
-                    absent,
+                    markedCount,
+                    unmarkedCount,
                     leaveCount,
                     totalRequiredHours: formatMins(totalRequiredMinutes),
                     regularHours: formatMins(totalRegMins),
-                    outsideHours: formatMins(totalOutMins),
-                    totalHours: formatMins(totalRegMins + totalOutMins)
+                    totalHours: formatMins(totalRegMins)
                 };
             });
         }, [users, attendances, filterDate, leaveRequests, getDaysInMonth]);
@@ -353,166 +400,97 @@ const UserAttendance =
             },
             {
                 headerName: "Status",
-                field: "status",
                 minWidth: 200,
-                cellClass: "text-nowrap",
                 cellRenderer: (params) => {
-                    const { status, check_in, total_outside_hours } = params.data;
-
-                    const isMarked = status === 'present' || status === 'late' || status === 'absent';
-                    const isClosed = status === 'Weekend' || status === 'Holiday';
+                    const { status, clock, isOffDay, offDayType } = params.data;
+                    const isMarked = status === 'present' || status === 'late' || status === 'absent' || (Array.isArray(clock) && clock.length > 0);
                     const isLeave = status === 'On Leave' || status === 'leave';
 
                     if (isMarked) {
-                        const hasRegular = !!check_in;
-                        const hasManual = Array.isArray(total_outside_hours) && total_outside_hours.length > 0;
-
-                        return (
-                            <div className="d-flex align-items-center gap-2">
-                                <Tag color="success" className="m-0">MARKED</Tag>
-                                <div className="d-flex align-items-center gap-1 border-start ps-2" style={{ fontSize: '11px' }}>
-                                    <span className="d-flex align-items-center gap-1">
-                                        {hasRegular ? <CheckOutlined style={{ color: '#52c41a' }} /> : <CloseCircleFilled style={{ color: '#ff4d4f' }} />}
-                                        <span className="text-muted">Reg</span>
-                                    </span>
-                                    <span className="text-muted mx-1">/</span>
-                                    <span className="d-flex align-items-center gap-1">
-                                        {hasManual ? <CheckOutlined style={{ color: '#52c41a' }} /> : <CloseCircleFilled style={{ color: '#ff4d4f' }} />}
-                                        <span className="text-muted">Man</span>
-                                    </span>
-                                </div>
-                            </div>
-                        );
+                        const markedText = isOffDay ? `${offDayType} / MARKED` : 'MARKED';
+                        return <Tag color="success">{markedText}</Tag>;
                     }
-
                     if (isLeave) return <Tag color="blue">LEAVE</Tag>;
-                    if (isClosed) return <Tag color="default">{status.toUpperCase()}</Tag>;
-                    if (status === 'Not Marked') return <Tag color="processing">NOT MARKED</Tag>;
-
-                    return <Tag>{status?.toUpperCase() || '-'}</Tag>;
+                    if (isOffDay) return <Tag color="default">{offDayType.toUpperCase()}</Tag>;
+                    return <Tag color="processing">{status?.toUpperCase() || 'NOT MARKED'}</Tag>;
                 }
             },
-            {
-                headerName: "Check In",
-                field: "check_in",
-                minWidth: 100,
-                cellClass: "text-nowrap",
-                cellRenderer: (params) => params.value ? <Tag color="cyan">{params.value}</Tag> : "-"
-            },
-            {
-                headerName: "Breaks",
-                field: "break",
-                minWidth: 150,
-                cellClass: "text-nowrap",
-                cellRenderer: (params) => {
-                    const breaks = params.value;
-                    if (!Array.isArray(breaks) || breaks.length === 0) return "-";
+            // {
+            //     headerName: "Required Duration (Excl. Break)",
+            //     minWidth: 150,
+            //     cellRenderer: (params) => {
+            //         const userId = params.data.user_id || selectedUserForAttendance?.id;
+            //         const date = params.data.date;
+            //         const shiftHrs = getShiftHoursForDay(userId, date);
+            //         if (shiftHrs === null) return "-";
 
-                    return (
-                        <div className="d-flex align-items-center gap-1 flex-wrap">
-                            {breaks.map((b, idx) => (
-                                <Tag color="orange" key={idx} className="m-0 text-nowrap">
-                                    {b.break_start || '...'} to {b.break_end || '...'}
-                                </Tag>
-                            ))}
-                        </div>
-                    );
-                }
-            },
+            //         const totalMins = Math.round(shiftHrs * 60);
+            //         return <Tag color="orange">{formatMins(totalMins)}</Tag>;
+            //     }
+            // },
             {
-                headerName: "Required Hours",
+                headerName: "Recorded Hours",
+                field: "clock",
                 minWidth: 120,
-                cellClass: "text-center text-nowrap",
                 cellRenderer: (params) => {
-                    const userId = params.data.user_id || selectedUserForAttendance?.id;
-                    const date = params.data.date;
-                    const shiftHrs = getShiftHoursForDay(userId, date);
-                    if (shiftHrs === null) return "-";
-
-                    const totalMins = Math.round(shiftHrs * 60);
-                    return <Tag color="orange">{formatMins(totalMins)}</Tag>;
-                }
-            },
-            {
-                headerName: "Regular Hours",
-                field: "total_regular_hours",
-                minWidth: 110,
-                cellClass: "text-nowrap",
-                cellRenderer: (params) => {
-                    const manual = params.value;
                     const calculated = calculateHoursMins(params.data);
-                    const display = manual ? formatMins(timeStringToMins(manual)) : (calculated > 0 ? formatMins(calculated) : "-");
-                    return <Tag color="geekblue">{display}</Tag>;
+                    return <Tag color="geekblue">{formatMins(calculated) || "-"}</Tag>;
                 }
             },
             {
-                headerName: "Outside Hours",
-                field: "total_outside_hours",
-                minWidth: 200,
-                flex: 1,
-                cellClass: "text-nowrap",
+                headerName: "Break Duration",
+                field: "clock",
+                minWidth: 120,
                 cellRenderer: (params) => {
-                    const entries = params.value;
-                    if (!Array.isArray(entries) || entries.length === 0) return "-";
-
+                    const calculated = formatBreakDuration(params.data);
+                    return <Tag color="warning">{calculated || "-"}</Tag>;
+                }
+            },
+            {
+                headerName: "Details",
+                field: "clock",
+                minWidth: 300,
+                maxWidth: 300,
+                flex: 2,
+                pinned: "right",
+                cellRenderer: (params) => {
+                    const clock = params.value;
+                    if (!Array.isArray(clock) || clock.length === 0) return "-";
                     return (
-                        <div className="d-flex align-items-center gap-1">
-                            {entries.map((entry, idx) => (
-                                <span key={idx} className="d-flex align-items-center gap-1">
-                                    <Tag color={entry.work_from === 'home' ? 'blue' : 'orange'} style={{ margin: 0 }} className="d-flex align-items-center gap-1">
-                                        {entry.work_from === 'home' ? <HomeOutlined style={{ fontSize: '12px' }} /> : <ApartmentOutlined style={{ fontSize: '12px' }} />}
-                                        {entry.manual_hours}
-                                    </Tag>
-                                    <Tag color={entry.status === 'approved' ? 'success' : 'warning'} style={{ fontSize: '10px', margin: 0 }}>
-                                        {entry.status === 'approved' ? 'App' : 'Pend'}
-                                    </Tag>
-                                    {idx < entries.length - 1 && <span className="text-muted">/</span>}
-                                </span>
-                            ))}
+                        <div className="d-flex flex-column gap-1 py-1">
+                            {clock.map((c, idx) => {
+                                const breakTags = [];
+                                if (c.break) {
+                                    if (c.break.break_start) {
+                                        breakTags.push(<Tag color="warning" className="m-0" style={{ fontSize: '10px' }}>B: {c.break.break_start}</Tag>);
+                                        if (c.break.break_end) {
+                                            breakTags.push(<Tag color="warning" className="m-0" style={{ fontSize: '10px' }}>E: {c.break.break_end}</Tag>);
+                                        }
+                                    }
+                                    let i = 2;
+                                    while (c.break[`break_start_${i}`]) {
+                                        breakTags.push(<Tag color="warning" className="m-0" style={{ fontSize: '10px' }}>B{i}: {c.break[`break_start_${i}`]}</Tag>);
+                                        if (c.break[`break_end_${i}`]) {
+                                            breakTags.push(<Tag color="warning" className="m-0" style={{ fontSize: '10px' }}>E{i}: {c.break[`break_end_${i}`]}</Tag>);
+                                        }
+                                        i++;
+                                    }
+                                }
+
+                                return (
+                                    <div key={idx} className="d-flex align-items-center gap-1 flex-wrap">
+                                        <Tag color={c.work_from === 'home' ? 'blue' : 'orange'} className="m-0" style={{ fontSize: '10px' }}>
+                                            {c.work_from === 'home' ? <HomeOutlined /> : <ApartmentOutlined />} {c.work_from.toUpperCase()}
+                                        </Tag>
+                                        <Tag color="cyan" className="m-0" style={{ fontSize: '10px' }}>{c.check_in}</Tag>
+                                        {breakTags}
+                                        {c.check_out && <Tag color="blue" className="m-0" style={{ fontSize: '10px' }}>{c.check_out}</Tag>}
+                                        {c.status === 'pending' && <Tag color="error" className="m-0" style={{ fontSize: '10px' }}>PENDING</Tag>}
+                                    </div>
+                                );
+                            })}
                         </div>
                     );
-                }
-            },
-            {
-                headerName: "Check Out",
-                field: "check_out",
-                minWidth: 100,
-                cellClass: "text-nowrap",
-                cellRenderer: (params) => params.value ? <Tag color="blue">{params.value}</Tag> : "-"
-            },
-            {
-                headerName: "Worked From",
-                field: "worked_from",
-                minWidth: 120,
-                cellClass: "text-nowrap",
-                cellRenderer: (params) => (
-                    <Tag color={params.value === 'home' ? 'blue' : 'orange'}>
-                        {params.value ? params.value.toUpperCase() : 'OFFICE'}
-                    </Tag>
-                )
-            },
-            {
-                headerName: "Check In IP",
-                field: "check_in_ip",
-                minWidth: 120,
-                cellClass: "text-nowrap",
-                cellRenderer: (params) => params.value ? <small className="font-monospace text-muted" style={{ fontSize: '10px' }}>{params.value}</small> : "-"
-            },
-            {
-                headerName: "Check Out IP",
-                field: "check_out_ip",
-                minWidth: 120,
-                cellClass: "text-nowrap",
-                cellRenderer: (params) => params.value ? <small className="font-monospace text-muted" style={{ fontSize: '10px' }}>{params.value}</small> : "-"
-            },
-            {
-                headerName: "Leave Status",
-                field: "leave_status",
-                minWidth: 130,
-                cellClass: "text-nowrap",
-                cellRenderer: (params) => {
-                    if (!params.value) return "-";
-                    return <Tag color="blue">{params.value}</Tag>;
                 }
             },
             {
@@ -601,12 +579,17 @@ const UserAttendance =
                     status = existing.status;
                 }
 
+                const isOffDay = !!holiday || !hasShift;
+                const offDayType = holiday ? 'Holiday' : (!hasShift ? 'Weekend' : null);
+
                 return {
                     ...(existing || {}),
                     user_id: selectedUserForAttendance.id,
                     date: d,
                     day: dayName,
-                    office_status: (holiday || !hasShift) ? 'Closed' : 'Open',
+                    office_status: isOffDay ? 'Closed' : 'Open',
+                    isOffDay,
+                    offDayType,
                     status: status,
                     leave_status: onLeave ? onLeave.leave_type?.name || 'On Leave' : (holiday ? holiday.title : null),
                     isPlaceholder: !existing
@@ -615,57 +598,64 @@ const UserAttendance =
         }, [selectedUserForAttendance, attendances, filterDate, getDaysInMonth, leaveRequests, holidays]);
 
         const handleValuesChange = (changedValues, allValues) => {
-            if (changedValues.check_in || changedValues.check_out || changedValues.break) {
-                const { check_in, check_out, break: breaks } = allValues;
-                if (check_in && check_out) {
-                    const s = dayjs(check_in);
-                    const e = dayjs(check_out);
+            if (allValues.clock) {
+                const totalMins = allValues.clock.reduce((total, c) => {
+                    if (!c && !c.check_in || !c.check_out) return total;
+                    const s = dayjs(c.check_in);
+                    const e = dayjs(c.check_out);
                     let diff = e.diff(s, 'minute');
                     if (diff < 0) diff += 1440; // Handle night shifts
 
-                    if (Array.isArray(breaks)) {
-                        breaks.forEach(b => {
-                            if (b && b.break_start && b.break_end) {
-                                const bs = dayjs(b.break_start);
-                                const be = dayjs(b.break_end);
-                                let bDiff = be.diff(bs, 'minute');
+                    if (Array.isArray(c.breaks)) {
+                        c.breaks.forEach(b => {
+                            if (b.start && b.end) {
+                                let bDiff = dayjs(b.end).diff(dayjs(b.start), 'minute');
                                 if (bDiff < 0) bDiff += 1440;
                                 diff -= bDiff;
                             }
                         });
                     }
+                    return total + (diff > 0 ? diff : 0);
+                }, 0);
 
-                    if (diff < 0) diff = 0;
-
-                    const hrs = Math.floor(diff / 60).toString().padStart(2, '0');
-                    const mins = (diff % 60).toString().padStart(2, '0');
-                    form.setFieldsValue({ total_regular_hours: `${hrs}:${mins}` });
-                }
+                const hrs = Math.floor(totalMins / 60).toString().padStart(2, '0');
+                const mins = (totalMins % 60).toString().padStart(2, '0');
+                form.setFieldsValue({ total_regular_hours: `${hrs}:${mins}` });
             }
         };
 
 
         const handleEdit = (rec) => {
-
             setEditingAttendance(rec);
             form.setFieldsValue({
                 user_id: rec.user_id,
                 date: dayjs(rec.date),
-                check_in: rec.check_in ? dayjs(rec.check_in, 'HH:mm:ss') : null,
-                check_out: rec.check_out ? dayjs(rec.check_out, 'HH:mm:ss') : null,
-                break: Array.isArray(rec.break) ? rec.break.map(b => ({
-                    break_start: b.break_start ? dayjs(b.break_start, 'HH:mm:ss') : null,
-                    break_end: b.break_end ? dayjs(b.break_end, 'HH:mm:ss') : null,
-                })) : [],
-                status: rec.status === 'Not Marked' || rec.status === 'Weekend' || rec.status === 'Holiday' ? 'present' : rec.status,
-                worked_from: rec.worked_from || 'office',
-                total_regular_hours: rec.total_regular_hours,
-                total_outside_hours: Array.isArray(rec.total_outside_hours) ? rec.total_outside_hours.map(h => ({
-                    ...h,
-                    status: h.status || 'pending',
-                    hh: h.manual_hours?.split(':')[0] || '00',
-                    mm: h.manual_hours?.split(':')[1] || '00'
-                })) : [],
+                clock: Array.isArray(rec.clock) ? rec.clock.map(c => {
+                    const breaksArray = [];
+                    if (c.break) {
+                        if (c.break.break_start) {
+                            breaksArray.push({
+                                start: dayjs(c.break.break_start, 'HH:mm:ss'),
+                                end: c.break.break_end ? dayjs(c.break.break_end, 'HH:mm:ss') : null
+                            });
+                        }
+                        let i = 2;
+                        while (c.break[`break_start_${i}`]) {
+                            breaksArray.push({
+                                start: dayjs(c.break[`break_start_${i}`], 'HH:mm:ss'),
+                                end: c.break[`break_end_${i}`] ? dayjs(c.break[`break_end_${i}`], 'HH:mm:ss') : null
+                            });
+                            i++;
+                        }
+                    }
+                    return {
+                        ...c,
+                        check_in: c.check_in ? dayjs(c.check_in, 'HH:mm:ss') : null,
+                        check_out: c.check_out ? dayjs(c.check_out, 'HH:mm:ss') : null,
+                        breaks: breaksArray,
+                        status: c.status || 'approved'
+                    };
+                }) : [],
                 notes: rec.notes || ''
             });
             setIsModalOpen(true);
@@ -695,21 +685,31 @@ const UserAttendance =
             form.validateFields().then(async values => {
 
                 setLoading(true);
-                let finalStatus = values.status || (editingAttendance?.status || 'present');
+                let finalStatus = editingAttendance?.status || 'Marked';
                 if (finalStatus === 'Not Marked' || finalStatus === 'Weekend' || finalStatus === 'Holiday') {
-                    finalStatus = 'present';
+                    finalStatus = 'Marked';
                 }
 
                 const submissionData = {
                     ...values,
                     status: finalStatus,
                     date: values.date.format('YYYY-MM-DD'),
-                    check_in: values.check_in ? values.check_in.format('HH:mm:ss') : null,
-                    check_out: values.check_out ? values.check_out.format('HH:mm:ss') : null,
-                    break: Array.isArray(values.break) ? values.break.map(b => ({
-                        break_start: b && b.break_start ? b.break_start.format('HH:mm:ss') : null,
-                        break_end: b && b.break_end ? b.break_end.format('HH:mm:ss') : null,
-                    })) : [],
+                    clock: Array.isArray(values.clock) ? values.clock.map(c => {
+                        const breakObj = {};
+                        if (Array.isArray(c.breaks)) {
+                            c.breaks.forEach((b, idx) => {
+                                const keySuffix = idx === 0 ? '' : `_${idx + 1}`;
+                                breakObj[`break_start${keySuffix}`] = b.start ? b.start.format('HH:mm:ss') : null;
+                                breakObj[`break_end${keySuffix}`] = b.end ? b.end.format('HH:mm:ss') : null;
+                            });
+                        }
+                        return {
+                            ...c,
+                            check_in: c.check_in ? c.check_in.format('HH:mm:ss') : null,
+                            break: breakObj,
+                            check_out: c.check_out ? c.check_out.format('HH:mm:ss') : null,
+                        };
+                    }) : [],
                     is_admin_action: true,
                 };
 
@@ -856,6 +856,23 @@ const UserAttendance =
                                 detailGridRef.current = params;
                                 params.api.sizeColumnsToFit();
                             }}
+                            getRowStyle={getRowStyle}
+                            onFirstDataRendered={(params) => {
+                                setTimeout(() => {
+                                    const today = dayjs().format('YYYY-MM-DD');
+                                    const rowIndex = userAttendanceRowData.findIndex(row => row.date === today);
+                                    if (rowIndex !== -1) {
+                                        params.api.ensureIndexVisible(rowIndex, 'middle');
+                                        const displayedRow = params.api.getDisplayedRowAtIndex(rowIndex);
+                                        if (displayedRow) {
+                                            const rowNode = params.api.getRowNode(displayedRow.id);
+                                            if (rowNode) {
+                                                params.api.flashCells({ rowNodes: [rowNode] });
+                                            }
+                                        }
+                                    }
+                                }, 100);
+                            }}
                             defaultColDef={{
                                 ...defaultColDef,
                                 suppressMovable: true,
@@ -866,8 +883,7 @@ const UserAttendance =
                                 autoHeaderHeight: true,
                             }}
                             theme={gridTheme}
-                            pagination={true}
-                            paginationPageSize={20}
+                            pagination={false}
                         />
                     </div>
                 </Modal>
@@ -898,227 +914,120 @@ const UserAttendance =
                                 </Form.Item>
                             </div>
                         </div>
-                        <div className="row">
-                            <div className="col-md-3">
-                                <Form.Item name="check_in" label="Check In">
-                                    <TimePicker className="w-100" format="HH:mm" />
-                                </Form.Item>
-                            </div>
-                            <div className="col-md-3">
-                                <Form.Item name="check_out" label="Check Out">
-                                    <TimePicker className="w-100" format="HH:mm" />
-                                </Form.Item>
-                            </div>
-                        </div>
-                        <div className="row">
-                            <div className="col-12">
-                                <Card size="small" title="Breaks" className="mb-4 bg-light border-0">
-                                    <Form.List name="break">
-                                        {(fields, { add, remove }) => (
-                                            <>
-                                                {fields.map(({ key, name, ...restField }) => (
-                                                    <div key={key} className="d-flex align-items-center gap-2 mb-2 p-2 bg-white rounded border">
+                        <Card size="small" title="Work Records (Clock Segments)" className="mb-4 bg-light border-0">
+                            <Form.List name="clock">
+                                {(fields, { add, remove }) => (
+                                    <>
+                                        {fields.map(({ key, name, ...restField }) => (
+                                            <div key={key} className="bg-white p-3 rounded border mb-3 shadow-sm position-relative">
+                                                <Button
+                                                    type="text"
+                                                    danger
+                                                    icon={<DeleteOutlined />}
+                                                    onClick={() => remove(name)}
+                                                    className="position-absolute"
+                                                    style={{ top: '8px', right: '8px', zIndex: 10 }}
+                                                />
+                                                <div className="row g-2 mb-3">
+                                                    <div className="col-md-3">
                                                         <Form.Item
                                                             {...restField}
-                                                            name={[name, 'break_start']}
-                                                            className="mb-0 flex-grow-1"
-                                                            label="Break Start"
-                                                            rules={[{ required: true, message: 'Required' }]}
+                                                            name={[name, 'work_from']}
+                                                            label="Mode"
+                                                            rules={[{ required: true }]}
+                                                            initialValue="office"
                                                         >
-                                                            <TimePicker format="HH:mm" className="w-100" />
+                                                            <Select options={[{ label: 'Office', value: 'office' }, { label: 'Home', value: 'home' }]} />
                                                         </Form.Item>
-                                                        <Form.Item
-                                                            {...restField}
-                                                            name={[name, 'break_end']}
-                                                            className="mb-0 flex-grow-1"
-                                                            label="Break End"
-                                                        >
-                                                            <TimePicker format="HH:mm" className="w-100" />
-                                                        </Form.Item>
-                                                        <button
-                                                            className="btn btn-outline-danger btn-sm mt-4 p-1 border-0"
-                                                            onClick={(e) => { e.preventDefault(); remove(name); }}
-                                                        >
-                                                            <DeleteOutlined />
-                                                        </button>
                                                     </div>
-                                                ))}
-                                                <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
-                                                    Add Break
-                                                </Button>
-                                            </>
-                                        )}
-                                    </Form.List>
-                                </Card>
-                            </div>
-                        </div>
-                        <div className="row">
-                            <div className="col-md-6">
-                                <Form.Item name="worked_from" label="Worked From" rules={[{ required: true }]}>
-                                    <Select options={[
-                                        { label: 'Office', value: 'office' },
-                                        { label: 'Home', value: 'home' }
-                                    ]} />
-                                </Form.Item>
-                            </div>
-                        </div>
-                        <div className="row">
-                            <div className="col-md-6">
-                                <Form.Item label="Total Regular Hours">
-                                    <Form.Item
-                                        noStyle
-                                        shouldUpdate={(prevValues, currentValues) => prevValues.total_regular_hours !== currentValues.total_regular_hours}
-                                    >
-                                        {({ getFieldValue }) => {
-                                            const currentValue = getFieldValue('total_regular_hours') || '00:00';
-                                            const [hh, mm] = currentValue.split(':');
-                                            return (
-                                                <div className="d-flex align-items-center gap-2">
-                                                    <Select
-                                                        showSearch
-                                                        placeholder="HH"
-                                                        style={{ width: '80px' }}
-                                                        value={hh || '00'}
-                                                        onChange={(val) => {
-                                                            const current = getFieldValue('total_regular_hours') || '00:00';
-                                                            const mins = current.split(':')[1] || '00';
-                                                            form.setFieldsValue({ total_regular_hours: `${val}:${mins}` });
-                                                        }}
-                                                        options={Array.from({ length: 24 }, (_, i) => ({ label: i.toString().padStart(2, '0'), value: i.toString().padStart(2, '0') }))}
-                                                    />
-                                                    <span>:</span>
-                                                    <Select
-                                                        showSearch
-                                                        placeholder="mm"
-                                                        style={{ width: '80px' }}
-                                                        value={mm || '00'}
-                                                        onChange={(val) => {
-                                                            const current = getFieldValue('total_regular_hours') || '00:00';
-                                                            const hrs = current.split(':')[0] || '00';
-                                                            form.setFieldsValue({ total_regular_hours: `${hrs}:${val}` });
-                                                        }}
-                                                        options={Array.from({ length: 60 }, (_, i) => ({ label: i.toString().padStart(2, '0'), value: i.toString().padStart(2, '0') }))}
-                                                    />
+                                                    <div className="col-md-3">
+                                                        <Form.Item
+                                                            {...restField}
+                                                            name={[name, 'check_in']}
+                                                            label="Check In"
+                                                            rules={[{ required: true }]}
+                                                        >
+                                                            <TimePicker format="HH:mm" className="w-100" />
+                                                        </Form.Item>
+                                                    </div>
+                                                    <div className="col-md-3">
+                                                        <Form.Item
+                                                            {...restField}
+                                                            name={[name, 'check_out']}
+                                                            label="Check Out"
+                                                        >
+                                                            <TimePicker format="HH:mm" className="w-100" />
+                                                        </Form.Item>
+                                                    </div>
+                                                    <div className="col-md-3">
+                                                        <Form.Item
+                                                            {...restField}
+                                                            name={[name, 'status']}
+                                                            label="Status"
+                                                            rules={[{ required: true }]}
+                                                            initialValue="approved"
+                                                        >
+                                                            <Select options={[{ label: 'Pending', value: 'pending' }, { label: 'Approved', value: 'approved' }]} />
+                                                        </Form.Item>
+                                                    </div>
                                                 </div>
-                                            );
-                                        }}
-                                    </Form.Item>
-                                    <Form.Item name="total_regular_hours" noStyle><Input type="hidden" /></Form.Item>
-                                </Form.Item>
-                            </div>
-                            <div className="row">
-                                <div className="col-12">
-                                    <Card size="small" title="Manual Outside Hours Entries" className="mb-4 bg-light border-0">
-                                        <Form.List name="total_outside_hours">
-                                            {(fields, { add, remove }) => (
-                                                <>
-                                                    {fields.map(({ key, name, ...restField }) => (
-                                                        <div key={key} className="d-flex align-items-end gap-2 mb-3 bg-white p-2 rounded shadow-sm border">
-                                                            <div className="d-flex align-items-center gap-1">
-                                                                <Form.Item
-                                                                    {...restField}
-                                                                    name={[name, 'hh']}
-                                                                    noStyle
-                                                                    initialValue={form.getFieldValue(['total_outside_hours', name, 'manual_hours'])?.split(':')[0] || '00'}
-                                                                >
-                                                                    <Select
-                                                                        showSearch
-                                                                        placeholder="HH"
-                                                                        style={{ width: '70px' }}
-                                                                        options={Array.from({ length: 24 }, (_, i) => ({ label: i.toString().padStart(2, '0'), value: i.toString().padStart(2, '0') }))}
-                                                                        onChange={(val) => {
-                                                                            const current = form.getFieldValue(['total_outside_hours', name]);
-                                                                            const mm = current.mm || '00';
-                                                                            const updated = [...form.getFieldValue('total_outside_hours')];
-                                                                            updated[name] = { ...current, manual_hours: `${val}:${mm}`, hh: val };
-                                                                            form.setFieldsValue({ total_outside_hours: updated });
-                                                                        }}
-                                                                    />
-                                                                </Form.Item>
-                                                                <span>:</span>
-                                                                <Form.Item
-                                                                    {...restField}
-                                                                    name={[name, 'mm']}
-                                                                    noStyle
-                                                                    initialValue={form.getFieldValue(['total_outside_hours', name, 'manual_hours'])?.split(':')[1] || '00'}
-                                                                >
-                                                                    <Select
-                                                                        showSearch
-                                                                        placeholder="mm"
-                                                                        style={{ width: '70px' }}
-                                                                        options={Array.from({ length: 60 }, (_, i) => ({ label: i.toString().padStart(2, '0'), value: i.toString().padStart(2, '0') }))}
-                                                                        onChange={(val) => {
-                                                                            const current = form.getFieldValue(['total_outside_hours', name]);
-                                                                            const hh = current.hh || '00';
-                                                                            const updated = [...form.getFieldValue('total_outside_hours')];
-                                                                            updated[name] = { ...current, manual_hours: `${hh}:${val}`, mm: val };
-                                                                            form.setFieldsValue({ total_outside_hours: updated });
-                                                                        }}
-                                                                    />
-                                                                </Form.Item>
-                                                            </div>
-                                                            <Form.Item name={[name, 'manual_hours']} noStyle><Input type="hidden" /></Form.Item>
-                                                            <div className="flex-grow-1">
-                                                                <Form.Item
-                                                                    {...restField}
-                                                                    name={[name, 'work_from']}
-                                                                    label="Work From"
-                                                                    rules={[{ required: true, message: 'Required' }]}
-                                                                    className="mb-0"
-                                                                >
-                                                                    <Select options={[{ label: 'Office', value: 'office' }, { label: 'Home', value: 'home' }]} />
-                                                                </Form.Item>
-                                                            </div>
-                                                            <div style={{ width: '100px' }}>
-                                                                <Form.Item
-                                                                    {...restField}
-                                                                    name={[name, 'status']}
-                                                                    label="Status"
-                                                                    rules={[{ required: true }]}
-                                                                    className="mb-0"
-                                                                    initialValue={form.getFieldValue(['total_outside_hours', name, 'status']) || 'pending'}
-                                                                >
-                                                                    <Select options={[
-                                                                        { label: 'Pending', value: 'pending' },
-                                                                        { label: 'Approved', value: 'approved' }
-                                                                    ]} />
-                                                                </Form.Item>
-                                                            </div>
-                                                            <button
-                                                                className="btn btn-outline-danger btn-sm p-2"
-                                                                onClick={() => remove(name)}
-                                                                style={{ height: '32px', display: 'flex', alignItems: 'center' }}
-                                                            >
-                                                                <DeleteOutlined />
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                    <button
-                                                        className="btn btn-outline-primary btn-sm w-100 mt-2"
-                                                        onClick={() => add({ manual_hours: '01:00', work_from: 'office', status: 'approved' })}
-                                                    >
-                                                        <PlusCircleOutlined className="me-1" /> Add Manual Entry
-                                                    </button>
-                                                </>
-                                            )}
-                                        </Form.List>
-                                    </Card>
-                                </div>
-                            </div>
-                        </div>
 
-                        <div className="mb-3">
-                            <label className="fw-bold small text-muted d-block mb-1">Status</label>
-                            <Tag color={
-                                editingAttendance?.status === 'present' || editingAttendance?.status === 'late' || editingAttendance?.status === 'absent' ? 'success' :
-                                    editingAttendance?.status === 'On Leave' || editingAttendance?.status === 'leave' ? 'blue' :
-                                        editingAttendance?.status === 'Weekend' || editingAttendance?.status === 'Holiday' ? 'default' :
-                                            editingAttendance?.status === 'Not Marked' ? 'processing' : 'default'
-                            } className="px-3 py-1 fw-bold">
-                                {(editingAttendance?.status || 'Not Marked').toUpperCase()}
-                            </Tag>
-                        </div>
-                        <Form.Item name="status" noStyle><Input type="hidden" /></Form.Item>
+                                                <div className="bg-light p-2 rounded">
+                                                    <Form.List name={[name, 'breaks']}>
+                                                        {(breakFields, { add: addBreak, remove: removeBreak }) => (
+                                                            <>
+                                                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                                                    <span className="small fw-bold text-muted px-1">BREAKS</span>
+                                                                    <Button type="link" size="small" onClick={() => addBreak()} icon={<PlusOutlined />}>Add Break</Button>
+                                                                </div>
+                                                                {breakFields.map((breakField, bIdx) => (
+                                                                    <div key={breakField.key} className="row g-2 mb-2 align-items-end">
+                                                                        <div className="col-md-5">
+                                                                            <Form.Item
+                                                                                {...breakField}
+                                                                                name={[breakField.name, 'start']}
+                                                                                label={bIdx === 0 ? "Start" : ""}
+                                                                                className="mb-0"
+                                                                            >
+                                                                                <TimePicker format="HH:mm" className="w-100" size="small" />
+                                                                            </Form.Item>
+                                                                        </div>
+                                                                        <div className="col-md-5">
+                                                                            <Form.Item
+                                                                                {...breakField}
+                                                                                name={[breakField.name, 'end']}
+                                                                                label={bIdx === 0 ? "End" : ""}
+                                                                                className="mb-0"
+                                                                            >
+                                                                                <TimePicker format="HH:mm" className="w-100" size="small" />
+                                                                            </Form.Item>
+                                                                        </div>
+                                                                        <div className="col-md-2">
+                                                                            <Button
+                                                                                type="text"
+                                                                                danger
+                                                                                icon={<DeleteOutlined />}
+                                                                                onClick={() => removeBreak(breakField.name)}
+                                                                                size="small"
+                                                                                className="w-100"
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </>
+                                                        )}
+                                                    </Form.List>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <Button type="dashed" onClick={() => add({ work_from: 'office', status: 'approved' })} block icon={<PlusOutlined />}>
+                                            Add Work Segment
+                                        </Button>
+                                    </>
+                                )}
+                            </Form.List>
+                        </Card>
+
                         <Form.Item name="notes" label="Notes"><Input.TextArea rows={3} /></Form.Item>
                     </Form>
                 </Modal>

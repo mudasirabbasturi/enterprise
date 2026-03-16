@@ -414,7 +414,8 @@ export const getSidebarItems = ({
       can("View Salary Sheets") ||
       can("View Tax Management") ||
       can("View Salary Packages") ||
-      can("View Penalty Management")
+      can("View Penalty Management") ||
+      can("View Final Sheet")
       ? [
         {
           key: "payroll-management",
@@ -449,7 +450,19 @@ export const getSidebarItems = ({
                 },
               ]
               : []),
-
+            ...(can("View Final Sheet")
+              ? [
+                {
+                  key: "final-sheet",
+                  label: (
+                    <Link href={route("payroll.final-sheets.index")}>
+                      Final Sheet
+                    </Link>
+                  ),
+                  icon: <CheckCircleOutlined />,
+                },
+              ]
+              : []),
             ...(can("View Tax Management")
               ? [
                 {
@@ -477,7 +490,6 @@ export const getSidebarItems = ({
                 },
               ]
               : []),
-
             ...(can("View Penalty Management")
               ? [
                 {
