@@ -181,6 +181,12 @@ class PermissionSeeder extends Seeder
             //    ['model' => 'PayrollTaxRule', 'type' => 'route', 'name' => 'View Tax Management'],
             //    ['model' => 'SalaryPackage', 'type' => 'route', 'name' => 'View Salary Packages'],
             //    ['model' => 'PayrollPenalty', 'type' => 'route', 'name' => 'View Penalty Management'],
+            // ['model' => 'Tracking', 'type' => 'route', 'name' => 'View Tracking'],
+            // ['model' => 'Tracking', 'type' => 'route', 'name' => 'Update Config'],
+            // ['model' => 'Tracking', 'type' => 'route', 'name' => 'Take Screenshot'],
+            // ['model' => 'Tracking', 'type' => 'route', 'name' => 'View Screenshot'],
+            // ['model' => 'Tracking', 'type' => 'route', 'name' => 'Delete Screenshot'],
+
         ];
 
         foreach ($permissions as $perm) {

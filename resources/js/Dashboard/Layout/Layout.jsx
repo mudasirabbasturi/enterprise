@@ -323,16 +323,20 @@ const DashboardLayout = ({ children }) => {
                       >
                         <BarChartOutlined />
                       </button>
-                      <button
-                        className="btn btn-sm btn-outline-primary me-3"
-                        onClick={() =>
-                          router.visit(route("user.tracking"))
-                        }
-                      >
-                        User Activity
-                      </button>
                     </div>
                   </>
+                )}
+                {can("View Tracking") && (
+                  <div>
+                    <button
+                      className="btn btn-sm btn-outline-primary me-3"
+                      onClick={() =>
+                        router.visit(route("user.tracking"))
+                      }
+                    >
+                      User Activity
+                    </button>
+                  </div>
                 )}
                 {can("View Report") && (
                   <div>

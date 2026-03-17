@@ -429,6 +429,18 @@ const UserAttendance =
             //     }
             // },
             {
+                headerName: "Late",
+                field: "isLate",
+                minWidth: 100,
+                cellRenderer: (params) => {
+                    const { status, isLate, clock } = params.data;
+                    const sLower = status?.toLowerCase();
+                    const isMarked = sLower === 'marked' || sLower === 'present' || (Array.isArray(clock) && clock.length > 0);
+                    if (!isMarked) return "-";
+                    return <Tag color={isLate ? 'error' : 'success'}>{isLate ? 'LATE' : 'ON TIME'}</Tag>;
+                }
+            },
+            {
                 headerName: "Recorded Hours",
                 field: "clock",
                 minWidth: 120,
@@ -579,8 +591,26 @@ const UserAttendance =
                     status = existing.status;
                 }
 
-                const isOffDay = !!holiday || !hasShift;
-                const offDayType = holiday ? 'Holiday' : (!hasShift ? 'Weekend' : null);
+                const isWeekend = !hasShift;
+                const isHoliday = !!holiday;
+                const isOffDay = isWeekend || isHoliday;
+                const offDayType = isWeekend ? (dayName === 'Saturday' ? 'SATURDAY' : 'SUNDAY') : (isHoliday ? 'HOLIDAY' : '');
+
+                const schedule = selectedUserForAttendance.user_shift_schedules?.find(s => s.day === dayName);
+                const shift = schedule?.shift;
+
+                let isLate = false;
+                if (shift && existing && (status?.toLowerCase() === 'marked' || status?.toLowerCase() === 'present' || (Array.isArray(existing.clock) && existing.clock.length > 0))) {
+                    const firstCheckIn = Array.isArray(existing.clock) && existing.clock.length > 0 ? existing.clock[0].check_in : existing.check_in;
+                    if (firstCheckIn && shift.start_time) {
+                        const lateGraceMins = parseInt(config?.attendance_late_grace_minutes || 0);
+                        const sTotal = timeStringToMins(shift.start_time);
+                        const aTotal = timeStringToMins(firstCheckIn);
+                        if (aTotal > (sTotal + lateGraceMins)) {
+                            isLate = true;
+                        }
+                    }
+                }
 
                 return {
                     ...(existing || {}),
@@ -591,6 +621,7 @@ const UserAttendance =
                     isOffDay,
                     offDayType,
                     status: status,
+                    isLate,
                     leave_status: onLeave ? onLeave.leave_type?.name || 'On Leave' : (holiday ? holiday.title : null),
                     isPlaceholder: !existing
                 };

@@ -67,6 +67,12 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         return dates;
     }, []);
 
+    const timeStringToMins = (timeStr) => {
+        if (!timeStr) return 0;
+        const [h, m] = timeStr.split(':').map(Number);
+        return h * 60 + m;
+    };
+
     const getHoursMins = (record) => {
         if (!record.clock || !Array.isArray(record.clock)) return 0;
         let totalMins = 0;
@@ -435,6 +441,18 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
         //     }
         // },
         {
+            headerName: "Late",
+            field: "isLate",
+            minWidth: 100,
+            cellRenderer: (params) => {
+                const { status, clock, isLate } = params.data;
+                const sLower = status?.toLowerCase();
+                const isMarked = sLower === 'marked' || sLower === 'present' || (Array.isArray(clock) && clock.length > 0);
+                if (!isMarked) return "-";
+                return <Tag color={isLate ? 'error' : 'success'}>{isLate ? 'LATE' : 'ON TIME'}</Tag>;
+            }
+        },
+        {
             headerName: "Recorded Duration",
             field: "clock",
             minWidth: 120,
@@ -610,41 +628,42 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
             // Check if this date is a holiday
             const holiday = (holidays || []).find(h => dayjs(h.date).isSame(dayjs(d), 'day'));
 
-            if (existing) {
-                return {
-                    ...existing,
-                    status: onLeave ? 'On Leave' : existing.status,
-                    isOffDay: !!holiday || !hasShift,
-                    offDayType: holiday ? 'Holiday' : (!hasShift ? 'Weekend' : null)
-                };
-            }
+            const schedule = (userShiftSchedules || []).find(s => s.day === dayName);
+            const shift = schedule?.shift;
 
-            let status = 'Not Marked';
-            let isOffDay = false;
-            let offDayType = null;
+            let status = existing ? existing.status : 'Not Marked';
+            let isOffDay = !!holiday || !hasShift;
+            let offDayType = holiday ? 'Holiday' : (!hasShift ? 'Weekend' : null);
 
             if (onLeave) {
                 status = 'On Leave';
-            } else if (holiday) {
-                status = 'Holiday';
-                isOffDay = true;
-                offDayType = 'Holiday';
-            } else if (!hasShift) {
-                status = 'Weekend';
-                isOffDay = true;
-                offDayType = 'Weekend';
+            }
+
+            let isLate = false;
+            if (shift && existing && (status?.toLowerCase() === 'marked' || status?.toLowerCase() === 'present' || (Array.isArray(existing.clock) && existing.clock.length > 0))) {
+                const firstCheckIn = Array.isArray(existing.clock) && existing.clock.length > 0 ? existing.clock[0].check_in : existing.check_in;
+                if (firstCheckIn && shift.start_time) {
+                    const lateGraceMins = parseInt(config?.attendance_late_grace_minutes || 0);
+                    const sTotal = timeStringToMins(shift.start_time);
+                    const aTotal = timeStringToMins(firstCheckIn);
+                    if (aTotal > (sTotal + lateGraceMins)) {
+                        isLate = true;
+                    }
+                }
             }
 
             return {
+                ...(existing || {}),
                 user_id: user.id,
                 date: d,
-                status: status,
-                isPlaceholder: true,
+                status,
+                isPlaceholder: !existing,
                 isOffDay,
-                offDayType
+                offDayType,
+                isLate
             };
         }).sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix());
-    }, [selectedMonthForAttendance, attendances, filterYear, getDaysInMonth, user.id, holidays]);
+    }, [selectedMonthForAttendance, attendances, filterYear, getDaysInMonth, user.id, holidays, userShiftSchedules, leaveRequests, config]);
 
     return (
         <>

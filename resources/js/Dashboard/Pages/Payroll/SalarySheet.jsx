@@ -249,43 +249,80 @@ const SalarySheet =
                         approvedLeaveDays++;
                     }
 
-                    // Only require hours if a shift is defined AND user is NOT on leave
-                    if (shift && !onLeave) {
-                        requiredDays++;
+                    if (shift) {
                         const shiftDur = getDuration(shift.start_time, shift.end_time) - (shift.total_break_minutes || 0);
                         totalRequiredMinutes += shiftDur;
+                        requiredDays++;
 
-                        let isPresent = (att && (att.status === 'present' || att.status === 'marked'));
+                        let isPresent = (att && (att.status?.toLowerCase() === 'present' || att.status?.toLowerCase() === 'marked'));
 
-                        if (isPresent) {
+                        if (onLeave) {
+                            // On leave: Count as worked minutes to avoid deductions
+                            totalActualWorkedMinutes += shiftDur;
+                            presentDays++; 
+                            // we don't count OT for leaves unless they worked, but here we prioritize leave
+                        } else if (isPresent) {
                             presentDays++;
 
-                            // Extract check_in/check_out from the clock array
-                            const clockEntry = Array.isArray(att.clock) && att.clock.length > 0 ? att.clock[0] : null;
-                            const checkIn = clockEntry?.check_in || att.check_in;
-                            const checkOut = clockEntry?.check_out || att.check_out;
-                            const workedFrom = clockEntry?.work_from || att.worked_from || 'office';
+                            // Extract check_in/check_out from the clock array segments
+                            if (Array.isArray(att.clock) && att.clock.length > 0) {
+                                att.clock.forEach(entry => {
+                                    const checkIn = entry.check_in;
+                                    const checkOut = entry.check_out;
+                                    const workedFrom = entry.work_from || 'office';
 
-                            // Missing Attendance Detection (Present but missing check-in or out)
-                            if (!checkIn || !checkOut) {
-                                totalMissingAttendanceDays++;
+                                    if (checkIn && checkOut) {
+                                        let segDur = getDuration(checkIn, checkOut);
+                                        // Subtract breaks from this segment
+                                        if (entry.break) {
+                                            const bStart = entry.break.break_start;
+                                            const bEnd = entry.break.break_end;
+                                            if (bStart && bEnd) {
+                                                segDur -= getDuration(bStart, bEnd);
+                                            }
+                                            // Handle multiple breaks in segment if schema allows break_start_2 etc.
+                                            let bIdx = 2;
+                                            while (entry.break[`break_start_${bIdx}`]) {
+                                                const bs = entry.break[`break_start_${bIdx}`];
+                                                const be = entry.break[`break_end_${bIdx}`];
+                                                if (bs && be) segDur -= getDuration(bs, be);
+                                                bIdx++;
+                                            }
+                                        }
+                                        const finalSegDur = Math.max(0, segDur);
+                                        if (workedFrom === 'home') dayNetWorkedMinsHome += finalSegDur;
+                                        else dayNetWorkedMinsOffice += finalSegDur;
+                                    }
+                                });
+                            } else {
+                                // Fallback for legacy flat structure
+                                const checkIn = att.check_in;
+                                const checkOut = att.check_out;
+                                const workedFrom = att.worked_from || 'office';
+                                const workedDur = (checkIn && checkOut) ? getDuration(checkIn, checkOut) : 0;
+
+                                if (workedFrom === 'home') dayNetWorkedMinsHome += workedDur;
+                                else dayNetWorkedMinsOffice += workedDur;
                             }
 
-                            // Rule: If check_out is missing, user does not count any hours
-                            const workedDur = (checkIn && checkOut) ? getDuration(checkIn, checkOut) : 0;
-
-                            if (workedFrom === 'home') dayNetWorkedMinsHome += workedDur;
-                            else dayNetWorkedMinsOffice += workedDur;
-
-                            // Late calculation (Dynamic grace from config)
-                            if (checkIn) {
+                            // Late calculation (Check only the first check-in of the day)
+                            const firstCheckIn = Array.isArray(att.clock) && att.clock.length > 0 ? att.clock[0].check_in : att.check_in;
+                            if (firstCheckIn) {
                                 const sTotal = getMinutes(shift.start_time);
-                                const aTotal = getMinutes(checkIn);
+                                const aTotal = getMinutes(firstCheckIn);
                                 const lateGraceMins = parseInt(config?.attendance_late_grace_minutes || 0);
                                 if (aTotal > (sTotal + lateGraceMins)) {
                                     totalLateDays++;
                                 }
                             }
+
+                            // Missing Attendance Detection
+                            const hasCheckIn = Array.isArray(att.clock) ? att.clock.some(c => c.check_in) : !!att.check_in;
+                            const hasCheckOut = Array.isArray(att.clock) ? att.clock.some(c => c.check_out) : !!att.check_out;
+                            if (!hasCheckIn || !hasCheckOut) {
+                                totalMissingAttendanceDays++;
+                            }
+
                         } else {
                             // Absent
                             absentDays++;
@@ -293,10 +330,12 @@ const SalarySheet =
                         }
 
                         const totalDayWorkedMins = dayNetWorkedMinsHome + dayNetWorkedMinsOffice;
-                        totalActualWorkedMinutes += totalDayWorkedMins;
+                        if (!onLeave) {
+                            totalActualWorkedMinutes += totalDayWorkedMins;
+                        }
 
                         // Calculate Overtime / Undertime
-                        if (isPresent && totalDayWorkedMins < shiftDur) {
+                        if (!onLeave && isPresent && totalDayWorkedMins < shiftDur) {
                             undertimeHours += (shiftDur - totalDayWorkedMins) / 60;
                         } else if (totalDayWorkedMins > shiftDur) {
                             // Distribute excess to overtime
@@ -313,14 +352,14 @@ const SalarySheet =
 
                             officeOvertimeHours += remainingOfficeMins / 60;
                             homeOvertimeHours += remainingHomeMins / 60;
-                        } else if (!isPresent && totalDayWorkedMins > 0) {
+                        } else if (!isPresent && !onLeave && totalDayWorkedMins > 0) {
                             // Absent but had manual hours -> treat manual hours as overtime
                             officeOvertimeHours += dayNetWorkedMinsOffice / 60;
                             homeOvertimeHours += dayNetWorkedMinsHome / 60;
                         }
 
                     } else {
-                        // User has no shift on this day, or is on leave
+                        // User has no shift on this day (e.g. they worked on weekend/holiday)
                         const totalDayWorkedMins = dayNetWorkedMinsHome + dayNetWorkedMinsOffice;
                         totalActualWorkedMinutes += totalDayWorkedMins;
                         officeOvertimeHours += dayNetWorkedMinsOffice / 60;
@@ -340,7 +379,8 @@ const SalarySheet =
                 const totalWorkedHours = totalActualWorkedMinutes / 60;
 
                 // Dynamic Rates Calculation Strategy
-                const hourlyRate = baseSalary / (30 * 8); // Strict 240 divisor
+                // User requirement: basic salary divide by total hours
+                const hourlyRate = (totalRequiredHours > 0) ? (baseSalary / totalRequiredHours) : 0;
                 const undertimeRate = hourlyRate;
                 const absentRate = hourlyRate;
 
@@ -582,6 +622,7 @@ const SalarySheet =
                                 );
                             }
                         },
+                        { headerName: "Late Pen", field: "late_penalty_deduction", width: 120, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
                         { headerName: "Less Hours Pen", field: "less_hours_penalty", width: 130, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
                         { headerName: "Manual Pen", field: "manual_penalty", width: 120, filter: false, sortable: false, cellClass: 'text-danger', valueFormatter: params => `-${Math.round(params.value || 0).toLocaleString()}` },
                     ]
@@ -1213,7 +1254,7 @@ const SalarySheet =
 
                         <Card size="small" className="bg-light border-0 mb-4" bodyStyle={{ padding: '15px' }}>
                             <div className="row g-3">
-                                <div className="col-12 col-md-4">
+                                <div className="col-12 col-md-6">
                                     <Form.Item
                                         name="attendance_late_grace_minutes"
                                         label={
@@ -1229,7 +1270,7 @@ const SalarySheet =
                                         <InputNumber className="w-100" min={0} placeholder="e.g. 15" />
                                     </Form.Item>
                                 </div>
-                                <div className="col-12 col-md-4">
+                                <div className="col-12 col-md-6">
                                     <Form.Item
                                         name="late_grace_count"
                                         label={
@@ -1245,7 +1286,7 @@ const SalarySheet =
                                         <InputNumber className="w-100" min={0} />
                                     </Form.Item>
                                 </div>
-                                <div className="col-12 col-md-4">
+                                <div className="col-12 col-md-6">
                                     <Form.Item
                                         name="late_penalty_per_day"
                                         label={
