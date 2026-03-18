@@ -21,7 +21,7 @@ class LeaveTypeController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'color' => 'nullable|string|max:20',
+            'color' => 'required|string|max:20',
             'max_per_year' => 'nullable|integer|min:0',
             'requires_approval' => 'boolean',
         ]);
@@ -31,11 +31,15 @@ class LeaveTypeController extends Controller
             return redirect()->back()->with('message', 'Leave type created successfully.');
         } catch (UniqueConstraintViolationException $e) {
             return redirect()->back()->withErrors([
-                'code' => 'This leave type code is already in use.'
+                'error' => 'This color or name is already in use.'
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            return redirect()->back()->withErrors([
+                'error' => 'Database error: ' . $e->getMessage()
             ]);
         } catch (Exception $e) {
             return redirect()->back()->withErrors([
-                'error' => 'Failed to create leave type. Please try again.'
+                'error' => 'Failed to create leave type: ' . $e->getMessage()
             ]);
         }
     }
@@ -47,7 +51,7 @@ class LeaveTypeController extends Controller
 
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
-                'color' => 'nullable|string|max:20',
+                'color' => 'required|string|max:20',
                 'max_per_year' => 'nullable|integer|min:0',
                 'requires_approval' => 'boolean',
             ]);
@@ -57,11 +61,15 @@ class LeaveTypeController extends Controller
             return redirect()->back()->with('message', 'Leave type updated successfully.');
         } catch (UniqueConstraintViolationException $e) {
             return redirect()->back()->withErrors([
-                'code' => 'This leave type code is already in use.'
+                'error' => 'This color or name is already in use.'
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            return redirect()->back()->withErrors([
+                'error' => 'Database error: ' . $e->getMessage()
             ]);
         } catch (Exception $e) {
             return redirect()->back()->withErrors([
-                'error' => 'Failed to update leave type. Please try again.'
+                'error' => 'Failed to update leave type: ' . $e->getMessage()
             ]);
         }
     }
