@@ -226,6 +226,8 @@ Route::prefix('api/test')->group(function () {
     Route::post('/payroll/salary-sheets/pay', [SalarySheetController::class, 'processPayment'])->name('salary-sheets.pay');
     Route::post('/payroll/salary-sheets/unpay', [SalarySheetController::class, 'unpayPayment'])->name('salary-sheets.unpay');
     Route::post('/payroll/salary-sheets/shifts', [SalarySheetController::class, 'saveMonthlyShifts'])->name('salary-sheets.shifts.save');
+    Route::post('/payroll/salary-sheets/update-user-package', [SalarySheetController::class, 'updateUserPackage'])->name('salary.update-user-package');
+    Route::post('/payroll/salary-sheets/store-and-assign-package', [SalarySheetController::class, 'storeAndAssignPackage'])->name('salary.store-and-assign-package');
     Route::post('/payroll/salary-sheets/snapshots/store', [SalarySheetController::class, 'storeSnapshot'])->name('salary-sheets.snapshots.store');
     Route::get('/payroll/salary-sheets/snapshots', [SalarySheetController::class, 'getSnapshots'])->name('salary-sheets.snapshots.index');
     Route::delete('/payroll/salary-sheets/snapshots/destroy/{id}', [SalarySheetController::class, 'destroySnapshot'])->name('salary-sheets.snapshots.destroy');

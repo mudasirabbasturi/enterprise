@@ -315,7 +315,17 @@ const QuickAttendanceModal = ({ open, onCancel, initialRecord = null, initialCon
                                 {(() => {
                                     const clock = Array.isArray(currentActionRecord.clock) ? currentActionRecord.clock : [];
                                     const lastEntry = clock.length > 0 ? clock[clock.length - 1] : null;
-                                    const isRunning = lastEntry && !lastEntry.check_out;
+                                    let isRunning = lastEntry && !lastEntry.check_out;
+
+                                    if (isRunning && lastEntry.check_in) {
+                                        const bufferHours = parseFloat(config?.attendance_late_checkout_max_hours || 0.5);
+                                        const maxMinutes = (8.5 + bufferHours) * 60;
+                                        const checkInTime = dayjs(`${currentActionRecord.date} ${lastEntry.check_in}`);
+                                        const elapsedMinutes = dayjs().diff(checkInTime, 'minute');
+                                        if (elapsedMinutes > maxMinutes) {
+                                            isRunning = false; // Treaty as not running if expired
+                                        }
+                                    }
 
                                     if (isRunning) {
                                         let hasBreak = false;

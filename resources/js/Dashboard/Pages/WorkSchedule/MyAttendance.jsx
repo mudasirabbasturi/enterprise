@@ -471,12 +471,90 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
             }
         },
         {
+            headerName: "Clock Out",
+            minWidth: 160,
+            pinned: "right",
+            cellRenderer: (params) => {
+                const { clock, date, status } = params.data;
+
+                const today = dayjs().format('YYYY-MM-DD');
+                const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+                const isToday = date === today;
+                const isYesterday = date === yesterday;
+                const isFuture = dayjs(date).isAfter(today, 'day');
+
+                // Determine if closed (same logic as Actions column)
+                const lastEntry = Array.isArray(clock) && clock.length > 0 ? clock[clock.length - 1] : null;
+                let isRunning = lastEntry && !lastEntry.check_out;
+                let sessionExpired = false;
+                if (isRunning && lastEntry.check_in) {
+                    const bufferHours = parseFloat(config?.attendance_late_checkout_max_hours || 0.5);
+                    const maxMinutes = (8.5 + bufferHours) * 60;
+                    const checkInTime = dayjs(`${date} ${lastEntry.check_in}`);
+                    const elapsedMinutes = dayjs().diff(checkInTime, 'minute');
+                    if (elapsedMinutes > maxMinutes) {
+                        sessionExpired = true;
+                        isRunning = false;
+                    }
+                }
+
+                const isOldPast = dayjs(date).isBefore(yesterday, 'day');
+                let isClosed = false;
+                if (isOldPast) {
+                    isClosed = true;
+                } else if (isYesterday) {
+                    if (!isRunning) isClosed = true;
+                } else if (isToday && sessionExpired) {
+                  isClosed = true;
+                }
+
+                if (isFuture) return "-";
+
+                // 1. If no clock but closed (excluding weekends/holidays unless they were marked)
+                if ((!clock || clock.length === 0) && isClosed) {
+                    // Only show Absent if it was supposed to be a work day 
+                    // (Actually the user said "if user has not marked then inside attendace closed ... then will have custom text absent")
+                    if (status === 'Not Marked' || status === 'absent') {
+                        return <Tag color="error" className="fw-bold">ABSENT</Tag>;
+                    }
+                    return "-";
+                }
+
+                if (Array.isArray(clock) && clock.length > 0) {
+                    // Check for missing checkouts in any segment if closed
+                    if (isClosed || isYesterday || isToday) {
+                        for (let i = 0; i < clock.length; i++) {
+                            if (!clock[i].check_out) {
+                                // If it's not today's running session, it's a missed checkout
+                                if (!(isToday && !sessionExpired)) {
+                                    const ordinal = (i + 1) === 1 ? "" : (i + 1 === 2 ? "2nd " : (i + 1 === 3 ? "3rd " : `${i + 1}th `));
+                                    return <Tag color="orange" className="fw-bold">Missed {ordinal}Checkout</Tag>;
+                                }
+                            }
+                        }
+                    }
+
+                    // If all segments have check-outs or it's currently running today
+                    const lastWithCheckout = [...clock].reverse().find(c => c.check_out);
+                    if (lastWithCheckout) {
+                        return <Tag color="blue">{lastWithCheckout.check_out}</Tag>;
+                    }
+                }
+
+                if (isRunning) return <Tag color="processing">Running...</Tag>;
+
+                return "-";
+            }
+        },
+        {
             headerName: "Details",
             field: "clock",
-            minWidth: 300,
+            // minWidth: 300,
             maxWidth: 300,
             flex: 2,
             pinned: "right",
+            floatingFilter: false,
+            filter: false,
             cellRenderer: (params) => {
                 const clock = params.value;
                 if (!Array.isArray(clock) || clock.length === 0) return "-";
@@ -538,7 +616,20 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                 if (isFuture) return <small className="text-muted italic">Upcoming</small>;
 
                 const lastEntry = Array.isArray(clock) && clock.length > 0 ? clock[clock.length - 1] : null;
-                const isRunning = lastEntry && !lastEntry.check_out;
+                let isRunning = lastEntry && !lastEntry.check_out;
+
+                // Session Expiration Logic: 8.5h + buffer
+                let sessionExpired = false;
+                if (isRunning && lastEntry.check_in) {
+                    const bufferHours = parseFloat(config?.attendance_late_checkout_max_hours || 0.5);
+                    const maxMinutes = (8.5 + bufferHours) * 60;
+                    const checkInTime = dayjs(`${date} ${lastEntry.check_in}`);
+                    const elapsedMinutes = dayjs().diff(checkInTime, 'minute');
+                    if (elapsedMinutes > maxMinutes) {
+                        sessionExpired = true;
+                        isRunning = false; // Treat as not running if expired
+                    }
+                }
 
                 // User Rule: Only today and yesterday are marking-enabled.
                 // Previous day (yesterday) is ONLY enabled if it has an open session (isRunning).
@@ -550,11 +641,12 @@ const MyAttendance = ({ attendances, selectedYear, auth, leaveRequests, userShif
                     isClosed = true;
                 } else if (isYesterday) {
                     // Yesterday is closed UNLESS there is an open session to finish
+                    // Note: if it was isRunning but expired, it's now isRunning=false, so it becomes closed.
                     if (!isRunning) {
                         isClosed = true;
                     }
                 }
-                // Today is never closed
+                // Today is normally never closed
 
                 if (isClosed) {
                     return <Tag color="default">Attendance Closed</Tag>;

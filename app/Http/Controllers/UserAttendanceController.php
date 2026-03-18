@@ -58,7 +58,7 @@ class UserAttendanceController extends Controller
 
         // Fetch users with branch and shift schedules for the master grid
         $users = User::with(['branch', 'userShiftSchedules.shift'])
-            ->select('id', 'name', 'email', 'branch_id', 'is_permission_granted', 'ip_restriction')
+            ->select('id', 'name', 'email', 'branch_id', 'is_permission_granted', 'ip_restriction', 'status')
             ->get();
 
         // Fetch approved leave requests for the month
@@ -320,11 +320,32 @@ class UserAttendanceController extends Controller
             ->whereNotNull('clock')
             ->orderBy('date', 'desc')
             ->get()
-            ->first(function($a) {
+            ->first(function($a) use ($config) {
                 $clock = $a->clock;
                 if (!is_array($clock) || empty($clock)) return false;
                 $last = end($clock);
-                return empty($last['check_out']);
+                
+                if (!empty($last['check_out'])) return false;
+
+                // User requested: 8.5h + buffer (default 30m)
+                // Get buffer from config (attendance_late_checkout_max_hours)
+                $bufferHours = isset($config['attendance_late_checkout_max_hours']) 
+                    ? (float)$config['attendance_late_checkout_max_hours'] 
+                    : 0.5; // default 30 mins
+
+                $maxMinutes = (8.5 + $bufferHours) * 60;
+
+                if (!empty($last['check_in'])) {
+                    try {
+                        // date of attendance + check_in time
+                        $checkInDateTime = \Carbon\Carbon::parse($a->date . ' ' . $last['check_in']);
+                        if ($checkInDateTime->diffInMinutes(now()) > $maxMinutes) {
+                            return false; // Session expired
+                        }
+                    } catch (\Exception $e) {}
+                }
+
+                return true;
             });
 
         if ($activeAttendance) {

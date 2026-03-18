@@ -13,6 +13,9 @@ use App\Models\PayrollAdjustment;
 use App\Models\Shift;
 use App\Models\Holiday;
 use App\Models\SalarySheetSnapshot;
+use App\Models\SalaryPackage;
+use App\Models\SalaryAllowance;
+use App\Models\PayrollTaxRule;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -193,7 +196,9 @@ class SalarySheetController extends Controller
             'selectedBatchId' => $request->input('batch'),
             'shifts' => $shifts,
             'monthlyShiftAssignments' => $monthlyShiftAssignments,
-            'holidays' => $holidays
+            'holidays' => $holidays,
+            'salaryPackages' => SalaryPackage::with(['allowances', 'taxRules'])->latest()->get(),
+            'taxRules' => PayrollTaxRule::all(),
         ]);
     }
 
@@ -385,5 +390,58 @@ class SalarySheetController extends Controller
 
         SalarySheetSnapshot::whereIn('id', $validated['ids'])->delete();
         return redirect()->back()->with('success', 'Selected snapshots deleted successfully.');
+    }
+
+    public function updateUserPackage(Request $request)
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'package_id' => 'required|exists:salary_packages,id',
+        ]);
+
+        EmployeeSalary::updateOrCreate(
+            ['user_id' => $validated['user_id']],
+            ['package_id' => $validated['package_id']]
+        );
+
+        return redirect()->back()->with('message', 'User salary package updated successfully.');
+    }
+
+    public function storeAndAssignPackage(Request $request)
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'name' => 'required|string|max:255',
+            'base_salary' => 'required|numeric|min:0',
+            'currency' => 'required|string|max:5',
+            'allowances' => 'array',
+            'allowances.*.label' => 'required|string',
+            'allowances.*.amount' => 'required|numeric|min:0',
+            'tax_ids' => 'array',
+            'tax_ids.*' => 'exists:payroll_tax_rules,id'
+        ]);
+
+        $package = SalaryPackage::create([
+            'name' => $validated['name'],
+            'base_salary' => $validated['base_salary'],
+            'currency' => $validated['currency'],
+        ]);
+
+        if (!empty($validated['allowances'])) {
+            foreach ($validated['allowances'] as $allowance) {
+                $package->allowances()->create($allowance);
+            }
+        }
+
+        if (!empty($validated['tax_ids'])) {
+            $package->taxRules()->sync($validated['tax_ids']);
+        }
+
+        EmployeeSalary::updateOrCreate(
+            ['user_id' => $validated['user_id']],
+            ['package_id' => $package->id]
+        );
+
+        return redirect()->back()->with('message', 'New salary package created and assigned successfully.');
     }
 }

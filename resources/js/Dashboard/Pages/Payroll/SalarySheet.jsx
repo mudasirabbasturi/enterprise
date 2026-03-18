@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Head, Link, Breadcrumb, EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, DownloadOutlined, DollarOutlined, SettingOutlined, ApartmentOutlined, CheckCircleFilled, router, notification, PlusCircleOutlined, PrinterOutlined, CalendarOutlined, dayjs, WalletOutlined, HomeOutlined } from "@shared/ui";
+import { Head, Link, Breadcrumb, EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, DownloadOutlined, DollarOutlined, SettingOutlined, ApartmentOutlined, CheckCircleFilled, router, notification, PlusCircleOutlined, PlusOutlined, PrinterOutlined, CalendarOutlined, dayjs, WalletOutlined, HomeOutlined } from "@shared/ui";
 import { AgGridReact, gridTheme, defaultColDef } from "@agConfig/AgGridConfig";
 import { Select, Space, Button, Modal, Form, Input, Checkbox, InputNumber, DatePicker, Card, Typography, Divider, Tag, Tooltip, Dropdown, Menu, Collapse, Empty } from 'antd';
 import MainLayout from "@layout";
@@ -8,7 +8,7 @@ import { calc } from 'antd/es/theme/internal';
 const { Text, Title } = Typography;
 
 const SalarySheet =
-    ({ users, attendances, penalties, payments, config, selectedMonth, selectedYear, selectedBatchId: propBatchId, leaveRequests, adjustments, projectPoints, shifts, monthlyShiftAssignments, holidays }) => {
+    ({ users, attendances, penalties, payments, config, selectedMonth, selectedYear, selectedBatchId: propBatchId, leaveRequests, adjustments, projectPoints, shifts, monthlyShiftAssignments, holidays, salaryPackages = [], taxRules = [] }) => {
         const [api, contextHolder] = notification.useNotification();
         const [modal, modalContextHolder] = Modal.useModal();
         const gridRef = useRef();
@@ -24,6 +24,10 @@ const SalarySheet =
         const [appliedShifts, setAppliedShifts] = useState(monthlyShiftAssignments || []);
         const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
         const [isSnapshotLoading, setIsSnapshotLoading] = useState(false);
+        const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
+        const [editingPackage, setEditingPackage] = useState(null);
+        const [packageFormUser, setPackageFormUser] = useState(null);
+        const [packageForm] = Form.useForm();
 
         // Sync local state when prop changes (e.g. month change)
         useEffect(() => {
@@ -148,6 +152,61 @@ const SalarySheet =
             return e - s;
         };
 
+        const handlePackageChange = (userId, packageId) => {
+            router.post(route('salary.update-user-package'), {
+                user_id: userId,
+                package_id: packageId
+            }, {
+                onSuccess: () => {
+                    api.success({ message: 'Success', description: 'Salary package updated' });
+                }
+            });
+        };
+
+        const handleEditPackage = (packageId) => {
+            const pkg = salaryPackages.find(p => p.id === packageId);
+            if (pkg) {
+                setEditingPackage(pkg);
+                packageForm.setFieldsValue({
+                    ...pkg,
+                    tax_ids: pkg.tax_rules ? pkg.tax_rules.map(t => t.id) : pkg.taxRules ? pkg.taxRules.map(t => t.id) : []
+                });
+                setIsPackageModalOpen(true);
+            }
+        };
+
+        const handleCreatePackage = (userId) => {
+            setEditingPackage(null);
+            setPackageFormUser(userId);
+            packageForm.resetFields();
+            packageForm.setFieldsValue({ currency: 'PKR', allowances: [] });
+            setIsPackageModalOpen(true);
+        };
+
+        const handlePackageSubmit = (values) => {
+            setLoading(true);
+            if (editingPackage) {
+                router.put(route('salary-packages.update', editingPackage.id), values, {
+                    onSuccess: () => {
+                        setIsPackageModalOpen(false);
+                        api.success({ message: 'Success', description: 'Package updated' });
+                    },
+                    onFinish: () => setLoading(false)
+                });
+            } else {
+                router.post(route('salary.store-and-assign-package'), {
+                    ...values,
+                    user_id: packageFormUser
+                }, {
+                    onSuccess: () => {
+                        setIsPackageModalOpen(false);
+                        api.success({ message: 'Success', description: 'Package created and assigned' });
+                    },
+                    onFinish: () => setLoading(false)
+                });
+            }
+        };
+
         const rowData = useMemo(() => {
             const pointRate = parseFloat(config?.project_point_rate) || 0;
             const startOfMonth = dayjs(`${year}-${String(month).padStart(2, '0')}-01`);
@@ -166,7 +225,8 @@ const SalarySheet =
             return users.map(user => {
                 if (!user.salary) return null;
 
-                const pkg = user.salary.package;
+                const pkg = user.salary.package || {};
+                const packageId = user.salary.package_id;
                 const baseSalary = parseFloat(user.salary.custom_salary || pkg.base_salary || 0);
                 const totalAllowances = (pkg.allowances || []).reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
                 const grossSalary = baseSalary + totalAllowances;
@@ -176,14 +236,12 @@ const SalarySheet =
                 const userLeaves = (leaveRequests || []).filter(l => l.user_id === user.id && l.status === 'approved');
 
                 let totalRequiredMinutes = 0;
-                let totalActualWorkedMinutes = 0;
+                let totalWorkedMinsOffice = 0;
+                let totalWorkedMinsHome = 0;
                 let totalLateDays = 0;
                 let totalMissingAttendanceDays = 0;
+                let missedCheckoutCount = 0;
                 let presentDays = 0;
-                let absentHours = 0;
-                let undertimeHours = 0;
-                let homeOvertimeHours = 0;
-                let officeOvertimeHours = 0;
                 let approvedLeaveDays = 0;
                 let absentDays = 0;
                 let requiredDays = 0;
@@ -196,7 +254,7 @@ const SalarySheet =
                     const dateStr = dateObj.format('YYYY-MM-DD');
                     const dayName = dateObj.format('dddd');
 
-                    // Skip weekends entirely for payroll logic (Sat/Sun are off)
+                    // Skip weekends entirely for payroll logic
                     if (dayName === 'Saturday' || dayName === 'Sunday') continue;
 
                     // Skip Holidays entirely for payroll logic
@@ -210,8 +268,9 @@ const SalarySheet =
                         return dateObj.isSameOrAfter(leaveStart, 'day') && dateObj.isSameOrBefore(leaveEnd, 'day');
                     });
 
-                    let dayNetWorkedMinsHome = 0;
-                    let dayNetWorkedMinsOffice = 0;
+                    let dayWorkedMinsHome = 0;
+                    let dayWorkedMinsOffice = 0;
+                    let hasMissedCheckoutToday = false;
                     const att = userAttendances.find(a => a.date === dateStr);
 
                     // Manual Outside Hours Calculation (Approved only)
@@ -219,15 +278,13 @@ const SalarySheet =
                         att.total_outside_hours.forEach(m => {
                             if (m.status === 'approved' || m.status === 'Approved') {
                                 const mins = getMinutes(m.manual_hours);
-                                if (m.work_from === 'home') dayNetWorkedMinsHome += mins;
-                                else dayNetWorkedMinsOffice += mins;
+                                if (m.work_from === 'home') dayWorkedMinsHome += mins;
+                                else dayWorkedMinsOffice += mins;
                             }
                         });
                     }
 
-                    // Match shift for the day:
-                    // Priority 1: User-specific assignment for this range
-                    // Priority 2: Global monthly assignment for this range
+                    // Match shift for the day
                     let shiftRange = appliedShifts.find(s => d >= s.start_day && d <= s.end_day && s.user_id === user.id);
                     if (!shiftRange) {
                         shiftRange = appliedShifts.find(s => d >= s.start_day && d <= s.end_day && !s.user_id);
@@ -245,9 +302,7 @@ const SalarySheet =
                         }
                     }
 
-                    if (onLeave) {
-                        approvedLeaveDays++;
-                    }
+                    if (onLeave) approvedLeaveDays++;
 
                     if (shift) {
                         const shiftDur = getDuration(shift.start_time, shift.end_time) - (shift.total_break_minutes || 0);
@@ -257,117 +312,100 @@ const SalarySheet =
                         let isPresent = (att && (att.status?.toLowerCase() === 'present' || att.status?.toLowerCase() === 'marked'));
 
                         if (onLeave) {
-                            // On leave: Count as worked minutes to avoid deductions
-                            totalActualWorkedMinutes += shiftDur;
-                            presentDays++; 
-                            // we don't count OT for leaves unless they worked, but here we prioritize leave
+                            // On leave: Count as worked from office to fulfill requirement
+                            totalWorkedMinsOffice += shiftDur;
+                            presentDays++;
                         } else if (isPresent) {
                             presentDays++;
 
-                            // Extract check_in/check_out from the clock array segments
                             if (Array.isArray(att.clock) && att.clock.length > 0) {
                                 att.clock.forEach(entry => {
                                     const checkIn = entry.check_in;
                                     const checkOut = entry.check_out;
                                     const workedFrom = entry.work_from || 'office';
 
-                                    if (checkIn && checkOut) {
-                                        let segDur = getDuration(checkIn, checkOut);
-                                        // Subtract breaks from this segment
-                                        if (entry.break) {
-                                            const bStart = entry.break.break_start;
-                                            const bEnd = entry.break.break_end;
-                                            if (bStart && bEnd) {
-                                                segDur -= getDuration(bStart, bEnd);
+                                    if (checkIn) {
+                                        if (checkOut) {
+                                            let segDur = getDuration(checkIn, checkOut);
+                                            // Subtract breaks
+                                            if (entry.break) {
+                                                const bStart = entry.break.break_start;
+                                                const bEnd = entry.break.break_end;
+                                                if (bStart && bEnd) segDur -= getDuration(bStart, bEnd);
+                                                let bIdx = 2;
+                                                while (entry.break[`break_start_${bIdx}`]) {
+                                                    const bs = entry.break[`break_start_${bIdx}`];
+                                                    const be = entry.break[`break_end_${bIdx}`];
+                                                    if (bs && be) segDur -= getDuration(bs, be);
+                                                    bIdx++;
+                                                }
                                             }
-                                            // Handle multiple breaks in segment if schema allows break_start_2 etc.
-                                            let bIdx = 2;
-                                            while (entry.break[`break_start_${bIdx}`]) {
-                                                const bs = entry.break[`break_start_${bIdx}`];
-                                                const be = entry.break[`break_end_${bIdx}`];
-                                                if (bs && be) segDur -= getDuration(bs, be);
-                                                bIdx++;
-                                            }
+                                            const finalSegDur = Math.max(0, segDur);
+                                            if (workedFrom === 'home') dayWorkedMinsHome += finalSegDur;
+                                            else dayWorkedMinsOffice += finalSegDur;
+                                        } else {
+                                            // Missed Checkout detected
+                                            hasMissedCheckoutToday = true;
                                         }
-                                        const finalSegDur = Math.max(0, segDur);
-                                        if (workedFrom === 'home') dayNetWorkedMinsHome += finalSegDur;
-                                        else dayNetWorkedMinsOffice += finalSegDur;
                                     }
                                 });
                             } else {
-                                // Fallback for legacy flat structure
                                 const checkIn = att.check_in;
                                 const checkOut = att.check_out;
                                 const workedFrom = att.worked_from || 'office';
-                                const workedDur = (checkIn && checkOut) ? getDuration(checkIn, checkOut) : 0;
-
-                                if (workedFrom === 'home') dayNetWorkedMinsHome += workedDur;
-                                else dayNetWorkedMinsOffice += workedDur;
+                                if (checkIn) {
+                                    if (checkOut) {
+                                        const workedDur = getDuration(checkIn, checkOut);
+                                        if (workedFrom === 'home') dayWorkedMinsHome += workedDur;
+                                        else dayWorkedMinsOffice += workedDur;
+                                    } else {
+                                        hasMissedCheckoutToday = true;
+                                    }
+                                }
                             }
 
-                            // Late calculation (Check only the first check-in of the day)
+                            // If missed checkout, automatically award full shift duration (office)
+                            if (hasMissedCheckoutToday) {
+                                dayWorkedMinsOffice = Math.max(dayWorkedMinsOffice, shiftDur);
+                                missedCheckoutCount++;
+                            }
+
+                            // Late calculation
                             const firstCheckIn = Array.isArray(att.clock) && att.clock.length > 0 ? att.clock[0].check_in : att.check_in;
                             if (firstCheckIn) {
                                 const sTotal = getMinutes(shift.start_time);
                                 const aTotal = getMinutes(firstCheckIn);
                                 const lateGraceMins = parseInt(config?.attendance_late_grace_minutes || 0);
-                                if (aTotal > (sTotal + lateGraceMins)) {
-                                    totalLateDays++;
-                                }
+                                if (aTotal > (sTotal + lateGraceMins)) totalLateDays++;
                             }
 
-                            // Missing Attendance Detection
+                            // Missing Attendance
                             const hasCheckIn = Array.isArray(att.clock) ? att.clock.some(c => c.check_in) : !!att.check_in;
-                            const hasCheckOut = Array.isArray(att.clock) ? att.clock.some(c => c.check_out) : !!att.check_out;
-                            if (!hasCheckIn || !hasCheckOut) {
-                                totalMissingAttendanceDays++;
-                            }
-
+                            const hasCheckOut = Array.isArray(att.clock) ? att.clock.some(c => (c.check_out || hasMissedCheckoutToday)) : !!(att.check_out || hasMissedCheckoutToday);
+                            if (!hasCheckIn || !hasCheckOut) totalMissingAttendanceDays++;
                         } else {
-                            // Absent
                             absentDays++;
-                            absentHours += shiftDur / 60;
                         }
-
-                        const totalDayWorkedMins = dayNetWorkedMinsHome + dayNetWorkedMinsOffice;
-                        if (!onLeave) {
-                            totalActualWorkedMinutes += totalDayWorkedMins;
-                        }
-
-                        // Calculate Overtime / Undertime
-                        if (!onLeave && isPresent && totalDayWorkedMins < shiftDur) {
-                            undertimeHours += (shiftDur - totalDayWorkedMins) / 60;
-                        } else if (totalDayWorkedMins > shiftDur) {
-                            // Distribute excess to overtime
-                            let remainingShiftDur = shiftDur;
-                            let remainingOfficeMins = dayNetWorkedMinsOffice;
-                            let deductOffice = Math.min(remainingOfficeMins, remainingShiftDur);
-                            remainingOfficeMins -= deductOffice;
-                            remainingShiftDur -= deductOffice;
-
-                            let remainingHomeMins = dayNetWorkedMinsHome;
-                            let deductHome = Math.min(remainingHomeMins, remainingShiftDur);
-                            remainingHomeMins -= deductHome;
-                            remainingShiftDur -= deductHome;
-
-                            officeOvertimeHours += remainingOfficeMins / 60;
-                            homeOvertimeHours += remainingHomeMins / 60;
-                        } else if (!isPresent && !onLeave && totalDayWorkedMins > 0) {
-                            // Absent but had manual hours -> treat manual hours as overtime
-                            officeOvertimeHours += dayNetWorkedMinsOffice / 60;
-                            homeOvertimeHours += dayNetWorkedMinsHome / 60;
-                        }
-
                     } else {
-                        // User has no shift on this day (e.g. they worked on weekend/holiday)
-                        const totalDayWorkedMins = dayNetWorkedMinsHome + dayNetWorkedMinsOffice;
-                        totalActualWorkedMinutes += totalDayWorkedMins;
-                        officeOvertimeHours += dayNetWorkedMinsOffice / 60;
-                        homeOvertimeHours += dayNetWorkedMinsHome / 60;
+                        // Extra work (on non-shift days)
+                        if (att) {
+                            if (Array.isArray(att.clock)) {
+                                att.clock.forEach(entry => {
+                                    if (entry.check_in && entry.check_out) {
+                                        const dur = getDuration(entry.check_in, entry.check_out);
+                                        if (entry.work_from === 'home') dayWorkedMinsHome += dur;
+                                        else dayWorkedMinsOffice += dur;
+                                    }
+                                });
+                            }
+                        }
                     }
+
+                    totalWorkedMinsHome += dayWorkedMinsHome;
+                    totalWorkedMinsOffice += dayWorkedMinsOffice;
                 }
 
-                // Fallback to standard 22 days/8 hours if no shifts assigned
+                // Fallback to 22/8 if no shifts
                 let finalRequiredMinutes = totalRequiredMinutes;
                 let finalRequiredDays = requiredDays;
                 if (finalRequiredMinutes === 0) {
@@ -376,74 +414,84 @@ const SalarySheet =
                 }
 
                 const totalRequiredHours = finalRequiredMinutes / 60;
-                const totalWorkedHours = totalActualWorkedMinutes / 60;
+                const totalWorkedHours = (totalWorkedMinsOffice + totalWorkedMinsHome) / 60;
 
-                // Dynamic Rates Calculation Strategy
-                // User requirement: basic salary divide by total hours
-                const hourlyRate = (totalRequiredHours > 0) ? (baseSalary / totalRequiredHours) : 0;
-                const undertimeRate = hourlyRate;
-                const absentRate = hourlyRate;
+                // Monthly Overtime Calculation Logic
+                let officeOvertimeHours = 0;
+                let homeOvertimeHours = 0;
 
+                if (totalWorkedMinsOffice > finalRequiredMinutes) {
+                    officeOvertimeHours = (totalWorkedMinsOffice - finalRequiredMinutes) / 60;
+                    homeOvertimeHours = totalWorkedMinsHome / 60;
+                } else {
+                    const deficit = finalRequiredMinutes - totalWorkedMinsOffice;
+                    homeOvertimeHours = Math.max(0, totalWorkedMinsHome - deficit) / 60;
+                }
+
+                const hourlyRate = baseSalary / 30 / 8;
                 const homeOvertimeRate = hourlyRate * 2.0;
                 const officeOvertimeRate = hourlyRate * 2.5;
-
-                const absentDeduction = absentHours * absentRate;
-                const undertimeDeduction = undertimeHours * undertimeRate;
 
                 const homeOvertimeBonus = homeOvertimeHours * homeOvertimeRate;
                 const officeOvertimeBonus = officeOvertimeHours * officeOvertimeRate;
                 const totalOvertimeBonus = homeOvertimeBonus + officeOvertimeBonus;
 
-                // Late Penalty Calculation
+                const absentDeduction = 0;
+                const undertimeDeduction = 0;
+
+                // Late Penalty Calculation (Default 0 placeholders)
                 const lateGraceCount = parseInt(config?.late_grace_count || 0);
                 const latePenaltyPerDay = parseFloat(config?.late_penalty_per_day || 0);
                 const taxableLateDays = Math.max(0, totalLateDays - lateGraceCount);
                 const latePenaltyDeduction = taxableLateDays * latePenaltyPerDay;
 
-                // Missing Attendance Penalty Calculation (Deactivated as requested)
+                // Missed Checkout Penalty Calculation
+                const missedCheckoutGraceCount = parseInt(config?.missed_checkout_grace_count || 0);
+                const missedCheckoutPenaltyPerDay = parseFloat(config?.missed_checkout_penalty_per_day || 0);
+                const taxableMissedCheckouts = Math.max(0, missedCheckoutCount - missedCheckoutGraceCount);
+                const missedCheckoutDeduction = taxableMissedCheckouts * missedCheckoutPenaltyPerDay;
+
                 const taxableMissingAttendanceDays = 0;
                 const missingAttendancePenaltyDeduction = 0;
 
                 // Manual Penalties
                 const userPenalties = penalties.filter(p => p.user_id === user.id);
                 const manualPenaltiesBreakdown = userPenalties.map(p => ({
-                    type: p.type,
-                    reason: p.reason,
-                    amount: parseFloat(p.amount || 0)
+                    type: p.type, reason: p.reason, amount: parseFloat(p.amount || 0)
                 }));
                 const totalManualPenalty = manualPenaltiesBreakdown.reduce((acc, curr) => acc + curr.amount, 0);
 
-                // Taxes Breakdown
+                // Taxes
                 const taxesBreakdown = [];
                 (pkg.tax_rules || pkg.taxRules || []).forEach(rule => {
                     const ruleVal = parseFloat(rule.value || 0);
                     const amount = rule.type === 'percentage' ? (grossSalary * ruleVal) / 100 : ruleVal;
                     taxesBreakdown.push({
-                        name: rule.name || 'Tax',
-                        amount: amount,
+                        name: rule.name || 'Tax', amount: amount,
                         rate: rule.type === 'percentage' ? `${ruleVal}%` : `Rs.${ruleVal}`
                     });
                 });
                 const totalTax = taxesBreakdown.reduce((acc, curr) => acc + curr.amount, 0);
 
-                // Manual Adjustments
+                // Adjustments
                 const userAdjustments = adjustments?.filter(a => a.user_id === user.id) || [];
                 const bonusTotal = userAdjustments.filter(a => a.type === 'bonus').reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+                const pointRate = parseFloat(config?.project_point_rate) || 0;
                 const manualPointsTotal = userAdjustments.filter(a => a.type === 'points').reduce((acc, curr) => acc + (parseFloat(curr.amount) * pointRate), 0);
                 const userProjectPoints = parseFloat(projectPoints?.[user.id] || 0);
                 const projectPointsAmount = userProjectPoints * pointRate;
                 const deductionTotal = userAdjustments.filter(a => a.type === 'deduction').reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
 
                 const hasNoShift = !hasMatchedAnyShift;
-                // User objectives: Isolation of adjustments from main grid.
-                // We keep standard calculations based on attendance, overtime and points.
-                const totalDeductions = hasNoShift ? 0 : (absentDeduction + undertimeDeduction + latePenaltyDeduction + missingAttendancePenaltyDeduction + totalManualPenalty + totalTax);
+                const totalDeductions = hasNoShift ? 0 : (absentDeduction + undertimeDeduction + latePenaltyDeduction + missedCheckoutDeduction + missingAttendancePenaltyDeduction + totalManualPenalty + totalTax);
                 const netPay = hasNoShift ? 0 : Math.max(0, grossSalary + totalOvertimeBonus + manualPointsTotal + projectPointsAmount - totalDeductions);
 
                 const payment = payments.find(p => p.user_id === user.id);
 
                 return {
                     ...user,
+                    package_id: packageId,
+                    package_name: pkg.name || "No Package",
                     base_salary: baseSalary,
                     gross_salary: hasNoShift ? 0 : grossSalary,
                     shift_group: userGroupMap[user.id] || "No Group Assigned",
@@ -453,10 +501,10 @@ const SalarySheet =
                     leave_days: approvedLeaveDays,
                     absent_days: absentDays,
                     required_days: finalRequiredDays,
-                    absent_hours: absentHours,
-                    undertime_hours: undertimeHours,
+                    absent_hours: 0,
+                    undertime_hours: Math.max(0, finalRequiredMinutes - totalWorkedMinsOffice) / 60, // Logic for display
                     late_days: totalLateDays,
-                    missing_attendance_days: totalMissingAttendanceDays,
+                    missed_checkout_count: missedCheckoutCount,
                     total_required_hours: totalRequiredHours,
                     total_worked_hours: totalWorkedHours,
                     hourly_rate: hourlyRate,
@@ -469,18 +517,13 @@ const SalarySheet =
                             { label: 'Office Overtime Bonus', count: officeOvertimeHours.toFixed(2), rate: officeOvertimeRate, amount: officeOvertimeBonus, unit: 'hrs', status: 'Bonus' },
                             { label: 'Project Points', count: userProjectPoints, rate: pointRate, amount: projectPointsAmount, unit: 'pts', status: 'Bonus' },
                             ...userAdjustments.filter(a => a.type === 'bonus' || a.type === 'points').map((a, i) => ({
-                                label: a.label,
-                                amount: a.type === 'points' ? (parseFloat(a.amount) * pointRate) : parseFloat(a.amount),
-                                status: 'Bonus',
-                                count: a.type === 'points' ? parseFloat(a.amount) : undefined,
-                                unit: a.type === 'points' ? 'pts' : undefined,
-                                key: `adj-b-${i}`
+                                label: a.label, amount: a.type === 'points' ? (parseFloat(a.amount) * pointRate) : parseFloat(a.amount),
+                                status: 'Bonus', count: a.type === 'points' ? parseFloat(a.amount) : undefined, unit: a.type === 'points' ? 'pts' : undefined, key: `adj-b-${i}`
                             }))
                         ].filter(b => (b.count > 0 || b.amount > 0)),
                         penalties: [
-                            { label: 'Absence Penalty', count: absentHours.toFixed(2), rate: absentRate, amount: absentDeduction, unit: 'hrs' },
-                            { label: 'Undertime Penalty', count: undertimeHours.toFixed(2), rate: undertimeRate, amount: undertimeDeduction, unit: 'hrs' },
-                            { label: 'Late Arrival Penalty (Per Day)', count: taxableLateDays, rate: latePenaltyPerDay, amount: latePenaltyDeduction, unit: 'days' },
+                            { label: 'Late Arrival Penalty', count: taxableLateDays, rate: latePenaltyPerDay, amount: latePenaltyDeduction, unit: 'days' },
+                            { label: 'Missed Checkout Penalty', count: taxableMissedCheckouts, rate: missedCheckoutPenaltyPerDay, amount: missedCheckoutDeduction, unit: 'days' },
                             ...manualPenaltiesBreakdown.map((p, i) => ({ label: `Manual Penalty: ${p.type}`, reason: p.reason, amount: p.amount, key: `manual-${i}` })),
                             ...userAdjustments.filter(a => a.type === 'deduction').map((a, i) => ({ label: a.label, reason: a.reason, amount: parseFloat(a.amount), key: `adj-d-${i}` }))
                         ].filter(p => p.amount > 0),
@@ -489,12 +532,14 @@ const SalarySheet =
 
                     absent_deduction: absentDeduction,
                     undertime_deduction: undertimeDeduction,
-                    less_hours_penalty: absentDeduction + undertimeDeduction,
+                    missed_checkout_deduction: missedCheckoutDeduction,
                     late_penalty_deduction: latePenaltyDeduction,
                     missing_attendance_penalty_deduction: missingAttendancePenaltyDeduction,
                     overtime_bonus: totalOvertimeBonus,
-                    overtime_hours: homeOvertimeHours + officeOvertimeHours,
-                    total_extra_earnings: 0,
+                    office_overtime_hours: officeOvertimeHours,
+                    home_overtime_hours: homeOvertimeHours,
+                    total_worked_mins_office: totalWorkedMinsOffice,
+                    total_worked_mins_home: totalWorkedMinsHome,
                     manual_penalty: totalManualPenalty,
                     bonus_total: bonusTotal,
                     adjustment_deduction: deductionTotal,
@@ -541,6 +586,14 @@ const SalarySheet =
                     cellRenderer: params => <Tag color="processing" style={{ whiteSpace: 'normal', height: 'auto', padding: '4px 8px' }}>{params.value}</Tag>
                 },
                 {
+                    headerName: "Missed Clock Out",
+                    field: "missed_checkout_count",
+                    width: 130,
+                    cellClass: 'text-danger fw-bold text-center',
+                    filter: false,
+                    sortable: true
+                },
+                {
                     headerName: "Required Hrs",
                     field: "total_required_hours",
                     valueFormatter: params => params.value?.toFixed(1),
@@ -575,10 +628,19 @@ const SalarySheet =
                     sortable: false
                 },
                 {
-                    headerName: "Overtime",
-                    field: "overtime_hours",
+                    headerName: "Office OT",
+                    field: "office_overtime_hours",
                     width: 100,
-                    cellClass: 'text-success fw-bold',
+                    cellClass: 'text-primary fw-bold text-center',
+                    valueFormatter: params => `${(params.value || 0).toFixed(1)} hrs`,
+                    filter: false,
+                    sortable: false
+                },
+                {
+                    headerName: "Home OT",
+                    field: "home_overtime_hours",
+                    width: 100,
+                    cellClass: 'text-success fw-bold text-center',
                     valueFormatter: params => `${(params.value || 0).toFixed(1)} hrs`,
                     filter: false,
                     sortable: false
@@ -794,14 +856,15 @@ const SalarySheet =
             // manual_penalty here might already include existing deduction adjustments if we aren't careful.
             // Let's use the raw values if possible, or just be consistent.
 
-            const netPayCalculated = selectedUser.gross_salary + selectedUser.overtime_bonus + selectedUser.total_extra_earnings + selectedUser.project_points_amount + bonusTotal - (
-                selectedUser.absent_deduction +
-                selectedUser.undertime_deduction +
-                selectedUser.total_tax +
+            const netPayCalculated = selectedUser.gross_salary + (selectedUser.overtime_bonus || 0) + (selectedUser.total_extra_earnings || 0) + (selectedUser.project_points_amount || 0) + bonusTotal - (
+                (selectedUser.absent_deduction || 0) +
+                (selectedUser.undertime_deduction || 0) +
+                (selectedUser.total_tax || 0) +
                 deductionTotal +
-                selectedUser.late_penalty_deduction +
-                selectedUser.missing_attendance_penalty_deduction +
-                selectedUser.manual_penalty
+                (selectedUser.late_penalty_deduction || 0) +
+                (selectedUser.missed_checkout_deduction || 0) +
+                (selectedUser.missing_attendance_penalty_deduction || 0) +
+                (selectedUser.manual_penalty || 0)
             );
 
             const payload = {
@@ -813,7 +876,15 @@ const SalarySheet =
                 gross_salary: selectedUser.gross_salary,
                 overtime_bonus: selectedUser.overtime_bonus,
                 total_extra_earnings: selectedUser.total_extra_earnings,
-                total_deductions: (selectedUser.absent_deduction + selectedUser.undertime_deduction + selectedUser.late_penalty_deduction + selectedUser.total_tax + deductionTotal + selectedUser.manual_penalty),
+                total_deductions: (
+                    (selectedUser.absent_deduction || 0) + 
+                    (selectedUser.undertime_deduction || 0) + 
+                    (selectedUser.late_penalty_deduction || 0) + 
+                    (selectedUser.missed_checkout_deduction || 0) +
+                    (selectedUser.total_tax || 0) + 
+                    deductionTotal + 
+                    (selectedUser.manual_penalty || 0)
+                ),
                 net_pay: netPayCalculated,
                 payment_date: values.payment_date.format('YYYY-MM-DD'),
             };
@@ -912,6 +983,7 @@ const SalarySheet =
                                     ref={gridRef}
                                     rowData={rowData}
                                     columnDefs={columnDefs}
+                                    sideBar={true}
                                     defaultColDef={{
                                         ...defaultColDef,
                                         flex: 1,
@@ -992,6 +1064,33 @@ const SalarySheet =
                                         </div>
                                     </Card>
                                 </div>
+
+                                <div className="mb-4">
+                                    <Card size="small" className="border-0 shadow-sm" style={{ background: '#fff7e6' }}>
+                                        <div className="row align-items-center g-3">
+                                            <div className="col-12 col-md-8">
+                                                <Form.Item label={<Text strong><ApartmentOutlined className="me-2 text-warning" />Current Salary Package</Text>} style={{ marginBottom: 0 }}>
+                                                    <Select 
+                                                        value={selectedUser.package_id} 
+                                                        onChange={(val) => handlePackageChange(selectedUser.id, val)}
+                                                        placeholder="Select Package"
+                                                        className="w-100"
+                                                        showSearch
+                                                        optionFilterProp="children"
+                                                    >
+                                                        {salaryPackages.map(pkg => (
+                                                            <Select.Option key={pkg.id} value={pkg.id}>{pkg.name}</Select.Option>
+                                                        ))}
+                                                    </Select>
+                                                </Form.Item>
+                                            </div>
+                                            <div className="col-12 col-md-4 d-flex gap-2 align-items-end" style={{ height: '58px' }}>
+                                                <Button icon={<EditOutlined />} block onClick={() => handleEditPackage(selectedUser.package_id)}>Edit</Button>
+                                                <Button icon={<PlusCircleOutlined />} block type="dashed" onClick={() => handleCreatePackage(selectedUser.id)}>New</Button>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                </div>
                                 {/* Print Header (Hidden on Screen) */}
                                 <div className="print-header mb-4 text-center" style={{ display: 'none' }}>
                                     <Title level={2} style={{ margin: 0 }}>PAYROLL SLIP</Title>
@@ -1023,16 +1122,24 @@ const SalarySheet =
                                                         <Title level={4} className="m-0 text-primary">{selectedUser.present_days} / {selectedUser.leave_days} d</Title>
                                                     </div>
                                                 </div>
-                                                <div className="col-md-3 border-end">
-                                                    <div className="p-3">
-                                                        <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '8px' }}>Deficit Hours</Text>
-                                                        <Title level={4} className="m-0 text-danger">{selectedUser.undertime_hours?.toFixed(1) || 0} Hrs</Title>
+                                                <div className="col-md-2 border-end">
+                                                    <div className="p-2">
+                                                        <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '4px' }}>Deficit Hrs</Text>
+                                                        <Tooltip title="Gap between Required and Actual hours.">
+                                                            <Title level={5} className="m-0 text-danger">{selectedUser.undertime_hours?.toFixed(1) || 0} <small style={{ fontSize: '10px' }}>h</small></Title>
+                                                        </Tooltip>
                                                     </div>
                                                 </div>
-                                                <div className="col-md-3">
-                                                    <div className="p-3">
-                                                        <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '8px' }}>Overtime</Text>
-                                                        <Title level={4} className="m-0 text-success">{selectedUser.overtime_hours?.toFixed(1) || 0} Hrs</Title>
+                                                <div className="col-md-3 border-end">
+                                                    <div className="p-2">
+                                                        <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '4px' }}>Office OT</Text>
+                                                        <Title level={5} className="m-0 text-primary">{selectedUser.office_overtime_hours?.toFixed(1) || 0} <small style={{ fontSize: '10px' }}>h</small></Title>
+                                                    </div>
+                                                </div>
+                                                <div className="col-md-2">
+                                                    <div className="p-2">
+                                                        <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '4px' }}>Home OT</Text>
+                                                        <Title level={5} className="m-0 text-success">{selectedUser.home_overtime_hours?.toFixed(1) || 0} <small style={{ fontSize: '10px' }}>h</small></Title>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1108,6 +1215,12 @@ const SalarySheet =
                                                         <Text strong className="text-danger">- Rs. {Math.round(selectedUser.manual_penalty).toLocaleString()}</Text>
                                                     </div>
                                                 )}
+                                                {selectedUser.missed_checkout_deduction > 0 && (
+                                                    <div className="d-flex justify-content-between mb-2 px-2 py-1 rounded-pill bg-danger-subtle" style={{ fontSize: '12px' }}>
+                                                        <Text><CheckCircleFilled className="text-danger me-2" />Missed Checkout Penalty</Text>
+                                                        <Text strong className="text-danger">- Rs. {Math.round(selectedUser.missed_checkout_deduction).toLocaleString()}</Text>
+                                                    </div>
+                                                )}
                                             </div>
                                         </Card>
                                     </div>
@@ -1128,6 +1241,7 @@ const SalarySheet =
                                                             (selectedUser.absent_deduction || 0) +
                                                             (selectedUser.undertime_deduction || 0) +
                                                             (selectedUser.late_penalty_deduction || 0) +
+                                                            (selectedUser.missed_checkout_deduction || 0) +
                                                             (selectedUser.missing_attendance_penalty_deduction || 0) +
                                                             (selectedUser.manual_penalty || 0) +
                                                             (selectedUser.total_tax || 0) +
@@ -1298,6 +1412,43 @@ const SalarySheet =
                                             </Space>
                                         }
                                         extra="PKR / day"
+                                    >
+                                        <InputNumber className="w-100" min={0} />
+                                    </Form.Item>
+                                </div>
+                            </div>
+                        </Card>
+
+                        <Card size="small" className="bg-light border-0 mb-4" bodyStyle={{ padding: '15px' }} title={<Text strong style={{ fontSize: '12px', textTransform: 'uppercase' }}>Missed Checkout Rules</Text>}>
+                            <div className="row g-3">
+                                <div className="col-12 col-md-6">
+                                    <Form.Item
+                                        name="missed_checkout_grace_count"
+                                        label={
+                                            <Space>
+                                                Allowed Missed (Count)
+                                                <Tooltip title="Number of missed checkouts allowed before penalty starts.">
+                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
+                                                </Tooltip>
+                                            </Space>
+                                        }
+                                        extra="Grace days"
+                                    >
+                                        <InputNumber className="w-100" min={0} />
+                                    </Form.Item>
+                                </div>
+                                <div className="col-12 col-md-6">
+                                    <Form.Item
+                                        name="missed_checkout_penalty_per_day"
+                                        label={
+                                            <Space>
+                                                Missed Penalty (Amount)
+                                                <Tooltip title="Penalty amount for each missed checkout beyond grace.">
+                                                    <SettingOutlined style={{ fontSize: '12px', color: '#1890ff', cursor: 'pointer' }} />
+                                                </Tooltip>
+                                            </Space>
+                                        }
+                                        extra="PKR per day"
                                     >
                                         <InputNumber className="w-100" min={0} />
                                     </Form.Item>
@@ -1747,6 +1898,82 @@ const SalarySheet =
                         }
                     }
                 `}</style>
+
+            <Modal
+                title={editingPackage ? <Space><EditOutlined /> Edit Salary Package</Space> : <Space><PlusCircleOutlined /> Create Salary Package</Space>}
+                open={isPackageModalOpen}
+                onCancel={() => setIsPackageModalOpen(false)}
+                footer={null}
+                width={700}
+                centered
+            >
+                <Form form={packageForm} layout="vertical" onFinish={handlePackageSubmit} initialValues={{ currency: 'PKR', allowances: [] }}>
+                    <Form.Item name="name" label="Package Name" rules={[{ required: true }]}>
+                        <Input placeholder="e.g. Senior Developer" />
+                    </Form.Item>
+
+                    <div className="row">
+                        <div className="col-md-6">
+                            <Form.Item name="base_salary" label="Base Salary" rules={[{ required: true }]}>
+                                <InputNumber style={{ width: '100%' }} min={0} />
+                            </Form.Item>
+                        </div>
+                        <div className="col-md-6">
+                            <Form.Item name="currency" label="Currency" rules={[{ required: true }]}>
+                                <Input />
+                            </Form.Item>
+                        </div>
+                    </div>
+
+                    <Form.Item label="Allowances">
+                        <Form.List name="allowances">
+                            {(fields, { add, remove }) => (
+                                <>
+                                    {fields.map(({ key, name, ...restField }) => (
+                                        <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                                            <Form.Item
+                                                {...restField}
+                                                name={[name, 'label']}
+                                                rules={[{ required: true, message: 'Missing label' }]}
+                                            >
+                                                <Input placeholder="Allowance Label" />
+                                            </Form.Item>
+                                            <Form.Item
+                                                {...restField}
+                                                name={[name, 'amount']}
+                                                rules={[{ required: true, message: 'Missing amount' }]}
+                                            >
+                                                <InputNumber placeholder="Amount" min={0} />
+                                            </Form.Item>
+                                            <DeleteOutlined className="text-danger" onClick={() => remove(name)} />
+                                        </Space>
+                                    ))}
+                                    <Form.Item>
+                                        <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                                            Add Allowance
+                                        </Button>
+                                    </Form.Item>
+                                </>
+                            )}
+                        </Form.List>
+                    </Form.Item>
+
+                    <Form.Item name="tax_ids" label="Linked Taxes">
+                        <Select mode="multiple" placeholder="Select taxes to apply">
+                            {taxRules.map(tax => (
+                                <Select.Option key={tax.id} value={tax.id}>{tax.name} ({tax.value}{tax.type === 'percentage' ? '%' : ' fixed'})</Select.Option>
+                            ))}
+                        </Select>
+                    </Form.Item>
+
+                    <div className="d-flex justify-content-end gap-2 mt-4">
+                        <Button onClick={() => setIsPackageModalOpen(false)}>Cancel</Button>
+                        <Button type="primary" htmlType="submit" loading={loading} style={{ borderRadius: '8px' }}>
+                            {editingPackage ? "Update Package" : "Create Package"}
+                        </Button>
+                    </div>
+                </Form>
+            </Modal>
             </>
         );
     };
