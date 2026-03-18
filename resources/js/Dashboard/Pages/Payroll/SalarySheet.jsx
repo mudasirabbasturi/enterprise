@@ -484,7 +484,7 @@ const SalarySheet =
 
                 const hasNoShift = !hasMatchedAnyShift;
                 const totalDeductions = hasNoShift ? 0 : (absentDeduction + undertimeDeduction + latePenaltyDeduction + missedCheckoutDeduction + missingAttendancePenaltyDeduction + totalManualPenalty + totalTax);
-                const netPay = hasNoShift ? 0 : Math.max(0, grossSalary + totalOvertimeBonus + manualPointsTotal + projectPointsAmount - totalDeductions);
+                const netPay = hasNoShift ? 0 : Math.max(0, grossSalary + totalOvertimeBonus + manualPointsTotal + projectPointsAmount + bonusTotal - totalDeductions - deductionTotal);
 
                 const payment = payments.find(p => p.user_id === user.id);
 
@@ -522,8 +522,8 @@ const SalarySheet =
                             }))
                         ].filter(b => (b.count > 0 || b.amount > 0)),
                         penalties: [
-                            { label: 'Late Arrival Penalty', count: taxableLateDays, rate: latePenaltyPerDay, amount: latePenaltyDeduction, unit: 'days' },
-                            { label: 'Missed Checkout Penalty', count: taxableMissedCheckouts, rate: missedCheckoutPenaltyPerDay, amount: missedCheckoutDeduction, unit: 'days' },
+                            { label: `Late Arrival Penalty ( ${taxableLateDays} * ${latePenaltyPerDay} )`, count: taxableLateDays, rate: latePenaltyPerDay, amount: latePenaltyDeduction, unit: 'days' },
+                            { label: `Missed Checkout Penalty ( ${taxableMissedCheckouts} * ${missedCheckoutPenaltyPerDay} )`, count: taxableMissedCheckouts, rate: missedCheckoutPenaltyPerDay, amount: missedCheckoutDeduction, unit: 'days' },
                             ...manualPenaltiesBreakdown.map((p, i) => ({ label: `Manual Penalty: ${p.type}`, reason: p.reason, amount: p.amount, key: `manual-${i}` })),
                             ...userAdjustments.filter(a => a.type === 'deduction').map((a, i) => ({ label: a.label, reason: a.reason, amount: parseFloat(a.amount), key: `adj-d-${i}` }))
                         ].filter(p => p.amount > 0),
@@ -1209,18 +1209,7 @@ const SalarySheet =
                                                         <Text strong className="text-danger">- Rs. {Math.round(t.amount || 0).toLocaleString()}</Text>
                                                     </div>
                                                 ))}
-                                                {selectedUser.manual_penalty > 0 && (
-                                                    <div className="d-flex justify-content-between mb-2 px-2 py-1 rounded-pill bg-danger-subtle" style={{ fontSize: '12px' }}>
-                                                        <Text><CheckCircleFilled className="text-danger me-2" />Adjustment Deductions</Text>
-                                                        <Text strong className="text-danger">- Rs. {Math.round(selectedUser.manual_penalty).toLocaleString()}</Text>
-                                                    </div>
-                                                )}
-                                                {selectedUser.missed_checkout_deduction > 0 && (
-                                                    <div className="d-flex justify-content-between mb-2 px-2 py-1 rounded-pill bg-danger-subtle" style={{ fontSize: '12px' }}>
-                                                        <Text><CheckCircleFilled className="text-danger me-2" />Missed Checkout Penalty</Text>
-                                                        <Text strong className="text-danger">- Rs. {Math.round(selectedUser.missed_checkout_deduction).toLocaleString()}</Text>
-                                                    </div>
-                                                )}
+                                                {/* Redundant specific penalties removed as they are already in breakdown.penalties loop */}
                                             </div>
                                         </Card>
                                     </div>

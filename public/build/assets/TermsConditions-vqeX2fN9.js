@@ -1,0 +1,1 @@
+import{j as s}from"./app-JDZxjXbr.js";function r({content:n}){return s.jsxs("div",{className:"container pt-4 pb-4",children:[s.jsx("h2",{className:"",children:"Terms & Conditions"}),s.jsx("hr",{}),n?s.jsx("div",{className:"prose max-w-none",dangerouslySetInnerHTML:{__html:n}}):s.jsx("p",{children:"Loading content…"})]})}export{r as default};
