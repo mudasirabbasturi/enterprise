@@ -25,4 +25,6 @@ Route::get('/track/settings', [TrackingController::class, 'getTrackerSettings'])
 Route::post('/track/settings/update', [TrackingController::class, 'updateTrackerSettings']);
 Route::post('/track/toggle-permission', [TrackingController::class, 'toggleUserPermission']);
 Route::post('/track/update-status', [TrackingController::class, 'updateStatus']);
+Route::post('/track/activity', [TrackingController::class, 'storeActivity']);
+Route::get('/track/activity/stats', [TrackingController::class, 'getActivityStats']);
 

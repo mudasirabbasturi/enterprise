@@ -143,6 +143,9 @@ const DashboardLayout = ({ children }) => {
           description: data.message,
         });
       }
+      window.dispatchEvent(new CustomEvent('project-data-changed', { 
+        detail: { type: 'created', project: data.project } 
+      }));
     };
     channel.listen(".event-project-created", handler);
     return () => {
@@ -159,6 +162,9 @@ const DashboardLayout = ({ children }) => {
           description: data.message,
         });
       }
+      window.dispatchEvent(new CustomEvent('project-data-changed', { 
+        detail: { type: 'updated', project: data.project } 
+      }));
     };
     channel.listen(".event-project-updated", handler);
     return () => {
@@ -175,6 +181,9 @@ const DashboardLayout = ({ children }) => {
           description: data.message,
         });
       }
+      window.dispatchEvent(new CustomEvent('project-data-changed', { 
+        detail: { type: 'updated', project: data.project } 
+      }));
     };
     channel.listen(".event-project-update-coloumn", handler);
     return () => {
@@ -191,6 +200,9 @@ const DashboardLayout = ({ children }) => {
           description: data.message,
         });
       }
+      window.dispatchEvent(new CustomEvent('project-data-changed', { 
+        detail: { type: 'deleted', project: data.project } 
+      }));
     };
     channel.listen(".event-project-delete", handler);
     return () => {
@@ -207,6 +219,9 @@ const DashboardLayout = ({ children }) => {
           description: data.message,
         });
       }
+      window.dispatchEvent(new CustomEvent('project-data-changed', { 
+        detail: { type: 'updated', project: data.project } 
+      }));
     };
     channel.listen(".event-project-joined", handler);
     return () => {
@@ -223,6 +238,9 @@ const DashboardLayout = ({ children }) => {
           description: data.message,
         });
       }
+      window.dispatchEvent(new CustomEvent('project-data-changed', { 
+        detail: { type: 'updated', project: data.project } 
+      }));
     };
     channel.listen(".event-project-leave", handler);
     return () => {

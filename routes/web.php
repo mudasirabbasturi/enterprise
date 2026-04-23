@@ -113,6 +113,11 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/project/team-member/score/{TeamMemberId}', [ProjectController::class, 'AddEditScore'])->name('AddEditScore');
     Route::put('/project/{project}/team-members/scores', [ProjectController::class, 'BulkUpdateScores'])->name('project.bulkUpdateScores');
 
+    // Project Chat
+    Route::get('/api/projects/{project}/chat', [App\Http\Controllers\Api\ProjectChatController::class, 'index'])->name('project.chat.index');
+    Route::post('/api/projects/{project}/chat', [App\Http\Controllers\Api\ProjectChatController::class, 'store'])->name('project.chat.store');
+    Route::delete('/api/projects/{project}/chat/{chatId}', [App\Http\Controllers\Api\ProjectChatController::class, 'destroy'])->name('project.chat.destroy');
+
     /** RoleController */
     Route::get('/role', [RoleController::class, 'Index'])->name('role.index');
     Route::post('/role/store', [RoleController::class, 'Store'])->name('role.store');

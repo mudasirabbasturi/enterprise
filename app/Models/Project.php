@@ -54,4 +54,8 @@ class Project extends Model
         return $this->morphMany(Media::class, 'model');
     }
 
+    public function chats(): HasMany
+    {
+        return $this->hasMany(ProjectChat::class);
+    }
 }

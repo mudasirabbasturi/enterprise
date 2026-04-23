@@ -121,4 +121,8 @@ class User extends Authenticatable
     public function userScreenshots(): HasMany {
         return $this->hasMany(UserScreenshot::class);
     }
+
+    public function userActivities(): HasMany {
+        return $this->hasMany(UserActivity::class);
+    }
 }

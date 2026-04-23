@@ -79,14 +79,21 @@ class TrackingController extends Controller
 
         $query = \App\Models\UserScreenshot::where('user_id', $userId);
 
-        if ($day) {
-            $query->whereDay('screenshot_time', $day);
-        }
-        if ($month) {
-            $query->whereMonth('screenshot_time', $month);
-        }
-        if ($year) {
-            $query->whereYear('screenshot_time', $year);
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $query->whereBetween('screenshot_time', [
+                $request->start_date . ' 00:00:00',
+                $request->end_date . ' 23:59:59'
+            ]);
+        } else {
+            if ($day) {
+                $query->whereDay('screenshot_time', $day);
+            }
+            if ($month) {
+                $query->whereMonth('screenshot_time', $month);
+            }
+            if ($year) {
+                $query->whereYear('screenshot_time', $year);
+            }
         }
 
         $screenshots = $query->latest('screenshot_time')->get()->map(function($s) {
@@ -296,5 +303,123 @@ class TrackingController extends Controller
             // For now, let's assume if their record is viewed, we show their status.
             return $user;
         }));
+    }
+    public function storeActivity(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'activities' => 'required|array',
+        ]);
+
+        foreach ($request->activities as $activity) {
+            \App\Models\UserActivity::create([
+                'user_id' => $request->user_id,
+                'app_name' => $activity['app_name'] ?? 'Unknown',
+                'window_title' => $activity['window_title'] ?? 'Unknown',
+                'clicks' => $activity['clicks'] ?? 0,
+                'keystrokes' => $activity['keystrokes'] ?? 0,
+                'is_idle' => $activity['is_idle'] ?? false,
+                'tracked_at' => \Carbon\Carbon::parse($activity['timestamp']),
+            ]);
+        }
+
+        return response()->json(['status' => 'success', 'message' => 'Activities saved']);
+    }
+
+    public function getActivityStats(Request $request)
+    {
+        $userId = $request->query('user_id');
+        $date = $request->query('date', now()->toDateString());
+
+        $activities = \App\Models\UserActivity::where('user_id', $userId)
+            ->whereDate('tracked_at', $date)
+            ->get();
+
+        $totalClicks = $activities->sum('clicks');
+        $totalKeys = $activities->sum('keystrokes');
+        // Group by resolved app name and calculate duration
+        $appUsage = $activities->groupBy(function($a) {
+            $name = $a->app_name;
+            if (!$name || strtolower($name) === 'active app' || strtolower($name) === 'unknown') {
+                $name = $this->resolveAppName($a->window_title);
+            }
+            return $name;
+        })->map(function ($group) {
+            return [
+                'minutes' => count($group),
+                'clicks' => $group->sum('clicks'),
+                'keystrokes' => $group->sum('keystrokes'),
+            ];
+        })->sortByDesc('minutes')->take(10);
+
+        // Timeline (Hourly activity level)
+        $timeline = $activities->groupBy(function($a) {
+            return $a->tracked_at ? $a->tracked_at->format('H') : '00';
+        })->map(function($group) {
+            return [
+                'clicks' => $group->sum('clicks'),
+                'keys' => $group->sum('keystrokes')
+            ];
+        });
+
+        return response()->json([
+            'total_clicks' => $totalClicks,
+            'total_keystrokes' => $totalKeys,
+            'app_usage' => $appUsage,
+            'timeline' => $timeline,
+            'total_minutes' => $activities->count()
+        ]);
+    }
+
+    /**
+     * Helper to extract a meaningful app name from a window title.
+     * Often window titles are formatted like "Project Name - SoftwareName"
+     * or "Untitled - ProjectName - FileName.ext"
+     */
+    private function resolveAppName($title)
+    {
+        if (empty($title)) return 'Unknown';
+
+        // Common extensions to skip (filenames)
+        $fileExtensions = ['.php', '.js', '.jsx', '.json', '.py', '.html', '.css', '.log', '.txt', '.md', '.sql', '.env'];
+        
+        // Common separators used in window titles
+        $separators = [' - ', ' | ', ' : '];
+        
+        foreach ($separators as $sep) {
+            if (str_contains($title, $sep)) {
+                $parts = array_map('trim', explode($sep, $title));
+                $count = count($parts);
+                
+                // Start from the last part and check if it's a filename
+                for ($i = $count - 1; $i >= 0; $i--) {
+                    $segment = $parts[$i];
+                    
+                    // Skip if segment is empty or too short (e.g. single letter)
+                    if (strlen($segment) <= 2) continue;
+                    
+                    // Check if segment is a filename by looking at extensions
+                    $isFileName = false;
+                    foreach ($fileExtensions as $ext) {
+                        if (str_ends_with(strtolower($segment), $ext)) {
+                            $isFileName = true;
+                            break;
+                        }
+                    }
+                    
+                    // If it's not a filename, this is our best bet for an app name
+                    if (!$isFileName) {
+                        return $segment;
+                    }
+                }
+            }
+        }
+
+        // Fallback checks
+        if (stripos($title, 'Google Chrome') !== false) return 'Google Chrome';
+        if (stripos($title, 'Visual Studio Code') !== false) return 'VS Code';
+        if (stripos($title, 'Antigravity') !== false) return 'Antigravity';
+
+        return $title;
     }
 }

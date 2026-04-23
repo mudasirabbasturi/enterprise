@@ -20,9 +20,12 @@ import {
   UnlockOutlined,
   InputNumber,
   Input,
+  FileExcelOutlined
 } from "@shared/ui";
 import axios from "axios";
 import NProgress from "nprogress";
+import { CommentOutlined } from "@ant-design/icons";
+import ProjectChatModal from "./ProjectChatModal";
 const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
 
   const hasPermission = (userpermission, permName) =>
@@ -58,6 +61,9 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
   const route = useRoute();
   const [localRowData, setLocalRowData] = useState(projects);
   const gridRef = useRef(null);
+
+  const [isChatModalVisible, setIsChatModalVisible] = useState(false);
+  const [chatProject, setChatProject] = useState(null);
 
   const [colDefs, setColDefs] = useState([
     {
@@ -134,6 +140,25 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         if (members.length === 0) {
           return (
             <div className="d-flex align-items-center">
+              <Tooltip title="Group Chat" color="blue" placement="left">
+                <div 
+                  className="btn btn-sm btn-warning text-white me-1"
+                  onClick={() => {
+                    setChatProject(params.data);
+                    setIsChatModalVisible(true);
+                  }}
+                >
+                  <CommentOutlined />
+                </div>
+              </Tooltip>
+              <Tooltip title="Spread Sheet" color="green" placement="left">
+                <div
+                  className="btn btn-sm btn-success me-1"
+                  onClick={() => alert("Coming soon")}
+                >
+                  <FileExcelOutlined />
+                </div>
+              </Tooltip>
               <Tooltip
                 title="Join Project"
                 className="btn btn-sm btn-primary me-1"
@@ -153,6 +178,25 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         return (
           <div className="d-flex flex-column">
             <div className="d-flex align-items-center">
+              <Tooltip title="Group Chat" color="blue" placement="left">
+                <div 
+                  className="btn btn-sm btn-warning text-white me-1"
+                  onClick={() => {
+                    setChatProject(params.data);
+                    setIsChatModalVisible(true);
+                  }}
+                >
+                  <CommentOutlined />
+                </div>
+              </Tooltip>
+              <Tooltip title="Spread Sheet" color="green" placement="left">
+                <div
+                  className="btn btn-sm btn-success me-1"
+                  onClick={() => alert("Coming soon")}
+                >
+                  <FileExcelOutlined />
+                </div>
+              </Tooltip>
               {members.some((m) => m.user?.id === auth.user.id) ? (
                 <div className="d-flex">
                   <Tooltip
@@ -814,7 +858,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
           description: data.message,
           placement: "topRight",
         });
-        refreshGrid();
+        setRowData(prev => prev.filter(p => p.id !== id));
       }
     } catch (error) {
       api.error({
@@ -834,7 +878,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
           description: data.message,
           placement: "topRight",
         });
-        refreshGrid();
+        setRowData(prev => prev.map(p => p.id === data.project.id ? data.project : p));
       }
     } catch (error) {
       api.error({
@@ -1048,30 +1092,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
     }
   }, [inertiaProps.status, isSelf, isSSRM]);
 
-  // Echo Listeners
-  useEffect(() => {
-    const channel = window.Echo.channel("project-channel");
-    const handler = (data) => {
-      if (data.project && user.email !== data.userEmail) {
-        refreshGrid();
-      }
-    };
 
-    const events = [
-      ".event-project-created",
-      ".event-project-updated",
-      ".event-project-update-coloumn",
-      ".event-project-joined",
-      ".event-project-delete",
-      ".event-project-leave"
-    ];
-
-    events.forEach(event => channel.listen(event, handler));
-
-    return () => {
-      events.forEach(event => channel.stopListening(event, handler));
-    };
-  }, [refreshGrid, user.email]);
 
 
   return (
@@ -1110,6 +1131,12 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         maintainColumnOrder={true}
         detailCellRenderer={DetailCellRenderer}
         rowSelection="single"
+      />
+      <ProjectChatModal
+        visible={isChatModalVisible}
+        onClose={() => setIsChatModalVisible(false)}
+        project={chatProject}
+        currentUser={user}
       />
     </>
   );

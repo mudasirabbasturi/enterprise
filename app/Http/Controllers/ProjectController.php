@@ -53,11 +53,13 @@ class ProjectController extends Controller
             'cluster' => 'ap2', 
             'useTLS' => true, 
         ];
+        $client = new \GuzzleHttp\Client(['verify' => false]);
         $pusher = new Pusher(
             '5158315c26b8f6732773', // app key
             '9ba1bfd3baa3f4ec2a4c', // app secret
             '2057639', // app id
-            $options
+            $options,
+            $client
         );
         $pusher->trigger('project-channel', 'event-project-created', [
             'message' => $userName . ' added new project ' . $project->project_title,
@@ -81,11 +83,13 @@ class ProjectController extends Controller
             'cluster' => 'ap2', 
             'useTLS' => true, 
         ];
+        $client = new \GuzzleHttp\Client(['verify' => false]);
         $pusher = new Pusher(
             '5158315c26b8f6732773', // app key
             '9ba1bfd3baa3f4ec2a4c', // app secret
             '2057639', // app id
-            $options
+            $options,
+            $client
         );
         $pusher->trigger('project-channel', 'event-project-updated', [
             'message' => $userName . ' Update project ' . $project->project_title,
@@ -109,11 +113,13 @@ class ProjectController extends Controller
             'cluster' => 'ap2', 
             'useTLS' => true, 
         ];
+        $client = new \GuzzleHttp\Client(['verify' => false]);
         $pusher = new Pusher(
             '5158315c26b8f6732773', // app key
             '9ba1bfd3baa3f4ec2a4c', // app secret
             '2057639', // app id
-            $options
+            $options,
+            $client
         );
         $pusher->trigger('project-channel', 'event-project-delete', [
             'message' => $userName . ' delete the project ' . $project->project_title,
@@ -672,11 +678,13 @@ class ProjectController extends Controller
             'cluster' => 'ap2', 
             'useTLS' => true, 
         ];
+        $client = new \GuzzleHttp\Client(['verify' => false]);
         $pusher = new Pusher(
             '5158315c26b8f6732773', // app key
             '9ba1bfd3baa3f4ec2a4c', // app secret
             '2057639', // app id
-            $options
+            $options,
+            $client
         );
         $pusher->trigger('project-channel', 'event-project-update-coloumn', [
             'message' => ucfirst(str_replace('_', ' ', $field)) . ' updated successfully by ' . $userName . ' for project ' . $project->project_title,
@@ -744,11 +752,13 @@ class ProjectController extends Controller
                 'cluster' => 'ap2', 
                 'useTLS' => true, 
             ];
+            $client = new \GuzzleHttp\Client(['verify' => false]);
             $pusher = new Pusher(
                 '5158315c26b8f6732773',
                 '9ba1bfd3baa3f4ec2a4c',
                 '2057639',
-                $options
+                $options,
+                $client
             );
             $pusher->trigger('project-channel', 'event-project-joined', [
                 'message' =>  $userName . ' joined project: ' . $project->project_title,
@@ -836,11 +846,13 @@ class ProjectController extends Controller
             'cluster' => 'ap2', 
             'useTLS' => true, 
         ];
+        $client = new \GuzzleHttp\Client(['verify' => false]);
         $pusher = new Pusher(
             '5158315c26b8f6732773',
             '9ba1bfd3baa3f4ec2a4c',
             '2057639',
-            $options
+            $options,
+            $client
         );
         $pusher->trigger('project-channel', 'event-project-leave', [
             'message' =>  $userName . ' leave project: ' . $project->project_title,

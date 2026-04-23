@@ -90,6 +90,33 @@ const Index = ({ projects, clients }) => {
       });
     }
   }, [errors]);
+  useEffect(() => {
+    const handleProjectChange = (event) => {
+      const { type, project } = event.detail;
+      
+      setRowData((prevData) => {
+        if (type === 'created') {
+          // Check if already exists to avoid duplicates
+          if (prevData.some(p => p.id === project.id)) return prevData;
+          return [project, ...prevData];
+        }
+        
+        if (type === 'updated') {
+          return prevData.map(p => p.id === project.id ? { ...p, ...project } : p);
+        }
+        
+        if (type === 'deleted') {
+          return prevData.filter(p => p.id !== project.id);
+        }
+        
+        return prevData;
+      });
+    };
+
+    window.addEventListener('project-data-changed', handleProjectChange);
+    return () => window.removeEventListener('project-data-changed', handleProjectChange);
+  }, []);
+
   {
     /** Flash Messages End */
   }

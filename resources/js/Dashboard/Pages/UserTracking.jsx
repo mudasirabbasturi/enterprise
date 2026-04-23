@@ -18,8 +18,9 @@ import {
 } from "@shared/ui";
 import MainLayout from "@layout";
 import axios from "axios";
-import { notification, Modal, Tag, Image, Select } from "antd";
+import { notification, Modal, Tag, Image, Select, DatePicker } from "antd";
 import { router } from "@inertiajs/react";
+import dayjs from "dayjs";
 
 const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) => {
     const [api, contextHolder] = notification.useNotification();
@@ -44,6 +45,7 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
     const [day, setDay] = useState(new Date().getDate());
     const [month, setMonth] = useState(new Date().getMonth() + 1);
     const [year, setYear] = useState(new Date().getFullYear());
+    const [screenshotRange, setScreenshotRange] = useState([dayjs(), dayjs()]);
 
     // Global Settings
     const [intervalMinutes, setIntervalMinutes] = useState(5);
@@ -53,6 +55,11 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [allowedIPs, setAllowedIPs] = useState([]);
     const [newIp, setNewIp] = useState("");
+
+    // Activity state
+    const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+    const [activityStats, setActivityStats] = useState(null);
+    const [activityLoading, setActivityLoading] = useState(false);
 
     const fetchUsers = async (showLoading = true) => {
         if (showLoading) setLoading(true);
@@ -130,16 +137,15 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
         });
     };
 
-    const fetchScreenshots = useCallback(async (userId, d, m, y) => {
+    const fetchScreenshots = useCallback(async (userId, start, end) => {
         setScreenshotLoading(true);
         setSelectedIds([]); // Reset selection on fetch
         try {
             const response = await axios.get("/api/track/screenshots", {
                 params: {
                     user_id: userId,
-                    day: d,
-                    month: m,
-                    year: y
+                    start_date: start.format('YYYY-MM-DD'),
+                    end_date: end.format('YYYY-MM-DD')
                 }
             });
             setScreenshots(response.data);
@@ -157,9 +163,9 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
 
     useEffect(() => {
         if (isScreenshotModalOpen && selectedUser) {
-            fetchScreenshots(selectedUser.id, day, month, year);
+            fetchScreenshots(selectedUser.id, screenshotRange[0], screenshotRange[1]);
         }
-    }, [isScreenshotModalOpen, selectedUser, day, month, year, fetchScreenshots]);
+    }, [isScreenshotModalOpen, selectedUser, screenshotRange, fetchScreenshots]);
 
     const openScreenshotModal = (user) => {
         setSelectedUser(user);
@@ -243,6 +249,36 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
             });
         }
     };
+    const fetchActivityStats = async (userId, d, m, y) => {
+        setActivityLoading(true);
+        try {
+            const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const response = await axios.get("/api/track/activity/stats", {
+                params: { user_id: userId, date: dateStr }
+            });
+            setActivityStats(response.data);
+        } catch (error) {
+            console.error("Error fetching activity stats:", error);
+            api.error({
+                message: "Error",
+                description: "Failed to fetch activity statistics",
+                placement: "topRight"
+            });
+        } finally {
+            setActivityLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (isActivityModalOpen && selectedUser) {
+            fetchActivityStats(selectedUser.id, day, month, year);
+        }
+    }, [isActivityModalOpen, selectedUser, day, month, year]);
+
+    const openActivityModal = (user) => {
+        setSelectedUser(user);
+        setIsActivityModalOpen(true);
+    };
 
     // User Grid Column Definitions
     const userColDefs = useMemo(() => [
@@ -318,6 +354,13 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                         <EyeOutlined className="me-1" />
                         Screenshots
                     </button>
+                    <button
+                        className="btn btn-info btn-sm rounded-pill px-3 text-white"
+                        onClick={() => openActivityModal(params.data)}
+                    >
+                        <i className="bi bi-graph-up-arrow me-1" />
+                        Activity
+                    </button>
                     <Tooltip title="Capture screenshot now">
                         <button
                             className="btn btn-warning btn-sm rounded-pill px-2"
@@ -329,7 +372,7 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                     </Tooltip>
                 </div>
             ),
-            flex: 1.5
+            flex: 2
         }
     ], []);
 
@@ -432,15 +475,17 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                             )}
                         </div>
                         <div className="d-flex gap-2 align-items-center">
-                            <select className="form-select form-select-sm w-auto" value={day} onChange={(e) => setDay(e.target.value)}>
-                                {days.map(d => <option key={d} value={d}>{d}</option>)}
-                            </select>
-                            <select className="form-select form-select-sm w-auto" value={month} onChange={(e) => setMonth(e.target.value)}>
-                                {months.map(m => <option key={m} value={m}>{m}</option>)}
-                            </select>
-                            <select className="form-select form-select-sm w-auto" value={year} onChange={(e) => setYear(e.target.value)}>
-                                {years.map(y => <option key={y} value={y}>{y}</option>)}
-                            </select>
+                            <DatePicker.RangePicker 
+                                value={screenshotRange}
+                                onChange={(dates) => {
+                                    if (dates) {
+                                        setScreenshotRange(dates);
+                                    }
+                                }}
+                                allowClear={false}
+                                format="DD MMM YYYY"
+                                className="shadow-sm"
+                            />
                         </div>
                     </div>
                 }
@@ -558,6 +603,111 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                             )}
                         </div>
                     </Image.PreviewGroup>
+                )}
+            </Modal>
+            {/* Activity Stats Modal */}
+            <Modal
+                title={
+                    <div className="d-flex align-items-center justify-content-between pe-4 w-100">
+                        <div className="d-flex align-items-center gap-2">
+                            <i className="bi bi-graph-up-arrow text-info"></i>
+                            <span className="fw-bold fs-5">Daily Activity: {selectedUser?.name}</span>
+                        </div>
+                        <div className="d-flex gap-2 align-items-center">
+                            <DatePicker 
+                                value={dayjs(`${year}-${month}-${day}`)}
+                                onChange={(date) => {
+                                    if (date) {
+                                        setDay(date.date());
+                                        setMonth(date.month() + 1);
+                                        setYear(date.year());
+                                    }
+                                }}
+                                allowClear={false}
+                                format="DD MMM YYYY"
+                                className="shadow-sm"
+                            />
+                        </div>
+                    </div>
+                }
+                open={isActivityModalOpen}
+                onCancel={() => setIsActivityModalOpen(false)}
+                footer={null}
+                width={800}
+                centered
+            >
+                {activityLoading ? (
+                    <div className="d-flex justify-content-center align-items-center py-5">
+                        <SyncOutlined spin style={{ fontSize: '32px' }} className="text-info" />
+                    </div>
+                ) : (
+                    <div className="py-3">
+                        {activityStats && activityStats.total_minutes > 0 ? (
+                            <div className="row g-4">
+                                {/* Summary Cards */}
+                                <div className="col-md-4">
+                                    <div className="card border-0 shadow-sm bg-soft-primary text-center p-3" style={{ borderRadius: '15px', backgroundColor: '#e7f1ff' }}>
+                                        <div className="text-muted small fw-bold mb-1">TOTAL WORK TIME</div>
+                                        <div className="fs-3 fw-bold text-primary">
+                                            {Math.floor(activityStats.total_minutes / 60)}h {activityStats.total_minutes % 60}m
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="col-md-4">
+                                    <div className="card border-0 shadow-sm bg-soft-info text-center p-3" style={{ borderRadius: '15px', backgroundColor: '#e1f5fe' }}>
+                                        <div className="text-muted small fw-bold mb-1">TOTAL CLICKS</div>
+                                        <div className="fs-3 fw-bold text-info">
+                                            {activityStats.total_clicks.toLocaleString()}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="col-md-4">
+                                    <div className="card border-0 shadow-sm bg-soft-warning text-center p-3" style={{ borderRadius: '15px', backgroundColor: '#fff3e0' }}>
+                                        <div className="text-muted small fw-bold mb-1">KEYSTROKES</div>
+                                        <div className="fs-3 fw-bold text-warning">
+                                            {activityStats.total_keystrokes.toLocaleString()}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Top Apps */}
+                                <div className="col-12 mt-4">
+                                    <h6 className="fw-bold mb-3 border-start border-4 border-info ps-2">Top Software Usage</h6>
+                                    <div className="list-group list-group-flush shadow-sm rounded-3">
+                                        {Object.entries(activityStats.app_usage).map(([app, stats], idx) => (
+                                            <div key={idx} className="list-group-item d-flex justify-content-between align-items-center">
+                                                <div className="d-flex align-items-center">
+                                                    <div className="bg-light p-2 rounded me-3">
+                                                        <i className="bi bi-window text-secondary"></i>
+                                                    </div>
+                                                    <span className="fw-medium text-dark">{app}</span>
+                                                </div>
+                                                <div className="d-flex align-items-center gap-2">
+                                                    <div className="progress d-none d-md-block" style={{ width: '100px', height: '6px' }}>
+                                                        <div 
+                                                            className="progress-bar bg-info" 
+                                                            role="progressbar" 
+                                                            style={{ width: `${(stats.minutes / activityStats.total_minutes) * 100}%` }}
+                                                        ></div>
+                                                    </div>
+                                                    <Tag color="blue" className="m-0 border-0">{stats.minutes}m</Tag>
+                                                    <Tag color="cyan" className="m-0 border-0">{stats.clicks.toLocaleString()} clicks</Tag>
+                                                    <Tag color="orange" className="m-0 border-0">{stats.keystrokes.toLocaleString()} keys</Tag>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                            </div>
+                        ) : (
+                            <div className="text-center py-5">
+                                <i className="bi bi-info-circle text-muted fs-1 mb-3 d-block"></i>
+                                <div className="text-muted fs-5">No activity data found for this date.</div>
+                                <p className="small text-secondary">Advanced tracking data will appear here once the user's tracker app starts reporting.</p>
+                            </div>
+                        )}
+                    </div>
                 )}
             </Modal>
             {/* Tracker Settings Modal */}
