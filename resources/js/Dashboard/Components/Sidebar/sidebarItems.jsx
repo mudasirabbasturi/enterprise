@@ -14,7 +14,8 @@ import {
   FileTextOutlined,
   FieldTimeOutlined,
   CreditCardOutlined,
-  ScheduleOutlined
+  ScheduleOutlined,
+  MessageOutlined
 } from "@shared/ui";
 
 // 🔑 helper function to check permission
@@ -181,6 +182,22 @@ export const getSidebarItems = ({
         },
       ]
       : []),
+      {
+        key: "chat",
+        label: "Chat",
+        icon: <MessageOutlined style={{ fontSize: "20px" }} />,
+        children:[
+          {
+            key: "project_chat",
+            label: (
+              <Link href={route("project-chat.index")}>
+                Project Chat
+              </Link>
+            ),
+            icon: <MessageOutlined />,
+          },
+        ]
+      },
 
     // User
     ...(can("View User")

@@ -13,6 +13,25 @@ use Pusher\Pusher;
 class ProjectChatController extends Controller
 {
     /**
+     * Show the full page chat view.
+     */
+    public function fullPageChat()
+    {
+        $projects = \App\Models\Project::with([
+            'projectTeamMembers.user.media' => function($query) {
+                $query->where('category', 'profile')->latest()->limit(1);
+            }
+        ])
+        ->where('project_status', '!=', 'Deliver')
+        ->orderBy('created_at', 'desc')
+        ->get();
+
+        return \Inertia\Inertia::render('Pages/chat/ProjectChat', [
+            'projects' => $projects
+        ]);
+    }
+
+    /**
      * Get chat history for a project.
      */
     public function index($projectId)

@@ -122,7 +122,8 @@ export {
   CloudDownloadOutlined,
   CheckOutlined,
   CloseCircleFilled,
- FileExcelOutlined 
+ FileExcelOutlined , 
+ MessageOutlined
 } from "@ant-design/icons";
 
 export { PhoneInput } from "react-international-phone";

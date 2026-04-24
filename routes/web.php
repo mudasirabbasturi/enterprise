@@ -114,6 +114,7 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/project/{project}/team-members/scores', [ProjectController::class, 'BulkUpdateScores'])->name('project.bulkUpdateScores');
 
     // Project Chat
+    Route::get('/project-chat', [App\Http\Controllers\Api\ProjectChatController::class, 'fullPageChat'])->name('project-chat.index');
     Route::get('/api/projects/{project}/chat', [App\Http\Controllers\Api\ProjectChatController::class, 'index'])->name('project.chat.index');
     Route::post('/api/projects/{project}/chat', [App\Http\Controllers\Api\ProjectChatController::class, 'store'])->name('project.chat.store');
     Route::delete('/api/projects/{project}/chat/{chatId}', [App\Http\Controllers\Api\ProjectChatController::class, 'destroy'])->name('project.chat.destroy');
