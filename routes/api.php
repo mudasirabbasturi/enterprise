@@ -24,7 +24,9 @@ Route::get('/track/active-status/{user_id}', [TrackingController::class, 'getAct
 Route::get('/track/settings', [TrackingController::class, 'getTrackerSettings']);
 Route::post('/track/settings/update', [TrackingController::class, 'updateTrackerSettings']);
 Route::post('/track/toggle-permission', [TrackingController::class, 'toggleUserPermission']);
+Route::post('/track/toggle-logout-restriction', [TrackingController::class, 'toggleLogoutRestriction']);
 Route::post('/track/update-status', [TrackingController::class, 'updateStatus']);
 Route::post('/track/activity', [TrackingController::class, 'storeActivity']);
 Route::get('/track/activity/stats', [TrackingController::class, 'getActivityStats']);
-
+Route::get('/track/screenshots/latest-all', [TrackingController::class, 'getLatestAllUsersScreenshots']);
+Route::post('/track/ping', [TrackingController::class, 'pingTrackers']);

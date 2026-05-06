@@ -10,6 +10,7 @@ class UserActivity extends Model
         'user_id',
         'app_name',
         'window_title',
+        'url',
         'clicks',
         'keystrokes',
         'is_idle',

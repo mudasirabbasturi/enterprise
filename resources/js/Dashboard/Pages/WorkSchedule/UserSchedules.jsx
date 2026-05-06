@@ -117,8 +117,6 @@ const UserSchedules = ({ schedules, users, shifts }) => {
         {
             headerName: "Time Slots",
             flex: 2,
-            headerName: "Time Slots",
-            flex: 2,
             valueGetter: (params) => {
                 if (params.data.shift) {
                     return `${params.data.shift.start_time} - ${params.data.shift.end_time}`;

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+/*
 import Echo from "laravel-echo";
 import Pusher from "pusher-js";
 
@@ -10,6 +11,7 @@ window.Echo = new Echo({
   cluster: "ap2",
   forceTLS: true,
 });
+*/
 
 import {
   /**
@@ -31,6 +33,7 @@ import {
   ScheduleOutlined,
   CloudDownloadOutlined,
   FieldTimeOutlined,
+  LineChartOutlined,
   /**
    * Ziggy
    */
@@ -48,6 +51,26 @@ const DashboardLayout = ({ children }) => {
   const { props } = usePage();
   const user = props.auth.user;
   const [isQuickAttendanceModalOpen, setIsQuickAttendanceModalOpen] = useState(false);
+  const [unreadCounts, setUnreadCounts] = useState({ project: 0, global: 0, direct: 0, groups: 0 });
+
+  // Chat unread counts logic removed (404)
+
+  const fetchUnreadCounts = async () => {
+    try {
+      const response = await axios.get(route('global-chat.unread-counts'));
+      setUnreadCounts(response.data);
+    } catch (err) {
+      console.error("Failed to fetch unread counts", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreadCounts();
+    
+    const handleRefresh = () => fetchUnreadCounts();
+    window.addEventListener('refresh-unread-counts', handleRefresh);
+    return () => window.removeEventListener('refresh-unread-counts', handleRefresh);
+  }, []);
 
   const hasPermission = (userpermission, permName) =>
     userpermission?.some((p) => p.name === permName);
@@ -56,6 +79,8 @@ const DashboardLayout = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [openKeys, setOpenKeys] = useState([]);
   const [savedOpenKeys, setSavedOpenKeys] = useState([]);
+  const projectSound = useRef(new Audio('/uploads/media/sound_effect/project/project_notification.wav'));
+  const chatSound = useRef(new Audio('/uploads/media/sound_effect/chat/chat_message_notification.mp3'));
 
   useEffect(() => {
     const storedKeys = localStorage.getItem("sidebar-open-keys");
@@ -84,6 +109,11 @@ const DashboardLayout = ({ children }) => {
       key: "profile",
       icon: <UserOutlined />,
       label: <Link href={route("user.profile", user.id)}>Profile</Link>,
+    },
+    {
+      key: "my-activity",
+      icon: <LineChartOutlined />,
+      label: <Link href={route("my-activity", user.id)}>My Activity</Link>,
     },
     {
       key: "my-shedule",
@@ -134,119 +164,126 @@ const DashboardLayout = ({ children }) => {
     },
   ];
 
-  // Add Project
+  // Centralized WebSocket Connection
   useEffect(() => {
-    const channel = window.Echo.channel("project-channel");
-    const handler = (data) => {
-      if (user.email !== data.userEmail) {
-        api.success({
-          description: data.message,
-        });
-      }
-      window.dispatchEvent(new CustomEvent('project-data-changed', { 
-        detail: { type: 'created', project: data.project } 
-      }));
-    };
-    channel.listen(".event-project-created", handler);
-    return () => {
-      channel.stopListening(".event-project-created", handler);
-    };
-  }, []);
+    if (!user.id) return;
 
-  // Update Project
-  useEffect(() => {
-    const channel = window.Echo.channel("project-channel");
-    const handler = (data) => {
-      if (user.email !== data.userEmail) {
-        api.success({
-          description: data.message,
-        });
-      }
-      window.dispatchEvent(new CustomEvent('project-data-changed', { 
-        detail: { type: 'updated', project: data.project } 
-      }));
-    };
-    channel.listen(".event-project-updated", handler);
-    return () => {
-      channel.stopListening(".event-project-updated", handler);
-    };
-  }, []);
+    let ws = null;
+    const userNotificationChannel = `user-notifications-${user.id}`;
+    const globalUserChannel = `global-chat.user.${user.id}`;
+    const projectMasterChannel = "project-channel";
+    const trackerChannel = "tracker-status";
 
-  // Update Project column
-  useEffect(() => {
-    const channel = window.Echo.channel("project-channel");
-    const handler = (data) => {
-      if (user.email !== data.userEmail) {
-        api.success({
-          description: data.message,
-        });
-      }
-      window.dispatchEvent(new CustomEvent('project-data-changed', { 
-        detail: { type: 'updated', project: data.project } 
-      }));
-    };
-    channel.listen(".event-project-update-coloumn", handler);
-    return () => {
-      channel.stopListening(".event-project-update-coloumn", handler);
-    };
-  }, []);
+    const handleProjectCRUD = (payload) => {
+      const eventMap = {
+        'event-project-created': 'created',
+        'event-project-updated': 'updated',
+        'event-project-update-coloumn': 'updated',
+        'event-project-delete': 'deleted',
+        'event-project-joined': 'updated',
+        'event-project-leave': 'updated',
+        'event-project-bulk-updated': 'updated'
+      };
 
-  // Delete Project
-  useEffect(() => {
-    const channel = window.Echo.channel("project-channel");
-    const handler = (data) => {
-      if (user.email !== data.userEmail) {
-        api.success({
-          description: data.message,
-        });
+      const type = eventMap[payload.event];
+      if (type) {
+        projectSound.current.play().catch(() => {});
+        if (user.email !== payload.data.userEmail) {
+          api.success({ description: payload.data.message });
+        }
+        window.dispatchEvent(new CustomEvent('project-data-changed', { 
+          detail: { type, project: payload.data.project } 
+        }));
       }
-      window.dispatchEvent(new CustomEvent('project-data-changed', { 
-        detail: { type: 'deleted', project: data.project } 
-      }));
     };
-    channel.listen(".event-project-delete", handler);
-    return () => {
-      channel.stopListening(".event-project-delete", handler);
-    };
-  }, []);
 
-  // Joint Project
-  useEffect(() => {
-    const channel = window.Echo.channel("project-channel");
-    const handler = (data) => {
-      if (user.email !== data.userEmail) {
-        api.success({
-          description: data.message,
-        });
-      }
-      window.dispatchEvent(new CustomEvent('project-data-changed', { 
-        detail: { type: 'updated', project: data.project } 
-      }));
-    };
-    channel.listen(".event-project-joined", handler);
-    return () => {
-      channel.stopListening(".event-project-joined", handler);
-    };
-  }, []);
+    const connect = () => {
+      try {
+        ws = new WebSocket('wss://demo.bidwinners.net');
+        
+        ws.onopen = () => {
+          console.log("WebSocket Connected: Centralized Layout Hub");
+          // Subscriptions
+          ws.send(JSON.stringify({ action: 'subscribe', channel: projectMasterChannel }));
+          // ws.send(JSON.stringify({ action: 'subscribe', channel: userNotificationChannel }));
+          ws.send(JSON.stringify({ action: 'subscribe', channel: globalUserChannel }));
+          ws.send(JSON.stringify({ action: 'subscribe', channel: trackerChannel }));
+        };
 
-  // leave Joint Project
-  useEffect(() => {
-    const channel = window.Echo.channel("project-channel");
-    const handler = (data) => {
-      if (user.email !== data.userEmail) {
-        api.success({
-          description: data.message,
-        });
+        ws.onmessage = (event) => {
+          const response = JSON.parse(event.data);
+          
+          // Route 1: Project CRUD
+          if (response.channel === projectMasterChannel && response.data) {
+            handleProjectCRUD(response.data);
+          }
+
+          // Route 2: Project Chat Notifications (Phasing out)
+          /*
+          if (response.channel === userNotificationChannel) {
+            const payload = response.data;
+            if (payload && payload.data && payload.data.message) {
+              const incomingMsg = payload.data.message;
+              if (incomingMsg.user_id !== user.id) {
+                chatSound.current.play().catch(() => {});
+                setUnreadCounts(prev => ({ ...prev, project: (prev.project || 0) + 1 }));
+              }
+            }
+            window.dispatchEvent(new CustomEvent('project-chat-notification', { detail: response.data }));
+          }
+          */
+
+          // Route 3: Global Chat Notifications
+          if (response.channel === globalUserChannel) {
+            const payload = response.data;
+            if (payload && payload.event === 'message.sent') {
+                const msg = payload.data.message;
+                const senderType = msg.group_id ? 'group' : 'user';
+                const targetId = msg.group_id ? msg.group_id : msg.sender_id;
+                
+                // Mute sound if the user already has this chat open
+                const isActive = window.activeGlobalChat && 
+                                 window.activeGlobalChat.type === senderType && 
+                                 window.activeGlobalChat.id == targetId;
+                
+                if (!isActive && msg.sender_id != user.id) {
+                    chatSound.current.play().catch(() => {});
+                    setUnreadCounts(prev => {
+                        const newDirect = senderType === 'user' ? (prev.direct || 0) + 1 : (prev.direct || 0);
+                        const newGroups = senderType === 'group' ? (prev.groups || 0) + 1 : (prev.groups || 0);
+                        return { 
+                            ...prev, 
+                            direct: newDirect,
+                            groups: newGroups,
+                            global: newDirect + newGroups
+                        };
+                    });
+                }
+            }
+            window.dispatchEvent(new CustomEvent('global-chat-notification', { detail: response }));
+          }
+
+          // Route 4: Tracker Status (Screenshots / Online Status)
+          if (response.channel === trackerChannel) {
+            // Unify structure for sub-components
+            const payload = response.data; // This is {event: '...', data: {...}}
+            if (payload && payload.event) {
+              window.dispatchEvent(new CustomEvent('tracker-status-notification', { detail: response }));
+            }
+          }
+        };
+
+        ws.onclose = () => setTimeout(connect, 3000);
+        ws.onerror = (err) => console.error("Layout Socket Error:", err);
+      } catch (e) {
+        console.error("Could not connect to layout socket:", e);
+        setTimeout(connect, 3000);
       }
-      window.dispatchEvent(new CustomEvent('project-data-changed', { 
-        detail: { type: 'updated', project: data.project } 
-      }));
     };
-    channel.listen(".event-project-leave", handler);
-    return () => {
-      channel.stopListening(".event-project-leave", handler);
-    };
-  }, []);
+
+    connect();
+    return () => { if (ws) ws.close(); };
+  }, [user.id]);
 
   const handleBulkUpdate = () => {
     if (
@@ -450,6 +487,7 @@ const DashboardLayout = ({ children }) => {
             setOpenKeys={setOpenKeys}
             savedOpenKeys={savedOpenKeys}
             setSavedOpenKeys={setSavedOpenKeys}
+            unreadCounts={unreadCounts}
           />
           <Layout>
             <Content style={{ backgroundColor: "white" }}>{children}</Content>

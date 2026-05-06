@@ -49,23 +49,12 @@ class ProjectController extends Controller
             'client'
         ])->find($project->id);
 
-        $options = [ 
-            'cluster' => 'ap2', 
-            'useTLS' => true, 
-        ];
-        $client = new \GuzzleHttp\Client(['verify' => false]);
-        $pusher = new Pusher(
-            '5158315c26b8f6732773', // app key
-            '9ba1bfd3baa3f4ec2a4c', // app secret
-            '2057639', // app id
-            $options,
-            $client
-        );
-        $pusher->trigger('project-channel', 'event-project-created', [
+        $this->broadcastMessage('project-channel', 'event-project-created', [
             'message' => $userName . ' added new project ' . $project->project_title,
             'userEmail' => $userEmail,
             'project' => $project,
         ]);
+
         return response()->json([
             'message' => 'Project Created Successfully.',
             'project' => $project,
@@ -79,28 +68,17 @@ class ProjectController extends Controller
         $project = Project::findOrFail($id);
         $validated = $request->validated();
         $project->update($validated);
-        $options = [ 
-            'cluster' => 'ap2', 
-            'useTLS' => true, 
-        ];
-        $client = new \GuzzleHttp\Client(['verify' => false]);
-        $pusher = new Pusher(
-            '5158315c26b8f6732773', // app key
-            '9ba1bfd3baa3f4ec2a4c', // app secret
-            '2057639', // app id
-            $options,
-            $client
-        );
-        $pusher->trigger('project-channel', 'event-project-updated', [
+        
+        $this->broadcastMessage('project-channel', 'event-project-updated', [
             'message' => $userName . ' Update project ' . $project->project_title,
             'userEmail' => $userEmail,
             'project' => $project,
         ]);
+
         return response()->json([
             'message' => 'Project updated successfully.',
             'project' => $project,
         ]);
-       
     }
 
     public function Destroy($id)
@@ -109,27 +87,52 @@ class ProjectController extends Controller
         $userEmail = Auth::user()->email;
         $project = Project::findOrFail($id);
         $project->delete();
-        $options = [ 
-            'cluster' => 'ap2', 
-            'useTLS' => true, 
-        ];
-        $client = new \GuzzleHttp\Client(['verify' => false]);
-        $pusher = new Pusher(
-            '5158315c26b8f6732773', // app key
-            '9ba1bfd3baa3f4ec2a4c', // app secret
-            '2057639', // app id
-            $options,
-            $client
-        );
-        $pusher->trigger('project-channel', 'event-project-delete', [
-            'message' => $userName . ' delete the project ' . $project->project_title,
+
+        $this->broadcastMessage('project-channel', 'event-project-delete', [
+            'message' => $userName . ' deleted project ' . $project->project_title,
             'userEmail' => $userEmail,
             'project' => $project,
         ]);
+
         return response()->json([
             'message' => 'Project deleted successfully.',
             'project' => $project, 
         ]);
+    }
+
+    private function broadcastMessage($channel, $event, $data)
+    {
+        $personalServerUrl = 'https://api-socket.bidwinners.net/publish';
+        $usePersonalServer = false;
+
+        try {
+            $client = new \GuzzleHttp\Client(['timeout' => 2, 'verify' => false]);
+            $client->post($personalServerUrl, [
+                'json' => [
+                    'channel' => $channel,
+                    'event' => $event,
+                    'data' => $data
+                ]
+            ]);
+        } catch (\Exception $e) {
+            \Log::info("Personal socket server error: " . $e->getMessage());
+        }
+
+        /* 
+        $usePersonalServer = false;
+        if (!$usePersonalServer) {
+            $options = ['cluster' => 'ap2', 'useTLS' => true];
+            $pusherClient = new \GuzzleHttp\Client(['verify' => false]);
+            $pusher = new \Pusher\Pusher(
+                '5158315c26b8f6732773',
+                '9ba1bfd3baa3f4ec2a4c',
+                '2057639',
+                $options,
+                $pusherClient
+            );
+            $pusher->trigger($channel, $event, $data);
+        }
+        */
     }
 
     public function Status(Request $request, $status)
@@ -674,23 +677,13 @@ class ProjectController extends Controller
         $project->update([
             $field => $value
         ]);
-        $options = [ 
-            'cluster' => 'ap2', 
-            'useTLS' => true, 
-        ];
-        $client = new \GuzzleHttp\Client(['verify' => false]);
-        $pusher = new Pusher(
-            '5158315c26b8f6732773', // app key
-            '9ba1bfd3baa3f4ec2a4c', // app secret
-            '2057639', // app id
-            $options,
-            $client
-        );
-        $pusher->trigger('project-channel', 'event-project-update-coloumn', [
+
+        $this->broadcastMessage('project-channel', 'event-project-update-coloumn', [
             'message' => ucfirst(str_replace('_', ' ', $field)) . ' updated successfully by ' . $userName . ' for project ' . $project->project_title,
             'userEmail' => $userEmail,
             'project' => $project,
         ]);
+
         return response()->json([
             'message' => ucfirst(str_replace('_', ' ', $field)) . ' updated successfully.',
             'project' => $project,
@@ -748,23 +741,12 @@ class ProjectController extends Controller
                 'client'
             ])->find($id);
 
-            $options = [ 
-                'cluster' => 'ap2', 
-                'useTLS' => true, 
-            ];
-            $client = new \GuzzleHttp\Client(['verify' => false]);
-            $pusher = new Pusher(
-                '5158315c26b8f6732773',
-                '9ba1bfd3baa3f4ec2a4c',
-                '2057639',
-                $options,
-                $client
-            );
-            $pusher->trigger('project-channel', 'event-project-joined', [
+            $this->broadcastMessage('project-channel', 'event-project-joined', [
                 'message' =>  $userName . ' joined project: ' . $project->project_title,
                 'userEmail' => $userEmail,
                 'project' => $project,
             ]);
+
             return response()->json([
                 'message' => 'Successfully joined project.',
                 'project' => $project,
@@ -780,6 +762,8 @@ class ProjectController extends Controller
 
     public function EditJoinProject(Request $request, $id)
     {
+        $userName = Auth::user()->name;
+        $userEmail = Auth::user()->email;
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
             'steps' => 'required|array',
@@ -819,6 +803,19 @@ class ProjectController extends Controller
             }
 
             $teamMember->update($updateData);
+
+            $project = Project::with([
+                'projectTeamMembers.user.media' => function ($query) {
+                    $query->where('category', 'profile')->latest()->limit(1);
+                },
+                'client'
+            ])->find($teamMember->project_id);
+
+            $this->broadcastMessage('project-channel', 'event-project-updated', [
+                'message' =>  $userName . ' updated tasks for project: ' . $project->project_title,
+                'userEmail' => $userEmail,
+                'project' => $project,
+            ]);
             
             return back()->with('message', 'Project tasks updated successfully');
         } catch (\Exception $e) {
@@ -842,23 +839,12 @@ class ProjectController extends Controller
             'client'
         ])->find($projectId);
 
-        $options = [ 
-            'cluster' => 'ap2', 
-            'useTLS' => true, 
-        ];
-        $client = new \GuzzleHttp\Client(['verify' => false]);
-        $pusher = new Pusher(
-            '5158315c26b8f6732773',
-            '9ba1bfd3baa3f4ec2a4c',
-            '2057639',
-            $options,
-            $client
-        );
-        $pusher->trigger('project-channel', 'event-project-leave', [
+        $this->broadcastMessage('project-channel', 'event-project-leave', [
             'message' =>  $userName . ' leave project: ' . $project->project_title,
             'userEmail' => $userEmail,
             'project' => $project,
         ]);
+
         return response()->json([
             'message' => 'Successfully removed from joined project.',
             'project' => $project,
@@ -876,6 +862,8 @@ class ProjectController extends Controller
     
     public function AddEditScore(Request $request, $teamMemberId)
     {
+        $userName = Auth::user()->name;
+        $userEmail = Auth::user()->email;
         $request->validate([
             'points_gain' => 'required|numeric|min:0'
         ]);
@@ -897,6 +885,21 @@ class ProjectController extends Controller
                 'points_gain' => $newPoints
             ]);
             DB::commit();
+
+            // Broadcast update
+            $project = Project::with([
+                'projectTeamMembers.user.media' => function ($query) {
+                    $query->where('category', 'profile')->latest()->limit(1);
+                },
+                'client'
+            ])->find($project->id);
+
+            $this->broadcastMessage('project-channel', 'event-project-updated', [
+                'message' =>  $userName . ' updated scores for project: ' . $project->project_title,
+                'userEmail' => $userEmail,
+                'project' => $project,
+            ]);
+
             return back()->with('message', 'Points updated successfully!');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             DB::rollBack();
@@ -909,6 +912,8 @@ class ProjectController extends Controller
 
     public function BulkUpdateScores(Request $request, $projectId)
     {
+        $userName = Auth::user()->name;
+        $userEmail = Auth::user()->email;
         $project = Project::with('projectTeamMembers')->findOrFail($projectId);
 
         $members = $request->input('members', []);
@@ -928,9 +933,22 @@ class ProjectController extends Controller
                 ->update(['points_gain' => (int) $m['points_gain']]);
         }
 
+        $project = Project::with([
+            'projectTeamMembers.user.media' => function ($query) {
+                $query->where('category', 'profile')->latest()->limit(1);
+            },
+            'client'
+        ])->find($projectId);
+
+        $this->broadcastMessage('project-channel', 'event-project-updated', [
+            'message' =>  $userName . ' bulk updated scores for project: ' . $project->project_title,
+            'userEmail' => $userEmail,
+            'project' => $project,
+        ]);
+
         return response()->json([
             'message' => 'All member scores updated successfully!',
-            'project' => $project->fresh(['projectTeamMembers.user']),
+            'project' => $project,
         ]);
     }
 
@@ -1082,9 +1100,18 @@ class ProjectController extends Controller
 
     public function BulkUpdate(Request $request)
     {
+        $userName = Auth::user()->name;
+        $userEmail = Auth::user()->email;
+        
         $updatedCount = Project::where('project_status', 'Completed')
             ->update(['project_status' => 'Deliver']);
+            
         if ($updatedCount > 0) {
+           $this->broadcastMessage('project-channel', 'event-project-bulk-updated', [
+               'message' => $userName . ' moved ' . $updatedCount . ' projects to Deliver status',
+               'userEmail' => $userEmail,
+               'count' => $updatedCount
+           ]);
            return Inertia::location(route('project.status', ['status' => 'Pending']));
         } else {
             return redirect()->back()->with('message', 'No projects found with status Completed.');

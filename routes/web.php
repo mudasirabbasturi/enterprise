@@ -14,7 +14,6 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\CandidateController;
 use App\Http\Controllers\LegalPageController;
-use App\Http\Controllers\ProjectTestController;
 use App\Http\Controllers\Api\TrackingController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\UserShiftScheduleController;
@@ -113,11 +112,24 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/project/team-member/score/{TeamMemberId}', [ProjectController::class, 'AddEditScore'])->name('AddEditScore');
     Route::put('/project/{project}/team-members/scores', [ProjectController::class, 'BulkUpdateScores'])->name('project.bulkUpdateScores');
 
-    // Project Chat
+    // Project Chat (Phasing out)
+    /*
     Route::get('/project-chat', [App\Http\Controllers\Api\ProjectChatController::class, 'fullPageChat'])->name('project-chat.index');
     Route::get('/api/projects/{project}/chat', [App\Http\Controllers\Api\ProjectChatController::class, 'index'])->name('project.chat.index');
     Route::post('/api/projects/{project}/chat', [App\Http\Controllers\Api\ProjectChatController::class, 'store'])->name('project.chat.store');
     Route::delete('/api/projects/{project}/chat/{chatId}', [App\Http\Controllers\Api\ProjectChatController::class, 'destroy'])->name('project.chat.destroy');
+    Route::get('/api/chat/unread-counts', [App\Http\Controllers\Api\ProjectChatController::class, 'getUnreadCounts'])->name('chat.unread-counts');
+    */
+
+    // Global Chat
+    Route::get('/global-chat', [App\Http\Controllers\GlobalChatController::class, 'index'])->name('global-chat.index');
+    Route::get('/api/global-chat/messages', [App\Http\Controllers\GlobalChatController::class, 'getMessages'])->name('global-chat.messages');
+    Route::get('/api/global-chat/unread-counts', [App\Http\Controllers\GlobalChatController::class, 'getUnreadCounts'])->name('global-chat.unread-counts');
+    Route::post('/api/global-chat/send', [App\Http\Controllers\GlobalChatController::class, 'sendMessage'])->name('global-chat.send');
+    Route::delete('/api/global-chat/messages/{id}', [App\Http\Controllers\GlobalChatController::class, 'deleteMessage'])->name('global-chat.messages.destroy');
+    Route::post('/api/global-chat/groups', [App\Http\Controllers\GlobalChatController::class, 'createGroup'])->name('global-chat.groups.store');
+    Route::put('/api/global-chat/groups/{id}', [App\Http\Controllers\GlobalChatController::class, 'updateGroup'])->name('global-chat.groups.update');
+    Route::delete('/api/global-chat/groups/{id}', [App\Http\Controllers\GlobalChatController::class, 'deleteGroup'])->name('global-chat.groups.destroy');
 
     /** RoleController */
     Route::get('/role', [RoleController::class, 'Index'])->name('role.index');
@@ -145,14 +157,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/terms-conditions', [LegalPageController::class, 'terms'])
         ->name('terms.conditions');
         
-// Test page routes
-Route::get('/projects/test', [ProjectTestController::class, 'index'])->name('projects.test');
-Route::prefix('api/test')->group(function () {
-    Route::post('/more-projects', [ProjectTestController::class, 'getMoreProjects']);
-    Route::post('/team-members', [ProjectTestController::class, 'getTeamMembers']);
-});
-
     Route::get('/user-tracking', [TrackingController::class, 'index'])->name('user.tracking');
+    Route::get('/last-screenshots', [TrackingController::class, 'lastScreenshots'])->name('user.last-screenshots');
+    Route::get('/my-activity/{id}', [TrackingController::class, 'myActivity'])->name('my-activity');
 
     /** Work Schedule Routes */
     Route::get('/schedule', [WorkScheduleController::class, 'Index'])->name('work-schedule.index');

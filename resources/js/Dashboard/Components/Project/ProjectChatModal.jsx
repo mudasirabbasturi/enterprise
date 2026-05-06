@@ -16,11 +16,10 @@ const ProjectChatModal = ({ visible, onClose, project, currentUser }) => {
             fetchChatHistory();
             
             const channelName = `project-chat-${project.id}`;
-            const channel = window.Echo.channel(channelName);
+            let ws = null;
             
-            const handler = (payload) => {
-                if (payload && payload.data) {
-                    const incomingMsg = payload.data;
+            const handler = (incomingMsg) => {
+                if (incomingMsg) {
                     setMessages(prev => {
                         if (prev.some(m => m.id === incomingMsg.id)) return prev;
                         return [...prev, incomingMsg];
@@ -29,18 +28,36 @@ const ProjectChatModal = ({ visible, onClose, project, currentUser }) => {
             };
 
             const deleteHandler = (payload) => {
-                if (payload && payload.data) {
-                    const deletedId = payload.data.id;
+                if (payload && payload.id) {
+                    const deletedId = payload.id;
                     setMessages(prev => prev.filter(m => m.id !== deletedId));
                 }
             };
             
-            channel.listen(".event-new-message", handler);
-            channel.listen(".event-delete-message", deleteHandler);
+            try {
+                ws = new WebSocket('wss://demo.bidwinners.net');
+                
+                ws.onopen = () => {
+                    console.log("Connected to personal socket server (Modal Chat)");
+                    ws.send(JSON.stringify({ action: 'subscribe', channel: channelName }));
+                };
+
+                ws.onmessage = (event) => {
+                    const response = JSON.parse(event.data);
+                    if (response.channel === channelName && response.data) {
+                        const payload = response.data;
+                        if (payload.event === 'event-new-message') handler(payload.data);
+                        if (payload.event === 'event-delete-message') deleteHandler(payload.data);
+                    }
+                };
+
+                ws.onerror = (err) => console.error("Modal Chat Socket Error:", err);
+            } catch (e) {
+                console.error("Could not connect to modal chat socket:", e);
+            }
 
             return () => {
-                channel.stopListening(".event-new-message", handler);
-                channel.stopListening(".event-delete-message", deleteHandler);
+                if (ws) ws.close();
             };
         }
     }, [visible, project]);

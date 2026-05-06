@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
     AgGridReact,
     gridTheme,
@@ -6,21 +6,69 @@ import {
     sideBarConfig,
     gridOptionsConfig
 } from "@agConfig/AgGridConfig";
-import {
-    Link,
-    Head,
-    Breadcrumb,
-    DeleteOutlined,
-    EyeOutlined,
-    Tooltip,
-    Popconfirm,
-    SyncOutlined
-} from "@shared/ui";
+import { Link, Head, Breadcrumb } from "@shared/ui";
 import MainLayout from "@layout";
 import axios from "axios";
-import { notification, Modal, Tag, Image, Select, DatePicker } from "antd";
+import {
+    notification,
+    Modal,
+    Tag,
+    Image,
+    Select,
+    DatePicker,
+    Badge,
+    Progress,
+    Switch,
+    Card,
+    Row,
+    Col,
+    Statistic,
+    Typography,
+    Empty,
+    Spin,
+    Tooltip,
+    Popconfirm 
+} from "antd";
+import {
+    LineChartOutlined,
+    ClockCircleOutlined,
+    SyncOutlined,
+    PictureOutlined,
+    DeleteOutlined,
+    EyeOutlined,
+    QuestionCircleOutlined,
+    InfoCircleOutlined,
+    GlobalOutlined,
+    LinkOutlined,
+    CameraOutlined
+} from '@ant-design/icons';
 import { router } from "@inertiajs/react";
 import dayjs from "dayjs";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title as ChartTitle,
+  Tooltip as ChartTooltip,
+  Filler,
+  Legend as ChartLegend,
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ChartTitle,
+  ChartTooltip,
+  Filler,
+  ChartLegend
+);
+
+const { Title, Text } = Typography;
 
 const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) => {
     const [api, contextHolder] = notification.useNotification();
@@ -45,22 +93,51 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
     const [day, setDay] = useState(new Date().getDate());
     const [month, setMonth] = useState(new Date().getMonth() + 1);
     const [year, setYear] = useState(new Date().getFullYear());
-    const [screenshotRange, setScreenshotRange] = useState([dayjs(), dayjs()]);
+    const [screenshotFrom, setScreenshotFrom] = useState(dayjs());
+    const [screenshotTo, setScreenshotTo] = useState(null);
+    const [activityFrom, setActivityFrom] = useState(dayjs());
+    const [activityTo, setActivityTo] = useState(null);
 
     // Global Settings
-    const [intervalMinutes, setIntervalMinutes] = useState(5);
-    const [syncInterval, setSyncInterval] = useState(30);
-    const [adminPassword, setAdminPassword] = useState("bidwinners#12");
-    const [isSavingSettings, setIsSavingSettings] = useState(false);
+    const [screenshotInterval, setScreenshotInterval] = useState(120);
+    const [socketUrl, setSocketUrl] = useState("wss://demo.bidwinners.net");
+    const [apiBaseUrl, setApiBaseUrl] = useState("http://127.0.0.1:8000");
+    const [syncInterval, setSyncInterval] = useState(5);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+    const [adminPassword, setAdminPassword] = useState("bidwinners");
     const [allowedIPs, setAllowedIPs] = useState([]);
-    const [newIp, setNewIp] = useState("");
+    const [isSavingSettings, setIsSavingSettings] = useState(false);
+    const [ipInput, setIpInput] = useState("");
 
     // Activity state
     const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
     const [activityStats, setActivityStats] = useState(null);
+    const [takingScreenshotId, setTakingScreenshotId] = useState(null);
+    const [previewImage, setPreviewImage] = useState(null);
+    const [isPreviewVisible, setIsPreviewVisible] = useState(false);
     const [activityLoading, setActivityLoading] = useState(false);
-
+    const takingScreenshotIdRef = useRef(null);
+    
+    useEffect(() => {
+        takingScreenshotIdRef.current = takingScreenshotId;
+    }, [takingScreenshotId]);
+    
+    // Screenshot pagination
+    const [screenshotsPage, setScreenshotsPage] = useState(1);
+    const [hasMoreScreenshots, setHasMoreScreenshots] = useState(false);
+    const [totalScreenshots, setTotalScreenshots] = useState(0);
+    const [isFetchingMore, setIsFetchingMore] = useState(false);
+    const observer = useRef();
+    const lastScreenshotElementRef = useCallback(node => {
+        if (screenshotLoading || isFetchingMore) return;
+        if (observer.current) observer.current.disconnect();
+        observer.current = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasMoreScreenshots) {
+                loadMoreScreenshots();
+            }
+        });
+        if (node) observer.current.observe(node);
+    }, [screenshotLoading, isFetchingMore, hasMoreScreenshots]);
     const fetchUsers = async (showLoading = true) => {
         if (showLoading) setLoading(true);
         try {
@@ -85,9 +162,11 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
     const fetchSettings = async () => {
         try {
             const resp = await axios.get("/api/track/settings");
-            setIntervalMinutes(Math.round(resp.data.screenshot_interval / 60));
-            setSyncInterval(resp.data.tracker_sync_interval || 30);
-            setAdminPassword(resp.data.tracker_admin_password);
+            setScreenshotInterval(resp.data.tracker_screenshot_interval || 120);
+            setSocketUrl(resp.data.tracker_socket_url || "wss://demo.bidwinners.net");
+            setApiBaseUrl(resp.data.tracker_api_url || "http://127.0.0.1:8000");
+            setSyncInterval(resp.data.tracker_sync_interval || 5);
+            setAdminPassword(resp.data.tracker_admin_password || "bidwinners");
             setAllowedIPs(resp.data.tracker_allowed_ips || []);
         } catch (error) {
             console.error("Error fetching tracker settings:", error);
@@ -98,14 +177,16 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
         setIsSavingSettings(true);
         try {
             await axios.post("/api/track/settings/update", {
-                screenshot_interval: intervalMinutes * 60,
+                tracker_screenshot_interval: screenshotInterval,
+                tracker_socket_url: socketUrl,
+                tracker_api_url: apiBaseUrl,
                 tracker_sync_interval: syncInterval,
                 tracker_admin_password: adminPassword,
                 tracker_allowed_ips: allowedIPs
             });
             api.success({
                 message: "Settings Updated",
-                description: `Settings saved successfully.`,
+                description: `Global tracker settings saved successfully.`,
                 placement: "topRight"
             });
         } catch (error) {
@@ -119,13 +200,46 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
         }
     };
 
-    // Auto-refresh users every 30 seconds
+    // Real-time status updates via Layout.jsx Events
     useEffect(() => {
         fetchSettings(); // Fetch on load
-        const interval = setInterval(() => {
-            fetchUsers(false);
-        }, 30000);
-        return () => clearInterval(interval);
+        
+        const handleStatusNotification = (event) => {
+            const response = event.detail;
+            if (!response || !response.data) return;
+            
+            const eventType = response.data.event;
+            const payload = response.data.data;
+
+            if (eventType === 'event-user-status-updated') {
+                const userId = payload.userId || payload.user_id;
+                const isOnline = payload.isOnline !== undefined ? payload.isOnline : payload.is_online;
+                setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_online: isOnline } : u));
+            }
+
+            if (eventType === 'event-screenshot-captured') {
+                const userId = payload.userId;
+                setUsers(prev => prev.map(u => {
+                    if (u.id === userId) {
+                        return { ...u, latest_screenshot: payload.screenshot, last_active_at: new Date().toISOString() };
+                    }
+                    return u;
+                }));
+                
+                // Reset loading state and SHOW PREVIEW if this is the user we were waiting for
+                if (takingScreenshotIdRef.current === userId) {
+                    setPreviewImage(payload.screenshot.url);
+                    setIsPreviewVisible(true);
+                    setTakingScreenshotId(null);
+                }
+            }
+        };
+
+        window.addEventListener('tracker-status-notification', handleStatusNotification);
+        
+        return () => {
+            window.removeEventListener('tracker-status-notification', handleStatusNotification);
+        };
     }, [selectedStatus]);
 
     const handleStatusChange = (value) => {
@@ -139,16 +253,20 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
 
     const fetchScreenshots = useCallback(async (userId, start, end) => {
         setScreenshotLoading(true);
+        setScreenshotsPage(1);
         setSelectedIds([]); // Reset selection on fetch
         try {
-            const response = await axios.get("/api/track/screenshots", {
-                params: {
-                    user_id: userId,
-                    start_date: start.format('YYYY-MM-DD'),
-                    end_date: end.format('YYYY-MM-DD')
-                }
-            });
-            setScreenshots(response.data);
+            const params = {
+                user_id: userId,
+                start_date: start ? start.format('YYYY-MM-DD') : undefined,
+                end_date: end ? end.format('YYYY-MM-DD') : (start ? start.format('YYYY-MM-DD') : undefined),
+                page: 1,
+                per_page: 24
+            };
+            const response = await axios.get("/api/track/screenshots", { params });
+            setScreenshots(response.data.data);
+            setHasMoreScreenshots(!!response.data.next_page_url);
+            setTotalScreenshots(response.data.total || 0);
         } catch (error) {
             console.error("Error fetching screenshots:", error);
             api.error({
@@ -161,11 +279,36 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
         }
     }, [api]);
 
+    const loadMoreScreenshots = async () => {
+        if (!selectedUser || !hasMoreScreenshots || isFetchingMore) return;
+        
+        setIsFetchingMore(true);
+        const nextPage = screenshotsPage + 1;
+        try {
+            const params = {
+                user_id: selectedUser.id,
+                start_date: screenshotFrom ? screenshotFrom.format('YYYY-MM-DD') : undefined,
+                end_date: screenshotTo ? screenshotTo.format('YYYY-MM-DD') : (screenshotFrom ? screenshotFrom.format('YYYY-MM-DD') : undefined),
+                page: nextPage,
+                per_page: 24
+            };
+            const response = await axios.get("/api/track/screenshots", { params });
+            setScreenshots(prev => [...prev, ...response.data.data]);
+            setScreenshotsPage(nextPage);
+            setHasMoreScreenshots(!!response.data.next_page_url);
+            setTotalScreenshots(response.data.total || 0);
+        } catch (error) {
+            console.error("Error loading more screenshots:", error);
+        } finally {
+            setIsFetchingMore(false);
+        }
+    };
+
     useEffect(() => {
         if (isScreenshotModalOpen && selectedUser) {
-            fetchScreenshots(selectedUser.id, screenshotRange[0], screenshotRange[1]);
+            fetchScreenshots(selectedUser.id, screenshotFrom, screenshotTo);
         }
-    }, [isScreenshotModalOpen, selectedUser, screenshotRange, fetchScreenshots]);
+    }, [isScreenshotModalOpen, selectedUser, screenshotFrom, screenshotTo, fetchScreenshots]);
 
     const openScreenshotModal = (user) => {
         setSelectedUser(user);
@@ -197,7 +340,7 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                 description: `${selectedIds.length} screenshots deleted successfully`,
                 placement: "topRight"
             });
-            fetchScreenshots(selectedUser.id, day, month, year);
+            fetchScreenshots(selectedUser.id, screenshotFrom, screenshotTo);
         } catch (error) {
             console.error("Error deleting screenshots:", error);
             api.error({
@@ -211,21 +354,64 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
     };
 
     const triggerScreenshot = async (user) => {
+        setTakingScreenshotId(user.id);
+        const triggerTime = dayjs();
+        
         try {
+            // 1. Trigger the screenshot via API
             await axios.post("/api/track/screenshot/trigger", { user_id: user.id });
-            api.success({
-                message: "Screenshot Requested",
-                description: `A screenshot will be captured from ${user.name}'s machine within 10 seconds. If nothing appears, their Tracker app may not be running.`,
-                placement: "topRight",
-                duration: 8
-            });
+            
+            // 2. We primarily rely on the WebSocket (handleStatusNotification) to clear the loading state.
+            // But we'll keep a shorter, background polling loop as a fallback just in case the socket misses.
+            let found = false;
+            for (let i = 0; i < 6; i++) {
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // If the socket already cleared the state, we can stop polling
+                if (!takingScreenshotId) {
+                    found = true;
+                    break;
+                }
+
+                try {
+                    const response = await axios.get("/api/track/screenshots", {
+                        params: {
+                            user_id: user.id,
+                            start_date: dayjs().format('YYYY-MM-DD'),
+                            end_date: dayjs().format('YYYY-MM-DD'),
+                            per_page: 1
+                        }
+                    });
+                    const latest = response.data.data ? response.data.data[0] : null;
+                    if (latest) {
+                        const screenshotTime = dayjs(`${latest.date} ${latest.time}`);
+                        if (screenshotTime.isAfter(triggerTime.subtract(5, 'seconds'))) {
+                            found = true;
+                            setUsers(prev => prev.map(u => u.id === user.id ? { ...u, latest_screenshot: { file_path: latest.url } } : u));
+                            setTakingScreenshotId(null);
+                            
+                            // Optional: show preview
+                            setPreviewImage(latest.url);
+                            setIsPreviewVisible(true);
+                            break;
+                        }
+                    }
+                } catch (e) {}
+            }
+
+            if (!found && takingScreenshotId === user.id) {
+                api.info({
+                    message: "Request Sent",
+                    description: `Capture request sent to ${user.name}. It will appear in the list once uploaded.`,
+                    placement: "topRight"
+                });
+            }
         } catch (error) {
             console.error("Error triggering screenshot:", error);
-            api.error({
-                message: "Error",
-                description: "Failed to request screenshot",
-                placement: "topRight"
-            });
+            api.error({ message: "Error", description: "Failed to request screenshot" });
+        } finally {
+            // Ensure loading state is eventually cleared
+            setTimeout(() => setTakingScreenshotId(null), 1000);
         }
     };
 
@@ -249,13 +435,37 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
             });
         }
     };
-    const fetchActivityStats = async (userId, d, m, y) => {
+
+    const toggleLogoutRestriction = async (user, restricted) => {
+        try {
+            await axios.post("/api/track/toggle-logout-restriction", {
+                user_id: user.id,
+                logout_restriction: restricted
+            });
+            api.success({
+                message: "Security Updated",
+                description: `Logout restriction for ${user.name} set to ${restricted ? 'ON' : 'OFF'}`,
+                placement: "topRight"
+            });
+            setUsers(prev => prev.map(u => u.id === user.id ? { ...u, logout_restriction: restricted } : u));
+        } catch (error) {
+            api.error({
+                message: "Error",
+                description: "Failed to update logout restriction",
+                placement: "topRight"
+            });
+        }
+    };
+    
+    const fetchActivityStats = async (userId, start, end) => {
         setActivityLoading(true);
         try {
-            const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            const response = await axios.get("/api/track/activity/stats", {
-                params: { user_id: userId, date: dateStr }
-            });
+            const params = {
+                user_id: userId,
+                start_date: start.format('YYYY-MM-DD'),
+                end_date: end ? end.format('YYYY-MM-DD') : start.format('YYYY-MM-DD')
+            };
+            const response = await axios.get("/api/track/activity/stats", { params });
             setActivityStats(response.data);
         } catch (error) {
             console.error("Error fetching activity stats:", error);
@@ -271,9 +481,9 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
 
     useEffect(() => {
         if (isActivityModalOpen && selectedUser) {
-            fetchActivityStats(selectedUser.id, day, month, year);
+            fetchActivityStats(selectedUser.id, activityFrom, activityTo);
         }
-    }, [isActivityModalOpen, selectedUser, day, month, year]);
+    }, [isActivityModalOpen, selectedUser, activityFrom, activityTo]);
 
     const openActivityModal = (user) => {
         setSelectedUser(user);
@@ -304,12 +514,12 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                     {params.value ? (
                         <Tag color="success" className="rounded-pill px-3">
                             <span className="dot me-1" style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#52c41a' }}></span>
-                            Online
+                            RUNNING
                         </Tag>
                     ) : (
                         <Tag color="default" className="rounded-pill px-3">
                             <span className="dot me-1" style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#bfbfbf' }}></span>
-                            Offline
+                            OFFLINE
                         </Tag>
                     )}
                 </div>
@@ -343,38 +553,147 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
             flex: 1.5
         },
         {
+            headerName: "Logout Protection",
+            field: "logout_restriction",
+            cellRenderer: (params) => (
+                <div className="d-flex align-items-center h-100">
+                    <div className="form-check form-switch cursor-pointer">
+                        <input
+                            className="form-check-input shadow-none"
+                            type="checkbox"
+                            checked={params.value !== undefined ? !!params.value : true} // Default to true if undefined
+                            onChange={(e) => toggleLogoutRestriction(params.data, e.target.checked)}
+                            style={{ cursor: 'pointer', width: '38px', height: '20px' }}
+                        />
+                    </div>
+                    <span className={`ms-1 small fw-bold ${params.value !== false ? 'text-danger' : 'text-success'}`}>
+                        {params.value !== false ? 'PROTECTED' : 'FREE'}
+                    </span>
+                </div>
+            ),
+            flex: 1.5
+        },
+        {
             headerName: "Action",
             minWidth: 250,
+            pinned: 'right',
             cellRenderer: (params) => (
                 <div className="d-flex justify-content-center align-items-center h-100 gap-2">
-                    <button
-                        className="btn btn-primary btn-sm rounded-pill px-3"
-                        onClick={() => openScreenshotModal(params.data)}
-                    >
-                        <EyeOutlined className="me-1" />
-                        Screenshots
-                    </button>
-                    <button
-                        className="btn btn-info btn-sm rounded-pill px-3 text-white"
-                        onClick={() => openActivityModal(params.data)}
-                    >
-                        <i className="bi bi-graph-up-arrow me-1" />
-                        Activity
-                    </button>
-                    <Tooltip title="Capture screenshot now">
+                    <Tooltip title="View Screenshots">
                         <button
-                            className="btn btn-warning btn-sm rounded-pill px-2"
-                            onClick={() => triggerScreenshot(params.data)}
+                            className="btn btn-primary btn-sm rounded-pill px-2"
+                            onClick={() => openScreenshotModal(params.data)}
                         >
-                            <i className="bi bi-camera-fill me-1" />
-                            Take
+                            <PictureOutlined />
                         </button>
                     </Tooltip>
+                    <Tooltip title="View Activity">
+                        <button
+                            className="btn btn-info btn-sm rounded-pill px-2 text-white"
+                            onClick={() => openActivityModal(params.data)}
+                        >
+                            <LineChartOutlined />
+                        </button>
+                    </Tooltip>
+                    <Tooltip title={params.data.is_online ? "Trigger Remote Screenshot" : "User is Offline"}>
+                        <button
+                            className="btn btn-warning btn-sm rounded-pill px-3"
+                            onClick={() => triggerScreenshot(params.data)}
+                            disabled={takingScreenshotId === params.data.id || !params.data.is_online}
+                        >
+                            {takingScreenshotId === params.data.id ? (
+                                <SyncOutlined spin className="me-1" />
+                            ) : (
+                                <CameraOutlined className="me-1" />
+                            )}
+                            {takingScreenshotId === params.data.id ? 'Capturing...' : params.data.is_online ? 'Capture' : 'Offline'}
+                        </button>
+                    </Tooltip>
+
+
                 </div>
             ),
             flex: 2
         }
+    ], [takingScreenshotId]);
+
+    // Activity Grid Column Definitions
+    const activityColumns = useMemo(() => [
+        {
+            headerName: 'Application / Detail',
+            field: 'title',
+            flex: 2,
+            minWidth: 400,
+            cellRenderer: (params) => {
+                const record = params.data;
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '100%' }}>
+                        <div style={{ padding: '6px', backgroundColor: '#f1f5f9', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '32px' }}>
+                            <GlobalOutlined style={{ color: '#3b82f6' }} />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.4', overflow: 'hidden' }}>
+                            <Text strong style={{ fontSize: '13px' }} ellipsis>{record.title}</Text>
+                            <div className="d-flex align-items-center gap-2">
+                                <Text type="secondary" style={{ fontSize: '10px' }}>{record.app}</Text>
+                                {record.url && (
+                                    <a href={record.url.startsWith('http') ? record.url : `https://${record.url}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '10px', color: '#3b82f6' }} className="text-truncate">
+                                        <LinkOutlined style={{ fontSize: '9px' }} /> {record.url}
+                                    </a>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+        },
+        {
+            headerName: 'Duration',
+            field: 'minutes',
+            width: 150,
+            sortable: true,
+            cellRenderer: (params) => <Tag color="blue" className="rounded-pill px-2">{params.value} mins</Tag>
+        },
+        {
+            headerName: 'Activity Level',
+            field: 'total_actions',
+            width: 200,
+            sortable: true,
+            cellRenderer: (params) => {
+                const record = params.data;
+                const totalActions = record.clicks + record.keystrokes;
+                const percentage = Math.min(100, (totalActions / 100) * 100);
+                return (
+                    <div style={{ width: '100%', padding: '0 10px' }}>
+                        <Progress 
+                            percent={Math.round(percentage)} 
+                            size="small" 
+                            showInfo={false}
+                            strokeColor={percentage > 70 ? '#10b981' : percentage > 30 ? '#3b82f6' : '#f59e0b'}
+                        />
+                    </div>
+                );
+            }
+        },
+        {
+            headerName: 'Clicks',
+            field: 'clicks',
+            width: 100,
+            sortable: true,
+            cellClass: 'text-center'
+        },
+        {
+            headerName: 'Keys',
+            field: 'keystrokes',
+            width: 100,
+            sortable: true,
+            cellClass: 'text-center'
+        }
     ], []);
+
+    const activityTableData = activityStats ? activityStats.app_usage.map((item, idx) => ({
+        key: idx,
+        ...item
+    })) : [];
 
     const days = Array.from({ length: 31 }, (_, i) => i + 1);
     const months = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -415,13 +734,13 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                             TRACKER SETTINGS
                         </button>
                         <button
-                            className="btn btn-primary btn-sm d-flex align-items-center"
-                            onClick={() => fetchUsers(true)}
-                            disabled={loading}
+                            className="btn btn-primary btn-sm d-flex align-items-center rounded-pill px-3 shadow-sm"
+                            onClick={() => router.visit(route('user.last-screenshots'))}
                         >
-                            {loading ? <SyncOutlined spin className="me-1" /> : <i className="bi bi-arrow-clockwise me-1"></i>}
-                            Refresh Users
+                            <i className="bi bi-display me-1"></i>
+                            INSTANT MONITOR
                         </button>
+
                     </div>
                 </div>
 
@@ -431,6 +750,8 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                             <AgGridReact
                                 rowData={users}
                                 columnDefs={userColDefs}
+                                getRowId={(params) => params.data.id.toString()}
+                                animateRows={true}
                                 defaultColDef={{
                                     ...defaultColDef,
                                     flex: 1,
@@ -444,6 +765,31 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                         </div>
                     </div>
                 </div>
+                {/* Global Loader for manual screenshot */}
+                {takingScreenshotId && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+                        backgroundColor: 'rgba(255,255,255,0.7)', zIndex: 9999,
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                        <SyncOutlined spin style={{ fontSize: '48px', color: '#1677ff' }} />
+                        <div className="mt-3 fw-bold text-primary fs-5">Capturing Screen...</div>
+                        <div className="text-muted">Waiting for user machine response</div>
+                    </div>
+                )}
+                {/* Hidden Image for direct popup */}
+                <div style={{ display: 'none' }}>
+                    <Image
+                        src={previewImage}
+                        preview={{
+                            visible: isPreviewVisible,
+                            onVisibleChange: (vis) => setIsPreviewVisible(vis),
+                            src: previewImage
+                        }}
+                    />
+                </div>
+
+
             </div>
 
             {/* Screenshot Modal */}
@@ -451,10 +797,17 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                 title={
                     <div className="d-flex align-items-center justify-content-between pe-4 w-100">
                         <div className="d-flex align-items-center gap-3">
-                            <span className="text-primary fw-bold fs-5">Screenshots for: {selectedUser?.name}</span>
+                            <div className="d-flex flex-column">
+                                <span className="text-primary fw-bold fs-5">Screenshots: {selectedUser?.name}</span>
+                                {totalScreenshots > 0 && (
+                                    <span className="text-muted small fw-bold">
+                                        Showing {screenshots.length} of {totalScreenshots} images
+                                    </span>
+                                )}
+                            </div>
                             {screenshots.length > 0 && (
                                 <div className="d-flex gap-2">
-                                    <button className="btn btn-outline-secondary btn-sm" onClick={selectAll}>
+                                    <button className="btn btn-outline-secondary btn-sm rounded-pill px-3" onClick={selectAll}>
                                         {selectedIds.length === screenshots.length ? 'Deselect All' : 'Select All'}
                                     </button>
                                     {selectedIds.length > 0 && (
@@ -465,26 +818,33 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                                             okText="Yes"
                                             cancelText="No"
                                         >
-                                            <button className="btn btn-danger btn-sm d-flex align-items-center" disabled={deleting}>
+                                            <button className="btn btn-danger btn-sm d-flex align-items-center rounded-pill px-3" disabled={deleting}>
                                                 {deleting ? <SyncOutlined spin className="me-1" /> : <DeleteOutlined className="me-1" />}
-                                                Delete Selected ({selectedIds.length})
+                                                Delete ({selectedIds.length})
                                             </button>
                                         </Popconfirm>
                                     )}
                                 </div>
                             )}
                         </div>
-                        <div className="d-flex gap-2 align-items-center">
-                            <DatePicker.RangePicker 
-                                value={screenshotRange}
-                                onChange={(dates) => {
-                                    if (dates) {
-                                        setScreenshotRange(dates);
-                                    }
-                                }}
+                        <div className="d-flex align-items-center gap-1 bg-white border rounded-pill px-2 py-1 shadow-sm" style={{ height: '38px' }}>
+                            <span className="text-muted small ps-2 fw-bold">From:</span>
+                            <DatePicker 
+                                value={screenshotFrom}
+                                onChange={(date) => setScreenshotFrom(date || dayjs())}
                                 allowClear={false}
-                                format="DD MMM YYYY"
-                                className="shadow-sm"
+                                format="DD MMM"
+                                className="border-0 shadow-none bg-transparent"
+                                style={{ width: '85px' }}
+                            />
+                            <span className="text-muted small fw-bold">To:</span>
+                            <DatePicker 
+                                value={screenshotTo}
+                                onChange={(date) => setScreenshotTo(date)}
+                                placeholder="Select"
+                                format="DD MMM"
+                                className="border-0 shadow-none bg-transparent"
+                                style={{ width: '85px' }}
                             />
                         </div>
                     </div>
@@ -522,7 +882,11 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                         <div className="row g-4">
                             {screenshots.length > 0 ? (
                                 screenshots.map((s, idx) => (
-                                    <div key={s.id} className="col-sm-6 col-md-4 col-lg-3 col-xl-2">
+                                    <div 
+                                        key={`${s.id}-${idx}`} 
+                                        className="col-sm-6 col-md-4 col-lg-3 col-xl-2"
+                                        ref={screenshots.length === idx + 1 ? lastScreenshotElementRef : null}
+                                    >
                                         <div
                                             className={`card shadow-sm border-0 h-100 screenshot-card position-relative ${selectedIds.includes(s.id) ? 'border border-primary border-2' : ''}`}
                                             style={{ transition: 'all 0.2s', borderRadius: '12px', cursor: 'pointer', outline: selectedIds.includes(s.id) ? '2px solid #0d6efd' : 'none' }}
@@ -605,27 +969,39 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                     </Image.PreviewGroup>
                 )}
             </Modal>
+            
             {/* Activity Stats Modal */}
             <Modal
                 title={
                     <div className="d-flex align-items-center justify-content-between pe-4 w-100">
-                        <div className="d-flex align-items-center gap-2">
-                            <i className="bi bi-graph-up-arrow text-info"></i>
-                            <span className="fw-bold fs-5">Daily Activity: {selectedUser?.name}</span>
+                        <div className="d-flex align-items-center gap-3">
+                            <div className="bg-primary bg-opacity-10 p-2 rounded-3">
+                                <LineChartOutlined className="text-primary fs-4" />
+                            </div>
+                            <div className="d-flex flex-column">
+                                <span className="text-dark fw-bold fs-5">Activity Dashboard</span>
+                                <span className="text-muted small fw-normal">{selectedUser?.name}</span>
+                            </div>
                         </div>
-                        <div className="d-flex gap-2 align-items-center">
+                        <div className="d-flex gap-2 align-items-center bg-light border rounded-pill px-3 py-1">
+                            <span className="text-muted small fw-bold">From:</span>
                             <DatePicker 
-                                value={dayjs(`${year}-${month}-${day}`)}
-                                onChange={(date) => {
-                                    if (date) {
-                                        setDay(date.date());
-                                        setMonth(date.month() + 1);
-                                        setYear(date.year());
-                                    }
-                                }}
+                                value={activityFrom}
+                                onChange={(date) => setActivityFrom(date || dayjs())}
                                 allowClear={false}
-                                format="DD MMM YYYY"
-                                className="shadow-sm"
+                                format="DD MMM"
+                                className="border-0 shadow-none bg-transparent fw-bold"
+                                style={{ width: '90px' }}
+                            />
+                            <span className="text-muted small">→</span>
+                            <DatePicker 
+                                value={activityTo}
+                                onChange={(date) => setActivityTo(date)}
+                                allowClear={true}
+                                placeholder="End"
+                                format="DD MMM"
+                                className="border-0 shadow-none bg-transparent fw-bold"
+                                style={{ width: '90px' }}
                             />
                         </div>
                     </div>
@@ -633,83 +1009,196 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                 open={isActivityModalOpen}
                 onCancel={() => setIsActivityModalOpen(false)}
                 footer={null}
-                width={800}
+                width="95%"
                 centered
+                styles={{
+                    body: { padding: '20px', backgroundColor: '#f8f9fa', maxHeight: '85vh', overflowY: 'auto' },
+                    content: { borderRadius: '16px', overflow: 'hidden' },
+                    mask: { backdropFilter: 'blur(4px)' }
+                }}
             >
                 {activityLoading ? (
                     <div className="d-flex justify-content-center align-items-center py-5">
-                        <SyncOutlined spin style={{ fontSize: '32px' }} className="text-info" />
+                        <div className="text-center">
+                            <SyncOutlined spin style={{ fontSize: '40px' }} className="text-primary" />
+                            <p className="mt-3 text-muted">Loading activity data...</p>
+                        </div>
                     </div>
                 ) : (
-                    <div className="py-3">
-                        {activityStats && activityStats.total_minutes > 0 ? (
-                            <div className="row g-4">
-                                {/* Summary Cards */}
-                                <div className="col-md-4">
-                                    <div className="card border-0 shadow-sm bg-soft-primary text-center p-3" style={{ borderRadius: '15px', backgroundColor: '#e7f1ff' }}>
-                                        <div className="text-muted small fw-bold mb-1">TOTAL WORK TIME</div>
-                                        <div className="fs-3 fw-bold text-primary">
-                                            {Math.floor(activityStats.total_minutes / 60)}h {activityStats.total_minutes % 60}m
+                    <div>
+                        {/* Side-by-Side: Summary Cards + Chart */}
+                        <Row gutter={[16, 16]}>
+                            {/* Left: Compact Summary Cards */}
+                            <Col xs={24} lg={8}>
+                                <div className="d-flex flex-column gap-3 h-100">
+                                    <Card className="border-0 shadow-sm overflow-hidden position-relative flex-fill" style={{ borderRadius: '16px', background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', minHeight: '90px' }}>
+                                        <div className="position-absolute opacity-10" style={{ right: '-10px', bottom: '-10px', fontSize: '55px' }}><ClockCircleOutlined /></div>
+                                        <Statistic
+                                            title={<Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: '11px', fontWeight: 'bold' }}>TOTAL ACTIVE TIME</Text>}
+                                            value={activityStats ? `${Math.floor(activityStats.total_minutes / 60)}h ${activityStats.total_minutes % 60}m` : '0h 0m'}
+                                            valueStyle={{ color: '#fff', fontWeight: '800', fontSize: '22px' }}
+                                        />
+                                    </Card>
+                                    <Card className="border-0 shadow-sm overflow-hidden position-relative flex-fill" style={{ borderRadius: '16px', background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', minHeight: '90px' }}>
+                                        <div className="position-absolute opacity-10" style={{ right: '-10px', bottom: '-10px', fontSize: '55px' }}>
+                                            <img src="/uploads/icons/selection.png" alt="Mouse" style={{ width: '55px', filter: 'brightness(0) invert(1)' }} />
                                         </div>
-                                    </div>
-                                </div>
-                                <div className="col-md-4">
-                                    <div className="card border-0 shadow-sm bg-soft-info text-center p-3" style={{ borderRadius: '15px', backgroundColor: '#e1f5fe' }}>
-                                        <div className="text-muted small fw-bold mb-1">TOTAL CLICKS</div>
-                                        <div className="fs-3 fw-bold text-info">
-                                            {activityStats.total_clicks.toLocaleString()}
+                                        <Statistic
+                                            title={<Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: '11px', fontWeight: 'bold' }}>TOTAL MOUSE CLICKS</Text>}
+                                            value={activityStats ? activityStats.total_clicks : 0}
+                                            valueStyle={{ color: '#fff', fontWeight: '800', fontSize: '22px' }}
+                                        />
+                                    </Card>
+                                    <Card className="border-0 shadow-sm overflow-hidden position-relative flex-fill" style={{ borderRadius: '16px', background: 'linear-gradient(135deg, #ea580c 0%, #f59e0b 100%)', minHeight: '90px' }}>
+                                        <div className="position-absolute opacity-10" style={{ right: '-10px', bottom: '-10px', fontSize: '55px' }}>
+                                            <img src="/uploads/icons/keyboard.png" alt="Keyboard" style={{ width: '55px', filter: 'brightness(0) invert(1)' }} />
                                         </div>
-                                    </div>
+                                        <Statistic
+                                            title={<Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: '11px', fontWeight: 'bold' }}>KEYBOARD STROKES</Text>}
+                                            value={activityStats ? activityStats.total_keystrokes : 0}
+                                            valueStyle={{ color: '#fff', fontWeight: '800', fontSize: '22px' }}
+                                        />
+                                    </Card>
                                 </div>
-                                <div className="col-md-4">
-                                    <div className="card border-0 shadow-sm bg-soft-warning text-center p-3" style={{ borderRadius: '15px', backgroundColor: '#fff3e0' }}>
-                                        <div className="text-muted small fw-bold mb-1">KEYSTROKES</div>
-                                        <div className="fs-3 fw-bold text-warning">
-                                            {activityStats.total_keystrokes.toLocaleString()}
-                                        </div>
-                                    </div>
-                                </div>
+                            </Col>
 
-                                {/* Top Apps */}
-                                <div className="col-12 mt-4">
-                                    <h6 className="fw-bold mb-3 border-start border-4 border-info ps-2">Top Software Usage</h6>
-                                    <div className="list-group list-group-flush shadow-sm rounded-3">
-                                        {Object.entries(activityStats.app_usage).map(([app, stats], idx) => (
-                                            <div key={idx} className="list-group-item d-flex justify-content-between align-items-center">
-                                                <div className="d-flex align-items-center">
-                                                    <div className="bg-light p-2 rounded me-3">
-                                                        <i className="bi bi-window text-secondary"></i>
-                                                    </div>
-                                                    <span className="fw-medium text-dark">{app}</span>
-                                                </div>
-                                                <div className="d-flex align-items-center gap-2">
-                                                    <div className="progress d-none d-md-block" style={{ width: '100px', height: '6px' }}>
-                                                        <div 
-                                                            className="progress-bar bg-info" 
-                                                            role="progressbar" 
-                                                            style={{ width: `${(stats.minutes / activityStats.total_minutes) * 100}%` }}
-                                                        ></div>
-                                                    </div>
-                                                    <Tag color="blue" className="m-0 border-0">{stats.minutes}m</Tag>
-                                                    <Tag color="cyan" className="m-0 border-0">{stats.clicks.toLocaleString()} clicks</Tag>
-                                                    <Tag color="orange" className="m-0 border-0">{stats.keystrokes.toLocaleString()} keys</Tag>
-                                                </div>
+                            {/* Right: 24h Productivity Pulse Chart */}
+                            <Col xs={24} lg={16}>
+                                <Card
+                                    title={
+                                        <div className="d-flex align-items-center justify-content-between">
+                                            <Title level={5} style={{ margin: 0 }}>
+                                                <LineChartOutlined className="text-primary me-2" /> 24-Hour Productivity Pulse
+                                            </Title>
+                                            <Tag color="blue" className="rounded-pill px-3 border-0" style={{ backgroundColor: '#e6f7ff' }}>Real-time</Tag>
+                                        </div>
+                                    }
+                                    className="border-0 shadow-sm overflow-hidden h-100"
+                                    style={{ borderRadius: '16px' }}
+                                >
+                                    <div style={{ height: '260px', width: '100%' }}>
+                                        {activityStats && activityStats.timeline && Object.keys(activityStats.timeline).length > 0 ? (
+                                            <Line
+                                                options={{
+                                                    responsive: true,
+                                                    maintainAspectRatio: false,
+                                                    plugins: {
+                                                        legend: { display: false },
+                                                        tooltip: {
+                                                            backgroundColor: 'rgba(255,255,255,0.95)',
+                                                            titleColor: '#1e293b',
+                                                            bodyColor: '#64748b',
+                                                            borderColor: '#e2e8f0',
+                                                            borderWidth: 1,
+                                                            padding: 12,
+                                                            cornerRadius: 12,
+                                                            callbacks: {
+                                                                title: (items) => `${items[0].label}:00 - ${items[0].label}:59`,
+                                                                label: (item) => {
+                                                                    const hour = item.label;
+                                                                    const stats = activityStats.timeline[hour];
+                                                                    return [
+                                                                        ` Total Actions: ${item.formattedValue}`,
+                                                                        ` Clicks: ${stats ? stats.clicks : 0}`,
+                                                                        ` Keystrokes: ${stats ? stats.keys : 0}`
+                                                                    ];
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    scales: {
+                                                        x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+                                                        y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', font: { size: 10 }, maxTicksLimit: 5 } }
+                                                    },
+                                                    interaction: { intersect: false, mode: 'index' },
+                                                    elements: { line: { tension: 0.4 }, point: { radius: 0, hoverRadius: 6, backgroundColor: '#1890ff' } }
+                                                }}
+                                                data={{
+                                                    labels: Array.from({ length: 24 }).map((_, i) => String(i).padStart(2, '0')),
+                                                    datasets: [{
+                                                        fill: true,
+                                                        label: 'Activity Intensity',
+                                                        data: Array.from({ length: 24 }).map((_, i) => {
+                                                            const hour = String(i).padStart(2, '0');
+                                                            const stats = activityStats.timeline[hour];
+                                                            return stats ? (stats.clicks + stats.keys) : 0;
+                                                        }),
+                                                        borderColor: '#1890ff',
+                                                        borderWidth: 3,
+                                                        backgroundColor: (context) => {
+                                                            const chart = context.chart;
+                                                            const { ctx, chartArea } = chart;
+                                                            if (!chartArea) return null;
+                                                            const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                                                            gradient.addColorStop(0, 'rgba(24,144,255,0.2)');
+                                                            gradient.addColorStop(1, 'rgba(24,144,255,0)');
+                                                            return gradient;
+                                                        }
+                                                    }]
+                                                }}
+                                            />
+                                        ) : (
+                                            <div className="h-100 d-flex align-items-center justify-content-center">
+                                                <Empty description="No timeline data available" />
                                             </div>
-                                        ))}
+                                        )}
+                                    </div>
+                                </Card>
+                            </Col>
+                        </Row>
+
+                        {/* Info Alert */}
+                        <div className="alert alert-info border-0 shadow-sm mt-3 d-flex align-items-center gap-3" style={{ borderRadius: '12px', backgroundColor: '#f0f9ff' }}>
+                            <InfoCircleOutlined className="fs-5 text-primary" />
+                            <div className="small text-muted">
+                                <b>Activity Level:</b> Intensity score based on interactions per minute.
+                                <b className="ms-3">Idle Time:</b> No mouse/keyboard movement detected for 5+ minutes.
+                            </div>
+                        </div>
+
+                        {/* AG Grid: Application Usage Analytics */}
+                        <Card
+                            title={
+                                <div className="d-flex align-items-center justify-content-between">
+                                    <Title level={5} style={{ margin: 0 }}>
+                                        <LineChartOutlined className="text-primary me-2" /> Application Usage Analytics
+                                    </Title>
+                                    <div className="text-muted small">
+                                        Total Apps: <b>{activityTableData.length}</b>
                                     </div>
                                 </div>
-
-                            </div>
-                        ) : (
-                            <div className="text-center py-5">
-                                <i className="bi bi-info-circle text-muted fs-1 mb-3 d-block"></i>
-                                <div className="text-muted fs-5">No activity data found for this date.</div>
-                                <p className="small text-secondary">Advanced tracking data will appear here once the user's tracker app starts reporting.</p>
-                            </div>
-                        )}
+                            }
+                            className="border-0 shadow-sm overflow-hidden mt-3"
+                            style={{ borderRadius: '16px' }}
+                            bodyStyle={{ padding: 0 }}
+                        >
+                            {activityStats && activityStats.total_minutes > 0 ? (
+                                <div className="ag-theme-alpine w-100" style={{ height: '420px' }}>
+                                    <AgGridReact
+                                        rowData={activityTableData}
+                                        columnDefs={activityColumns}
+                                        theme={gridTheme}
+                                        defaultColDef={{
+                                            ...defaultColDef,
+                                            filter: true,
+                                            resizable: true,
+                                        }}
+                                        animateRows={true}
+                                        pagination={true}
+                                        paginationPageSize={15}
+                                        rowHeight={60}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="py-5 text-center">
+                                    <Empty description={<span>No activity data found for the selected period.</span>} />
+                                </div>
+                            )}
+                        </Card>
                     </div>
                 )}
             </Modal>
+            
             {/* Tracker Settings Modal */}
             <Modal
                 title={
@@ -723,7 +1212,7 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                 footer={[
                     <button
                         key="cancel"
-                        className="btn btn-link text-muted me-2"
+                        className="btn btn-link text-muted me-2 text-decoration-none"
                         onClick={() => setIsSettingsModalOpen(false)}
                     >
                         Cancel
@@ -743,43 +1232,56 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                 centered
                 width={500}
             >
-                <div className="py-4">
-                    <div className="mb-4">
-                        <label className="form-label text-muted small fw-bold mb-2">SCREENSHOT INTERVAL</label>
-                        <select
-                            className="form-select border shadow-sm"
-                            value={intervalMinutes}
-                            onChange={(e) => setIntervalMinutes(parseInt(e.target.value))}
-                        >
-                            <option value={1}>Every 1 Min</option>
-                            <option value={2}>Every 2 Mins</option>
-                            <option value={3}>Every 3 Mins</option>
-                            <option value={5}>Every 5 Mins</option>
-                            <option value={10}>Every 10 Mins</option>
-                            <option value={15}>Every 15 Mins</option>
-                            <option value={30}>Every 30 Mins</option>
-                        </select>
-                        <div className="form-text mt-1 small">Frequency of automated screen captures</div>
+                <div className="py-3">
+                    <div className="row g-3 mb-4">
+                        <div className="col-md-6">
+                            <label className="form-label text-muted small fw-bold mb-1">SCREENSHOT INTERVAL (SEC)</label>
+                            <input
+                                type="number"
+                                className="form-control border shadow-sm"
+                                value={screenshotInterval}
+                                onChange={(e) => setScreenshotInterval(parseInt(e.target.value) || 0)}
+                                min={10}
+                            />
+                        </div>
+                        <div className="col-md-6">
+                            <label className="form-label text-muted small fw-bold mb-1">SYNC INTERVAL (SEC)</label>
+                            <input
+                                type="number"
+                                className="form-control border shadow-sm"
+                                value={syncInterval}
+                                onChange={(e) => setSyncInterval(parseInt(e.target.value) || 0)}
+                                min={1}
+                            />
+                        </div>
                     </div>
 
                     <div className="mb-4">
-                        <label className="form-label text-muted small fw-bold mb-2">SETTINGS SYNC FREQUENCY</label>
-                        <select
-                            className="form-select border shadow-sm"
-                            value={syncInterval}
-                            onChange={(e) => setSyncInterval(parseInt(e.target.value))}
-                        >
-                            <option value={10}>Every 10 Seconds</option>
-                            <option value={30}>Every 30 Seconds</option>
-                            <option value={60}>Every 1 Minute</option>
-                            <option value={120}>Every 2 Minutes</option>
-                            <option value={300}>Every 5 Minutes</option>
-                        </select>
-                        <div className="form-text mt-1 small">How often the tracker app checks for settings updates</div>
+                        <label className="form-label text-muted small fw-bold mb-1">SOCKET URL</label>
+                        <input
+                            type="text"
+                            className="form-control border shadow-sm"
+                            value={socketUrl}
+                            onChange={(e) => setSocketUrl(e.target.value)}
+                            placeholder="wss://..."
+                            disabled={true}
+                        />
                     </div>
 
                     <div className="mb-4">
-                        <label className="form-label text-muted small fw-bold mb-2">APP ADMIN PASSWORD</label>
+                        <label className="form-label text-muted small fw-bold mb-1">API BASE URL</label>
+                        <input
+                            type="text"
+                            className="form-control border shadow-sm"
+                            value={apiBaseUrl}
+                            onChange={(e) => setApiBaseUrl(e.target.value)}
+                            placeholder="http://..."
+                            disabled={true}
+                        />
+                    </div>
+
+                    <div className="mb-4">
+                        <label className="form-label text-muted small fw-bold mb-1">APP ADMIN PASSWORD</label>
                         <input
                             type="text"
                             className="form-control border shadow-sm"
@@ -787,26 +1289,33 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                             onChange={(e) => setAdminPassword(e.target.value)}
                             placeholder="Enter password"
                         />
-                        <div className="form-text mt-1 small">Password required for exiting or logging out of the app</div>
                     </div>
-
+                    
                     <div className="border-top pt-4 mt-4">
                         <label className="form-label text-muted small fw-bold mb-2">ALLOWED OFFICE IPs</label>
                         <div className="d-flex gap-2 mb-3">
                             <input
                                 type="text"
                                 className="form-control border shadow-sm"
-                                placeholder="Enter IP Address (e.g. 192.168.1.1)"
-                                value={newIp}
-                                onChange={(e) => setNewIp(e.target.value)}
-                                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), newIp && (setAllowedIPs([...allowedIPs, newIp]), setNewIp("")))}
+                                placeholder="Enter IP (e.g. 192.168.1.1)"
+                                value={ipInput}
+                                onChange={(e) => setIpInput(e.target.value)}
+                                onKeyPress={(e) => {
+                                    if (e.key === 'Enter') {
+                                        if (ipInput.trim() && !allowedIPs.includes(ipInput.trim())) {
+                                            setAllowedIPs([...allowedIPs, ipInput.trim()]);
+                                            setIpInput("");
+                                        }
+                                        e.preventDefault();
+                                    }
+                                }}
                             />
-                            <button
-                                className="btn btn-primary"
+                            <button 
+                                className="btn btn-primary px-3 shadow-sm"
                                 onClick={() => {
-                                    if (newIp) {
-                                        setAllowedIPs([...allowedIPs, newIp]);
-                                        setNewIp("");
+                                    if (ipInput.trim() && !allowedIPs.includes(ipInput.trim())) {
+                                        setAllowedIPs([...allowedIPs, ipInput.trim()]);
+                                        setIpInput("");
                                     }
                                 }}
                             >
@@ -814,21 +1323,13 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                             </button>
                         </div>
                         <div className="d-flex flex-wrap gap-2">
-                            {allowedIPs.length > 0 ? allowedIPs.map((ip, idx) => (
-                                <Tag
-                                    key={idx}
-                                    closable
-                                    onClose={() => setAllowedIPs(allowedIPs.filter((_, i) => i !== idx))}
-                                    className="px-3 py-1 rounded-pill bg-light border text-dark fw-bold"
-                                    style={{ fontSize: '12px' }}
-                                >
+                            {allowedIPs.map((ip, idx) => (
+                                <Tag key={idx} closable onClose={() => setAllowedIPs(allowedIPs.filter((_, i) => i !== idx))} color="blue">
                                     {ip}
                                 </Tag>
-                            )) : (
-                                <span className="text-muted small italic">No IPs added. Tracking will be disabled for all unless manually permitted.</span>
-                            )}
+                            ))}
+                            {allowedIPs.length === 0 && <span className="text-muted small italic">No IPs restricted. Tracking allowed everywhere.</span>}
                         </div>
-                        <div className="form-text mt-2 small">Users on these IPs will be tracked automatically.</div>
                     </div>
                 </div>
             </Modal>

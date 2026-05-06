@@ -187,6 +187,18 @@ class PermissionSeeder extends Seeder
             // ['model' => 'Tracking', 'type' => 'route', 'name' => 'View Screenshot'],
             // ['model' => 'Tracking', 'type' => 'route', 'name' => 'Delete Screenshot'],
 
+            // Chat
+            // ['model' => 'ChatGroup', 'type' => 'route', 'name' => 'Create Chat Group'],
+            // ['model' => 'ChatGroup', 'type' => 'route', 'name' => 'Update Chat Group'],
+            // ['model' => 'ChatGroup', 'type' => 'route', 'name' => 'Delete Chat Group'],
+
+            // below are unassigned yet biw 
+            // ['model' => 'ChatGroup', 'type' => 'route', 'name' => 'View Chat Group'],
+            // ['model' => 'GlobalMessage', 'type' => 'route', 'name' => 'View Global Message'],
+            // ['model' => 'GlobalMessage', 'type' => 'route', 'name' => 'Create Global Message'],
+            // ['model' => 'GlobalMessage', 'type' => 'route', 'name' => 'Update Global Message'],
+            // ['model' => 'GlobalMessage', 'type' => 'route', 'name' => 'Delete Global Message'],
+
         ];
 
         foreach ($permissions as $perm) {

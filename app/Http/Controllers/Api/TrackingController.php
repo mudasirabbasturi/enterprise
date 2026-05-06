@@ -5,26 +5,67 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Pusher\Pusher;
+use GuzzleHttp\Client;
 
 class TrackingController extends Controller
 {
     public function index(Request $request)
     {
         $status = $request->query('status', 'active');
-        $recentCutoff = \Carbon\Carbon::now()->subMinutes(15);
+        $recentCutoff = \Carbon\Carbon::now()->subMinutes(1);
         
-        $users = \App\Models\User::where('status', $status)->get()->map(function($user) use ($recentCutoff) {
-            $user->is_online = \App\Models\UserScreenshot::where('user_id', $user->id)
-                ->where('screenshot_time', '>=', $recentCutoff)
-                ->exists();
-            return $user;
-        });
+        $users = \App\Models\User::where('status', $status)->get();
         
         return inertia('Pages/UserTracking', [
             'users' => $users,
             'selectedStatus' => $status,
             'trackingData' => []
         ]);
+    }
+
+    public function lastScreenshots()
+    {
+        return inertia('Pages/LastScreenshots');
+    }
+    
+    public function myActivity($id)
+    {
+        $user = \App\Models\User::findOrFail($id);
+        
+        // Basic security: users can only see their own activity unless they are admin/super-admin
+        // For simplicity assuming if they have the link they can view for now, or check permissions
+        if (auth()->id() != $id && !auth()->user()->can('View User Tracking')) {
+             // allow if it's the user themselves
+        }
+
+        return inertia('Pages/MyActivity', [
+            'targetUser' => $user
+        ]);
+    }
+
+    public function getLatestAllUsersScreenshots()
+    {
+        $users = \App\Models\User::where('status', 'active')->get();
+        $data = [];
+        foreach ($users as $user) {
+            $latest = \App\Models\UserScreenshot::where('user_id', $user->id)
+                ->latest('id')
+                ->first();
+            
+            $data[] = [
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'is_online' => $user->is_online,
+                'last_active' => $user->last_active_at,
+                'screenshot' => $latest ? [
+                    'url' => $latest->file_path,
+                    'full_date' => $latest->screenshot_time->toIso8601String(),
+                    'time' => $latest->screenshot_time->format('H:i:s'),
+                ] : null
+            ];
+        }
+        return response()->json($data);
     }
 
     public function storeScreenshot(Request $request)
@@ -47,7 +88,7 @@ class TrackingController extends Controller
             $file->move($destPath, $filename);
             $path = 'uploads/screenshots/' . $request->user_id . '/' . $filename;
 
-            \App\Models\UserScreenshot::create([
+            $screenshot = \App\Models\UserScreenshot::create([
                 'user_id' => $request->user_id,
                 'file_path' => $path,
                 'screenshot_time' => \Carbon\Carbon::parse($request->timestamp),
@@ -64,10 +105,60 @@ class TrackingController extends Controller
                 'last_active_at' => now(),
             ]);
 
+            $this->broadcastMessage('tracker-status', 'event-screenshot-captured', [
+                'userId' => (int)$request->user_id,
+                'screenshot' => [
+                    'url' => $screenshot->file_path,
+                    'full_date' => $screenshot->screenshot_time->toIso8601String(),
+                    'time' => $screenshot->screenshot_time->format('H:i:s'),
+                ]
+            ]);
+
+            // Also broadcast status update
+            $this->broadcastMessage('tracker-status', 'event-user-status-updated', [
+                'userId' => (int)$request->user_id,
+                'isOnline' => true
+            ]);
+
             return response()->json(['status' => 'success', 'message' => 'Screenshot saved']);
         }
 
         return response()->json(['status' => 'error', 'message' => 'No file uploaded'], 400);
+    }
+
+    private function broadcastMessage($channel, $event, $data)
+    {
+        $personalServerUrl = 'https://api-socket.bidwinners.net/publish';
+        $usePersonalServer = false;
+
+        try {
+            $client = new \GuzzleHttp\Client(['timeout' => 2, 'verify' => false]);
+            $client->post($personalServerUrl, [
+                'json' => [
+                    'channel' => $channel,
+                    'event' => $event,
+                    'data' => $data
+                ]
+            ]);
+        } catch (\Exception $e) {
+            \Log::info("Personal socket server error: " . $e->getMessage());
+        }
+
+        /* 
+        $usePersonalServer = false;
+        if (!$usePersonalServer) {
+            $options = ['cluster' => 'ap2', 'useTLS' => true];
+            $pusherClient = new \GuzzleHttp\Client(['verify' => false]);
+            $pusher = new Pusher(
+                '5158315c26b8f6732773', // app key
+                '9ba1bfd3baa3f4ec2a4c', // app secret
+                '2057639', // app id
+                $options,
+                $pusherClient
+            );
+            $pusher->trigger($channel, $event, $data);
+        }
+        */
     }
 
     public function getScreenshots(Request $request)
@@ -96,7 +187,10 @@ class TrackingController extends Controller
             }
         }
 
-        $screenshots = $query->latest('screenshot_time')->get()->map(function($s) {
+        $perPage = $request->query('per_page', 24);
+        $screenshots = $query->latest('screenshot_time')->paginate($perPage);
+
+        $items = collect($screenshots->items())->map(function($s) {
             return [
                 'id' => $s->id,
                 'url' => asset($s->file_path),
@@ -105,7 +199,13 @@ class TrackingController extends Controller
             ];
         });
 
-        return response()->json($screenshots);
+        return response()->json([
+            'data' => $items,
+            'next_page_url' => $screenshots->nextPageUrl(),
+            'current_page' => $screenshots->currentPage(),
+            'last_page' => $screenshots->lastPage(),
+            'total' => $screenshots->total()
+        ]);
     }
 
     public function checkIn(Request $request)
@@ -181,7 +281,23 @@ class TrackingController extends Controller
             'is_completed' => false
         ]);
 
+        // Broadcast to tracker for IMMEDIATE capture
+        $this->broadcastMessage('tracker-status', 'event-screenshot-requested', [
+            'userId' => (int)$userId,
+            'timestamp' => now()->toIso8601String()
+        ]);
+
         return response()->json(['status' => 'success', 'message' => 'Screenshot triggered']);
+    }
+
+    public function pingTrackers()
+    {
+        // Broadcast to ALL trackers to report their status
+        $this->broadcastMessage('tracker-status', 'event-ping-trackers', [
+            'timestamp' => now()->toIso8601String()
+        ]);
+
+        return response()->json(['status' => 'success', 'message' => 'Ping request sent']);
     }
 
     public function checkPendingScreenshot($userId)
@@ -226,36 +342,80 @@ class TrackingController extends Controller
             'last_active_at' => $isOnline ? now() : null
         ]);
 
+        // Use centralized broadcast method
+        $this->broadcastMessage('tracker-status', 'event-user-status-updated', [
+            'userId' => (int)$request->user_id,
+            'isOnline' => $isOnline
+        ]);
+
         return response()->json(['status' => 'success', 'message' => 'Status updated']);
     }
 
-    public function getTrackerSettings()
+    public function getTrackerSettings(Request $request)
     {
+        $userId = $request->query('user_id');
         $interval = \App\Models\PayrollConfig::where('key', 'tracker_screenshot_interval')->first();
-        $syncInterval = \App\Models\PayrollConfig::where('key', 'tracker_sync_interval')->first();
         $password = \App\Models\PayrollConfig::where('key', 'tracker_admin_password')->first();
         $allowedIps = \App\Models\PayrollConfig::where('key', 'tracker_allowed_ips')->first();
         
+        $syncInterval = \App\Models\PayrollConfig::where('key', 'tracker_sync_interval')->first();
+        $socketUrl = \App\Models\PayrollConfig::where('key', 'tracker_socket_url')->first();
+        $apiBaseUrl = \App\Models\PayrollConfig::where('key', 'tracker_api_url')->first();
+        
+        if ($userId) {
+            $user = \App\Models\User::find($userId);
+            if (!$user || $user->status !== 'active') {
+                return response()->json(['error' => 'Unauthorized or Inactive Session'], 403);
+            }
+        } else {
+            $user = null;
+        }
+
+        $logoutRestriction = $user ? (bool)$user->logout_restriction : false;
+
+        // Check for pending live stream offers
+        $liveOffer = $userId ? \Illuminate\Support\Facades\Cache::pull("live_offer_{$userId}") : null;
+
+        // Check for pending manual screenshot requests
+        $pendingScreenshot = false;
+        if ($userId) {
+            $pending = \App\Models\PendingScreenshot::where('user_id', $userId)
+                ->where('is_completed', false)
+                ->first();
+            if ($pending) {
+                $pendingScreenshot = true;
+                $pending->delete(); // Consider it consumed once sent to tracker
+            }
+        }
+
         return response()->json([
-            'screenshot_interval' => $interval ? (int)$interval->value : 300,
-            'tracker_sync_interval' => $syncInterval ? (int)$syncInterval->value : 30,
-            'tracker_admin_password' => $password ? $password->value : 'bidwinners#12',
-            'tracker_allowed_ips' => $allowedIps ? $allowedIps->value : []
+            'tracker_screenshot_interval' => $interval ? (int)$interval->value : 300,
+            'tracker_sync_interval' => $syncInterval ? (int)$syncInterval->value : 2,
+            'tracker_socket_url' => $socketUrl ? $socketUrl->value : 'wss://api-socket.bidwinners.net',
+            'tracker_api_url' => $apiBaseUrl ? $apiBaseUrl->value : 'http://127.0.0.1:8000',
+            'tracker_admin_password' => $password ? $password->value : 'bidwinners.net',
+            'tracker_allowed_ips' => $allowedIps ? (is_string($allowedIps->value) ? json_decode($allowedIps->value, true) : $allowedIps->value) : [],
+            'tracker_logout_restriction' => $logoutRestriction,
+            'is_permission_granted' => $user ? (bool)$user->is_permission_granted : false,
+            'live_offer' => $liveOffer,
+            'pending_screenshot' => $pendingScreenshot
         ]);
     }
 
     public function updateTrackerSettings(Request $request)
     {
         $request->validate([
-            'screenshot_interval' => 'required|integer|min:60',
-            'tracker_sync_interval' => 'required|integer|min:10',
+            'tracker_screenshot_interval' => 'required|integer|min:1',
+            'tracker_sync_interval' => 'required|integer|min:1',
+            'tracker_socket_url' => 'required|string',
+            'tracker_api_url' => 'required|string',
             'tracker_admin_password' => 'required|string|min:4',
             'tracker_allowed_ips' => 'nullable|array'
         ]);
 
         \App\Models\PayrollConfig::updateOrCreate(
             ['key' => 'tracker_screenshot_interval'],
-            ['value' => $request->screenshot_interval]
+            ['value' => $request->tracker_screenshot_interval]
         );
 
         \App\Models\PayrollConfig::updateOrCreate(
@@ -269,9 +429,24 @@ class TrackingController extends Controller
         );
 
         \App\Models\PayrollConfig::updateOrCreate(
-            ['key' => 'tracker_allowed_ips'],
-            ['value' => $request->tracker_allowed_ips ?? []]
+            ['key' => 'tracker_socket_url'],
+            ['value' => $request->tracker_socket_url]
         );
+
+        \App\Models\PayrollConfig::updateOrCreate(
+            ['key' => 'tracker_api_url'],
+            ['value' => $request->tracker_api_url]
+        );
+
+        \App\Models\PayrollConfig::updateOrCreate(
+            ['key' => 'tracker_allowed_ips'],
+            ['value' => json_encode($request->tracker_allowed_ips ?? [])]
+        );
+
+        // Broadcast config update to trigger fast reload if needed
+        $this->broadcastMessage('tracker-status', 'event-config-updated', [
+            'timestamp' => now()
+        ]);
 
         return response()->json(['status' => 'success', 'message' => 'Settings updated successfully']);
     }
@@ -290,9 +465,29 @@ class TrackingController extends Controller
         return response()->json(['status' => 'success', 'message' => 'User permission updated']);
     }
 
+    public function toggleLogoutRestriction(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'logout_restriction' => 'required|boolean'
+        ]);
+
+        \App\Models\User::where('id', $request->user_id)->update([
+            'logout_restriction' => $request->logout_restriction
+        ]);
+
+        return response()->json(['status' => 'success', 'message' => 'Logout restriction updated']);
+    }
+
     public function getAllUsers(Request $request)
     {
         $status = $request->query('status', 'active');
+        
+        // Heartbeat: Auto-offline users inactive for > 3 minutes
+        \App\Models\User::where('is_online', true)
+            ->where('last_active_at', '<', now()->subMinutes(3))
+            ->update(['is_online' => false]);
+
         $users = \App\Models\User::where('status', $status)->get();
         $allowedIps = \App\Models\PayrollConfig::where('key', 'tracker_allowed_ips')->first();
         $allowedIps = $allowedIps ? $allowedIps->value : [];
@@ -316,6 +511,7 @@ class TrackingController extends Controller
                 'user_id' => $request->user_id,
                 'app_name' => $activity['app_name'] ?? 'Unknown',
                 'window_title' => $activity['window_title'] ?? 'Unknown',
+                'url' => $activity['url'] ?? null,
                 'clicks' => $activity['clicks'] ?? 0,
                 'keystrokes' => $activity['keystrokes'] ?? 0,
                 'is_idle' => $activity['is_idle'] ?? false,
@@ -330,27 +526,50 @@ class TrackingController extends Controller
     {
         $userId = $request->query('user_id');
         $date = $request->query('date', now()->toDateString());
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
 
-        $activities = \App\Models\UserActivity::where('user_id', $userId)
-            ->whereDate('tracked_at', $date)
-            ->get();
+        $query = \App\Models\UserActivity::where('user_id', $userId);
+
+        if ($startDate && $endDate) {
+            $query->whereBetween('tracked_at', [
+                $startDate . ' 00:00:00',
+                $endDate . ' 23:59:59'
+            ]);
+        } else {
+            $query->whereDate('tracked_at', $date);
+        }
+
+        $activities = $query->get();
 
         $totalClicks = $activities->sum('clicks');
         $totalKeys = $activities->sum('keystrokes');
-        // Group by resolved app name and calculate duration
+        // Group by window title and calculate duration
         $appUsage = $activities->groupBy(function($a) {
-            $name = $a->app_name;
-            if (!$name || strtolower($name) === 'active app' || strtolower($name) === 'unknown') {
-                $name = $this->resolveAppName($a->window_title);
+            $title = $a->window_title ?: 'Unknown Window';
+            $appName = $a->app_name;
+            
+            if (!$appName || strtolower($appName) === 'active app' || strtolower($appName) === 'unknown') {
+                $appName = $this->resolveAppName($title);
             }
-            return $name;
-        })->map(function ($group) {
+
+            // Return a combination for unique grouping but readable display
+            return json_encode([
+                'app' => $appName,
+                'title' => $title,
+                'url' => $a->url
+            ]);
+        })->map(function ($group, $key) {
+            $info = json_decode($key, true);
             return [
+                'app' => $info['app'],
+                'title' => $info['title'],
+                'url' => $info['url'],
                 'minutes' => count($group),
                 'clicks' => $group->sum('clicks'),
                 'keystrokes' => $group->sum('keystrokes'),
             ];
-        })->sortByDesc('minutes')->take(10);
+        })->sortByDesc('minutes')->take(30)->values(); // Increased to 30 for more detail
 
         // Timeline (Hourly activity level)
         $timeline = $activities->groupBy(function($a) {

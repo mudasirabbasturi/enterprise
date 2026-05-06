@@ -44,6 +44,7 @@ class User extends Authenticatable
         'role_id',
         'is_permission_granted',
         'ip_restriction',
+        'logout_restriction',
     ];
 
     protected $guarded = ['employee_id'];
@@ -124,5 +125,20 @@ class User extends Authenticatable
 
     public function userActivities(): HasMany {
         return $this->hasMany(UserActivity::class);
+    }
+
+    public function chatGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(ChatGroup::class, 'chat_group_user')->withPivot('role')->withTimestamps();
+    }
+
+    public function sentMessages(): HasMany
+    {
+        return $this->hasMany(GlobalMessage::class, 'sender_id');
+    }
+
+    public function receivedMessages(): HasMany
+    {
+        return $this->hasMany(GlobalMessage::class, 'receiver_id');
     }
 }

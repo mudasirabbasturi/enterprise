@@ -26,7 +26,7 @@ const AddEditPoint = lazy(() =>
 );
 
 const Index = ({ projects, clients }) => {
-  console.log("Projects:", projects);
+
 
   const { props } = usePage();
   const globalHeader = props.globalHeader ?? true;
@@ -94,6 +94,18 @@ const Index = ({ projects, clients }) => {
     const handleProjectChange = (event) => {
       const { type, project } = event.detail;
       
+      // If no specific project (like bulk update), we should probably refresh or handle differently
+      if (!project && type === 'updated') {
+        // Full refresh for bulk updates or when project data is missing
+        router.reload({ only: ['projects'] });
+        return;
+      }
+
+      // Update selectedProject if it's currently open in a drawer
+      if (type === 'updated' && selectedProject?.id === project.id) {
+        setSelectedProject(prev => ({ ...prev, ...project }));
+      }
+
       setRowData((prevData) => {
         if (type === 'created') {
           // Check if already exists to avoid duplicates
@@ -106,6 +118,10 @@ const Index = ({ projects, clients }) => {
         }
         
         if (type === 'deleted') {
+          // If the deleted project is currently open, close the drawer
+          if (selectedProject?.id === project.id) {
+            onClose();
+          }
           return prevData.filter(p => p.id !== project.id);
         }
         

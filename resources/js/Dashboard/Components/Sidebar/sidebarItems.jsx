@@ -15,8 +15,12 @@ import {
   FieldTimeOutlined,
   CreditCardOutlined,
   ScheduleOutlined,
-  MessageOutlined
+  MessageOutlined,
+  WechatWorkOutlined,
+  Tooltip
 } from "@shared/ui";
+
+import { Badge } from "antd";
 
 // 🔑 helper function to check permission
 const hasPermission = (userpermission, permName) =>
@@ -27,6 +31,8 @@ export const getSidebarItems = ({
   user,
   permissions,
   userpermission,
+  unreadCounts = { project: 0, global: 0 },
+  collapsed = false
 }) => {
   const can = (perm) => hasPermission(userpermission, perm);
 
@@ -184,19 +190,58 @@ export const getSidebarItems = ({
       : []),
       {
         key: "chat",
-        label: "Chat",
-        icon: <MessageOutlined style={{ fontSize: "20px" }} />,
-        children:[
+        label: (
+          <span>
+            Chat 
+            <Badge count={unreadCounts.global} size="small" style={{ backgroundColor: '#1890ff', marginLeft: '4px' }} />
+          </span>
+        ),
+        icon: (
+          <Badge count={collapsed ? unreadCounts.global : 0} size="small" offset={[10, 12]}>
+            <WechatWorkOutlined style={{ fontSize: "20px" }} />
+          </Badge>
+        ),
+        children: [
           {
-            key: "project_chat",
+            key: "chat_direct",
             label: (
-              <Link href={route("project-chat.index")}>
-                Project Chat
+              <Link href={route("global-chat.index", { view: 'direct' })}>
+                Direct Chat <Badge count={unreadCounts.direct || 0} size="small" className="sidebar-badge" style={{ backgroundColor: '#1890ff' }} offset={[5, 0]} />
               </Link>
             ),
-            icon: <MessageOutlined />,
+            icon: (
+              <Badge count={collapsed ? (unreadCounts.direct || 0) : 0} size="small" offset={[10, 0]}>
+                <WechatWorkOutlined />
+              </Badge>
+            ),
           },
-        ]
+          {
+            key: "chat_groups",
+            label: (
+              <Link href={route("global-chat.index", { view: 'groups' })}>
+                Groups Chat <Badge count={unreadCounts.groups || 0} size="small" className="sidebar-badge" style={{ backgroundColor: '#38f000ff' }} offset={[5, 0]} />
+              </Link>
+            ),
+            icon: (
+              <Badge count={collapsed ? (unreadCounts.groups || 0) : 0} size="small" offset={[10, 0]} style={{ backgroundColor: '#38f000ff' }}>
+                <UsergroupAddOutlined />
+              </Badge>
+            ),
+          },
+          {
+            key: "chat_project",
+            disabled: true,
+            label: (
+              <Tooltip title="Project chat is moving to Group Chat soon">
+                <span style={{ color: '#bfbfbf', cursor: 'not-allowed' }}>
+                  Project Chat <Badge count={0} size="small" style={{ backgroundColor: '#bfbfbf' }} offset={[5, 0]} />
+                </span>
+              </Tooltip>
+            ),
+            icon: <UsergroupAddOutlined style={{ color: '#bfbfbf' }} />,
+          },
+
+        ],
       },
 
     // User

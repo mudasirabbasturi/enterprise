@@ -3,7 +3,7 @@ import { Layout, Menu, theme, usePage } from "@shared/ui";
 import { useRoute } from "@ziggy";
 import { getSidebarItems } from "@component/Sidebar/sidebarItems";
 const { Sider } = Layout;
-const Sidebar = ({ collapsed, setCollapsed, openKeys, setOpenKeys }) => {
+const Sidebar = ({ collapsed, setCollapsed, openKeys, setOpenKeys, unreadCounts }) => {
   const route = useRoute();
   const { props } = usePage();
   const user = props?.auth?.user ?? {};
@@ -28,6 +28,11 @@ const Sidebar = ({ collapsed, setCollapsed, openKeys, setOpenKeys }) => {
       style={{ background: colorBgContainer }}
       className="sidebar pt-4"
     >
+      <style>{`
+        .ant-menu-submenu-popup .sidebar-badge {
+          display: none !important;
+        }
+      `}</style>
       <Menu
         mode="inline"
         style={{ height: "100%", borderRight: 0 }}
@@ -36,6 +41,8 @@ const Sidebar = ({ collapsed, setCollapsed, openKeys, setOpenKeys }) => {
           user,
           permissions,
           userpermission: userPermissions,
+          unreadCounts,
+          collapsed
         })}
         openKeys={openKeys}
         onOpenChange={onOpenChange}

@@ -123,7 +123,14 @@ export {
   CheckOutlined,
   CloseCircleFilled,
  FileExcelOutlined , 
- MessageOutlined
+ MessageOutlined,
+ CameraOutlined,
+ PictureOutlined,
+ LineChartOutlined,
+ VideoCameraAddOutlined,
+ WechatWorkOutlined,
+ QuestionCircleOutlined,
+ LinkOutlined 
 } from "@ant-design/icons";
 
 export { PhoneInput } from "react-international-phone";

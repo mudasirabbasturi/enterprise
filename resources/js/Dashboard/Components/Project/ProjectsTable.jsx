@@ -20,7 +20,8 @@ import {
   UnlockOutlined,
   InputNumber,
   Input,
-  FileExcelOutlined
+  FileExcelOutlined,
+  Badge 
 } from "@shared/ui";
 import axios from "axios";
 import NProgress from "nprogress";
@@ -62,8 +63,8 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
   const [localRowData, setLocalRowData] = useState(projects);
   const gridRef = useRef(null);
 
-  const [isChatModalVisible, setIsChatModalVisible] = useState(false);
-  const [chatProject, setChatProject] = useState(null);
+  // const [isChatModalVisible, setIsChatModalVisible] = useState(false);
+  // const [chatProject, setChatProject] = useState(null);
 
   const [colDefs, setColDefs] = useState([
     {
@@ -144,11 +145,14 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
                 <div 
                   className="btn btn-sm btn-warning text-white me-1"
                   onClick={() => {
-                    setChatProject(params.data);
-                    setIsChatModalVisible(true);
+                    // setChatProject(params.data);
+                    // setIsChatModalVisible(true);
+                    alert("Project Chat is disabled. Please use Global/Group Chat.");
                   }}
                 >
-                  <CommentOutlined />
+                  <Badge dot color="red" offset={[2, 2]}>
+                    <CommentOutlined />
+                  </Badge>
                 </div>
               </Tooltip>
               <Tooltip title="Spread Sheet" color="green" placement="left">
@@ -156,7 +160,9 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
                   className="btn btn-sm btn-success me-1"
                   onClick={() => alert("Coming soon")}
                 >
-                  <FileExcelOutlined />
+                  <Badge dot color="red" offset={[2, 2]}>
+                    <FileExcelOutlined />
+                  </Badge>
                 </div>
               </Tooltip>
               <Tooltip
@@ -182,11 +188,14 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
                 <div 
                   className="btn btn-sm btn-warning text-white me-1"
                   onClick={() => {
-                    setChatProject(params.data);
-                    setIsChatModalVisible(true);
+                    // setChatProject(params.data);
+                    // setIsChatModalVisible(true);
+                    alert("Project Chat is disabled. Please use Global/Group Chat.");
                   }}
                 >
-                  <CommentOutlined />
+                  <Badge dot color="red" offset={[2, 2]}>
+                    <CommentOutlined />
+                  </Badge>
                 </div>
               </Tooltip>
               <Tooltip title="Spread Sheet" color="green" placement="left">
@@ -194,7 +203,9 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
                   className="btn btn-sm btn-success me-1"
                   onClick={() => alert("Coming soon")}
                 >
-                  <FileExcelOutlined />
+                  <Badge dot color="red" offset={[2, 2]}>
+                    <FileExcelOutlined />
+                  </Badge>
                 </div>
               </Tooltip>
               {members.some((m) => m.user?.id === auth.user.id) ? (
@@ -1132,12 +1143,12 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         detailCellRenderer={DetailCellRenderer}
         rowSelection="single"
       />
-      <ProjectChatModal
+      {/* <ProjectChatModal
         visible={isChatModalVisible}
         onClose={() => setIsChatModalVisible(false)}
         project={chatProject}
         currentUser={user}
-      />
+      /> */}
     </>
   );
 };
