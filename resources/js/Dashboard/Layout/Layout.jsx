@@ -149,8 +149,8 @@ const DashboardLayout = ({ children }) => {
       label: "Download Tracker",
       onClick: () => {
         const link = document.createElement("a");
-        link.href = "/uploads/documents/BidwinnersTracker_Setup_v1.0.0.exe";
-        link.download = "BidwinnersTracker_Setup_v1.0.0.exe";
+        link.href = "/uploads/documents/BidwinnersTrackerV2_Setup_v1.0.0.exe";
+        link.download = "BidwinnersTrackerV2_Setup_v1.0.0.exe";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -393,6 +393,14 @@ const DashboardLayout = ({ children }) => {
                     </button>
                   </div>
                 )}
+                <div>
+                  <Link
+                  className="btn btn-sm btn-outline-primary me-3"
+                  href={route("my-activity", user.id)}
+                  >
+                    My Activity
+                  </Link>
+                </div>
                 {can("View Report") && (
                   <div>
                     <button
