@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Laravel\Sanctum\HasApiTokens;
+
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -12,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
     protected $fillable = [
         'name',
         'email',
@@ -125,20 +127,5 @@ class User extends Authenticatable
 
     public function userActivities(): HasMany {
         return $this->hasMany(UserActivity::class);
-    }
-
-    public function chatGroups(): BelongsToMany
-    {
-        return $this->belongsToMany(ChatGroup::class, 'chat_group_user')->withPivot('role')->withTimestamps();
-    }
-
-    public function sentMessages(): HasMany
-    {
-        return $this->hasMany(GlobalMessage::class, 'sender_id');
-    }
-
-    public function receivedMessages(): HasMany
-    {
-        return $this->hasMany(GlobalMessage::class, 'receiver_id');
     }
 }

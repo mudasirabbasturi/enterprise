@@ -30,6 +30,7 @@ use App\Http\Controllers\PenaltyController;
 use App\Http\Controllers\SalarySetupController;
 use App\Http\Controllers\SalarySheetController;
 use App\Http\Controllers\PayrollConfigController;
+use App\Http\Controllers\ChatController;
 
 
 use Illuminate\Support\Facades\DB;
@@ -47,6 +48,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/', [HomeController::class, 'Index'])->name('home.index');
     /** UserController */
     Route::get('/user', [UserController::class, 'Index'])->name('user.index');
+    
     Route::post('/user/store', [UserController::class, 'Store'])->name('user.store');
     Route::get('/user/view/{id}', [UserController::class, 'View'])->name('user.view');    
     Route::put('/user/update/{id}', [UserController::class, 'Update'])->name('user.update');
@@ -121,17 +123,20 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/api/chat/unread-counts', [App\Http\Controllers\Api\ProjectChatController::class, 'getUnreadCounts'])->name('chat.unread-counts');
     */
 
-    // Global Chat
-    Route::get('/global-chat', [App\Http\Controllers\GlobalChatController::class, 'index'])->name('global-chat.index');
-    Route::get('/api/global-chat/messages', [App\Http\Controllers\GlobalChatController::class, 'getMessages'])->name('global-chat.messages');
-    Route::get('/api/global-chat/unread-counts', [App\Http\Controllers\GlobalChatController::class, 'getUnreadCounts'])->name('global-chat.unread-counts');
-    Route::post('/api/global-chat/send', [App\Http\Controllers\GlobalChatController::class, 'sendMessage'])->name('global-chat.send');
-    Route::delete('/api/global-chat/messages/{id}', [App\Http\Controllers\GlobalChatController::class, 'deleteMessage'])->name('global-chat.messages.destroy');
-    Route::post('/api/global-chat/groups', [App\Http\Controllers\GlobalChatController::class, 'createGroup'])->name('global-chat.groups.store');
-    Route::put('/api/global-chat/groups/{id}', [App\Http\Controllers\GlobalChatController::class, 'updateGroup'])->name('global-chat.groups.update');
-    Route::delete('/api/global-chat/groups/{id}', [App\Http\Controllers\GlobalChatController::class, 'deleteGroup'])->name('global-chat.groups.destroy');
-
-    /** RoleController */
+    // New Chat System
+    Route::get('/chat', [ChatController::class, 'view'])->name('chat.index');
+    Route::get('/api/chats', [ChatController::class, 'index'])->name('chat.api.index');
+    Route::get('/api/chats/{chatId}/messages', [ChatController::class, 'getMessages'])->name('chat.api.messages');
+    Route::post('/api/chats/{chatId}/messages', [ChatController::class, 'sendMessage'])->name('chat.api.send');
+    Route::post('/api/chats', [ChatController::class, 'store'])->name('chat.api.store');
+    Route::get('/api/chat-visibility-users', [ChatController::class, 'getUsers'])->name('chat.api.users');
+    Route::put('/api/chats/{chatId}', [ChatController::class, 'update'])->name('chat.api.update');
+    Route::put('/api/chat-visibility-users/{userId}/group', [ChatController::class, 'updateUserChatGroup']);
+    Route::delete('/api/chats/{chatId}', [ChatController::class, 'destroy'])->name('chat.api.destroy');
+    Route::delete('/api/chats/{chatId}/messages/{messageId}', [ChatController::class, 'destroyMessage'])->name('chat.api.messages.destroy');
+    Route::get('/api/chat/unread-count', [ChatController::class, 'getUnreadCount'])->name('chat.api.unread');
+    Route::post('/api/chats/{chatId}/read', [ChatController::class, 'markAsRead'])->name('chat.api.read');
+    Route::get('/api/ably/auth', [ChatController::class, 'ablyAuth'])->name('ably.auth');
     Route::get('/role', [RoleController::class, 'Index'])->name('role.index');
     Route::post('/role/store', [RoleController::class, 'Store'])->name('role.store');
     Route::get('/role/view/{id}', [RoleController::class, 'View'])->name('role.view');

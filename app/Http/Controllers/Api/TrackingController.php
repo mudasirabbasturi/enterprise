@@ -5,8 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Pusher\Pusher;
-use GuzzleHttp\Client;
 
 class TrackingController extends Controller
 {
@@ -105,61 +103,13 @@ class TrackingController extends Controller
                 'last_active_at' => now(),
             ]);
 
-            $this->broadcastMessage('tracker-status', 'event-screenshot-captured', [
-                'userId' => (int)$request->user_id,
-                'screenshot' => [
-                    'url' => $screenshot->file_path,
-                    'full_date' => $screenshot->screenshot_time->toIso8601String(),
-                    'time' => $screenshot->screenshot_time->format('H:i:s'),
-                ]
-            ]);
-
-            // Also broadcast status update
-            $this->broadcastMessage('tracker-status', 'event-user-status-updated', [
-                'userId' => (int)$request->user_id,
-                'isOnline' => true
-            ]);
-
             return response()->json(['status' => 'success', 'message' => 'Screenshot saved']);
         }
 
         return response()->json(['status' => 'error', 'message' => 'No file uploaded'], 400);
     }
 
-    private function broadcastMessage($channel, $event, $data)
-    {
-        $personalServerUrl = 'https://api-socket.bidwinners.net/publish';
-        $usePersonalServer = false;
 
-        try {
-            $client = new \GuzzleHttp\Client(['timeout' => 2, 'verify' => false]);
-            $client->post($personalServerUrl, [
-                'json' => [
-                    'channel' => $channel,
-                    'event' => $event,
-                    'data' => $data
-                ]
-            ]);
-        } catch (\Exception $e) {
-            \Log::info("Personal socket server error: " . $e->getMessage());
-        }
-
-        /* 
-        $usePersonalServer = false;
-        if (!$usePersonalServer) {
-            $options = ['cluster' => 'ap2', 'useTLS' => true];
-            $pusherClient = new \GuzzleHttp\Client(['verify' => false]);
-            $pusher = new Pusher(
-                '5158315c26b8f6732773', // app key
-                '9ba1bfd3baa3f4ec2a4c', // app secret
-                '2057639', // app id
-                $options,
-                $pusherClient
-            );
-            $pusher->trigger($channel, $event, $data);
-        }
-        */
-    }
 
     public function getScreenshots(Request $request)
     {
@@ -281,24 +231,10 @@ class TrackingController extends Controller
             'is_completed' => false
         ]);
 
-        // Broadcast to tracker for IMMEDIATE capture
-        $this->broadcastMessage('tracker-status', 'event-screenshot-requested', [
-            'userId' => (int)$userId,
-            'timestamp' => now()->toIso8601String()
-        ]);
-
         return response()->json(['status' => 'success', 'message' => 'Screenshot triggered']);
     }
 
-    public function pingTrackers()
-    {
-        // Broadcast to ALL trackers to report their status
-        $this->broadcastMessage('tracker-status', 'event-ping-trackers', [
-            'timestamp' => now()->toIso8601String()
-        ]);
 
-        return response()->json(['status' => 'success', 'message' => 'Ping request sent']);
-    }
 
     public function checkPendingScreenshot($userId)
     {
@@ -325,7 +261,19 @@ class TrackingController extends Controller
     public function getActiveStatus($userId)
     {
         $user = \App\Models\User::find($userId);
-        return response()->json(['active' => $user ? $user->is_online : false]);
+        if (!$user) {
+            return response()->json(['active' => false]);
+        }
+
+        // Apply heartbeat logic: Auto-offline if inactive for > 3 minutes
+        $lastActive = $user->last_active_at ? \Carbon\Carbon::parse($user->last_active_at) : null;
+        
+        if ($user->is_online && $lastActive && $lastActive->diffInMinutes(now()) >= 3) {
+            $user->update(['is_online' => false]);
+            return response()->json(['active' => false]);
+        }
+
+        return response()->json(['active' => (bool)$user->is_online]);
     }
 
     public function updateStatus(Request $request)
@@ -340,12 +288,6 @@ class TrackingController extends Controller
         \App\Models\User::where('id', $request->user_id)->update([
             'is_online' => $isOnline,
             'last_active_at' => $isOnline ? now() : null
-        ]);
-
-        // Use centralized broadcast method
-        $this->broadcastMessage('tracker-status', 'event-user-status-updated', [
-            'userId' => (int)$request->user_id,
-            'isOnline' => $isOnline
         ]);
 
         return response()->json(['status' => 'success', 'message' => 'Status updated']);
@@ -391,7 +333,6 @@ class TrackingController extends Controller
         return response()->json([
             'tracker_screenshot_interval' => $interval ? (int)$interval->value : 300,
             'tracker_sync_interval' => $syncInterval ? (int)$syncInterval->value : 2,
-            'tracker_socket_url' => $socketUrl ? $socketUrl->value : 'wss://api-socket.bidwinners.net',
             'tracker_api_url' => $apiBaseUrl ? $apiBaseUrl->value : 'http://127.0.0.1:8000',
             'tracker_admin_password' => $password ? $password->value : 'bidwinners.net',
             'tracker_allowed_ips' => $allowedIps ? (is_string($allowedIps->value) ? json_decode($allowedIps->value, true) : $allowedIps->value) : [],
@@ -407,8 +348,8 @@ class TrackingController extends Controller
         $request->validate([
             'tracker_screenshot_interval' => 'required|integer|min:1',
             'tracker_sync_interval' => 'required|integer|min:1',
-            'tracker_socket_url' => 'required|string',
-            'tracker_api_url' => 'required|string',
+            'tracker_socket_url' => 'nullable|string',
+            'tracker_api_url' => 'nullable|string',
             'tracker_admin_password' => 'required|string|min:4',
             'tracker_allowed_ips' => 'nullable|array'
         ]);
@@ -428,25 +369,24 @@ class TrackingController extends Controller
             ['value' => $request->tracker_admin_password]
         );
 
-        \App\Models\PayrollConfig::updateOrCreate(
-            ['key' => 'tracker_socket_url'],
-            ['value' => $request->tracker_socket_url]
-        );
+        if ($request->tracker_socket_url) {
+            \App\Models\PayrollConfig::updateOrCreate(
+                ['key' => 'tracker_socket_url'],
+                ['value' => $request->tracker_socket_url]
+            );
+        }
 
-        \App\Models\PayrollConfig::updateOrCreate(
-            ['key' => 'tracker_api_url'],
-            ['value' => $request->tracker_api_url]
-        );
+        if ($request->tracker_api_url) {
+            \App\Models\PayrollConfig::updateOrCreate(
+                ['key' => 'tracker_api_url'],
+                ['value' => $request->tracker_api_url]
+            );
+        }
 
         \App\Models\PayrollConfig::updateOrCreate(
             ['key' => 'tracker_allowed_ips'],
             ['value' => json_encode($request->tracker_allowed_ips ?? [])]
         );
-
-        // Broadcast config update to trigger fast reload if needed
-        $this->broadcastMessage('tracker-status', 'event-config-updated', [
-            'timestamp' => now()
-        ]);
 
         return response()->json(['status' => 'success', 'message' => 'Settings updated successfully']);
     }

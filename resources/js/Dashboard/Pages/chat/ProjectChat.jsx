@@ -198,39 +198,21 @@ const ProjectChat = ({ projects: initialProjects }) => {
     useEffect(() => {
         if (!selectedProject?.id) return;
 
-        let ws = null;
         const channelName = `project-chat-${selectedProject.id}`;
+        const channel = window.Echo.channel(channelName);
 
-        const connect = () => {
-            ws = new WebSocket('wss://demo.bidwinners.net');
-            ws.onopen = () => {
-                console.log(`Chat Socket: Joining ${channelName}`);
-                ws.send(JSON.stringify({ action: 'subscribe', channel: channelName }));
-            };
-            ws.onmessage = (event) => {
-                const response = JSON.parse(event.data);
-                
-                // Only handle messages for this specific channel
-                if (response.channel === channelName && response.data) {
-                    const payload = response.data;
-                    
-                    if (payload.event === 'event-new-message') {
-                        const incomingMsg = payload.data;
-                        setMessages(prev => (prev.some(m => m.id === incomingMsg.id) ? prev : [...prev, incomingMsg]));
-                    }
-                    
-                    if (payload.event === 'event-delete-message') {
-                        const deletedId = payload.data.id;
-                        setMessages(prev => prev.filter(m => m.id !== deletedId));
-                    }
-                }
-            };
-            ws.onclose = () => setTimeout(connect, 3000);
-            ws.onerror = (err) => console.error("Chat Socket Error:", err);
+        channel.listen('.event-new-message', (payload) => {
+            setMessages(prev => (prev.some(m => m.id === payload.id) ? prev : [...prev, payload]));
+        });
+
+        channel.listen('.event-delete-message', (payload) => {
+            const deletedId = payload.id;
+            setMessages(prev => prev.filter(m => m.id !== deletedId));
+        });
+
+        return () => {
+            window.Echo.leave(channelName);
         };
-
-        connect();
-        return () => { if (ws) ws.close(); };
     }, [selectedProject?.id]);
 
     // Project CRUD Sync

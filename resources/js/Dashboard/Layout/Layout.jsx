@@ -1,17 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
-/*
 import Echo from "laravel-echo";
 import Pusher from "pusher-js";
+import * as Ably from 'ably';
 
 window.Pusher = Pusher;
 
 window.Echo = new Echo({
   broadcaster: "pusher",
-  key: "5158315c26b8f6732773",
-  cluster: "ap2",
+  key: "d9306811d5a58be380be",
+  cluster: "ap1",
   forceTLS: true,
 });
-*/
 
 import {
   /**
@@ -40,6 +39,9 @@ import {
   useRoute,
 } from "@shared/ui";
 import { Layout, Button, Dropdown, Avatar, notification } from "antd";
+import { motion, AnimatePresence } from "framer-motion";
+import { BiPhone, BiVideo, BiX, BiMicrophone } from "react-icons/bi";
+import axios from "axios";
 
 import Sidebar from "@component/Sidebar/Sidebar";
 import QuickAttendanceModal from "@component/Attendance/QuickAttendanceModal";
@@ -51,25 +53,17 @@ const DashboardLayout = ({ children }) => {
   const { props } = usePage();
   const user = props.auth.user;
   const [isQuickAttendanceModalOpen, setIsQuickAttendanceModalOpen] = useState(false);
-  const [unreadCounts, setUnreadCounts] = useState({ project: 0, global: 0, direct: 0, groups: 0 });
+  const [unreadCounts, setUnreadCounts] = useState({ 
+    project: 0, 
+    chat: props.unreadChatCount || { total: 0, direct: 0, group: 0 } 
+  });
+  const ablyRef = useRef(null);
+  const [onlineUsers, setOnlineUsers] = useState(new Set());
 
   // Chat unread counts logic removed (404)
 
-  const fetchUnreadCounts = async () => {
-    try {
-      const response = await axios.get(route('global-chat.unread-counts'));
-      setUnreadCounts(response.data);
-    } catch (err) {
-      console.error("Failed to fetch unread counts", err);
-    }
-  };
-
   useEffect(() => {
-    fetchUnreadCounts();
-    
-    const handleRefresh = () => fetchUnreadCounts();
-    window.addEventListener('refresh-unread-counts', handleRefresh);
-    return () => window.removeEventListener('refresh-unread-counts', handleRefresh);
+    // Logic for other unread counts if any
   }, []);
 
   const hasPermission = (userpermission, permName) =>
@@ -79,8 +73,33 @@ const DashboardLayout = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [openKeys, setOpenKeys] = useState([]);
   const [savedOpenKeys, setSavedOpenKeys] = useState([]);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const projectSound = useRef(new Audio('/uploads/media/sound_effect/project/project_notification.wav'));
-  const chatSound = useRef(new Audio('/uploads/media/sound_effect/chat/chat_message_notification.mp3'));
+  const chatSound = useRef(new Audio("/uploads/media/sound_effect/chat/chat_message_notification.mp3"));
+
+  // WebRTC Global State
+  const peerConnection = useRef(null);
+  const localStreamRef = useRef(null);
+  const [callState, setCallState] = useState('idle'); // idle, calling, ringing, connected
+  const [callType, setCallType] = useState('audio'); // audio, video
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
+  const [localStream, setLocalStream] = useState(null);
+  const [callDuration, setCallDuration] = useState(0);
+  const callTimerRef = useRef(null);
+
+  const iceServers = {
+      iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+      ]
+  };
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
 
   useEffect(() => {
     const storedKeys = localStorage.getItem("sidebar-open-keys");
@@ -164,126 +183,272 @@ const DashboardLayout = ({ children }) => {
     },
   ];
 
-  // Centralized WebSocket Connection
-  useEffect(() => {
-    if (!user.id) return;
-
-    let ws = null;
-    const userNotificationChannel = `user-notifications-${user.id}`;
-    const globalUserChannel = `global-chat.user.${user.id}`;
-    const projectMasterChannel = "project-channel";
-    const trackerChannel = "tracker-status";
-
-    const handleProjectCRUD = (payload) => {
-      const eventMap = {
-        'event-project-created': 'created',
-        'event-project-updated': 'updated',
-        'event-project-update-coloumn': 'updated',
-        'event-project-delete': 'deleted',
-        'event-project-joined': 'updated',
-        'event-project-leave': 'updated',
-        'event-project-bulk-updated': 'updated'
-      };
-
-      const type = eventMap[payload.event];
-      if (type) {
-        projectSound.current.play().catch(() => {});
-        if (user.email !== payload.data.userEmail) {
-          api.success({ description: payload.data.message });
-        }
-        window.dispatchEvent(new CustomEvent('project-data-changed', { 
-          detail: { type, project: payload.data.project } 
-        }));
-      }
+    const refreshUnreadCount = async () => {
+        try {
+            const res = await axios.get('/api/chat/unread-count');
+            setUnreadCounts(prev => ({ ...prev, chat: res.data }));
+        } catch (e) { console.error(e); }
     };
 
-    const connect = () => {
-      try {
-        ws = new WebSocket('wss://demo.bidwinners.net');
-        
-        ws.onopen = () => {
-          console.log("WebSocket Connected: Centralized Layout Hub");
-          // Subscriptions
-          ws.send(JSON.stringify({ action: 'subscribe', channel: projectMasterChannel }));
-          // ws.send(JSON.stringify({ action: 'subscribe', channel: userNotificationChannel }));
-          ws.send(JSON.stringify({ action: 'subscribe', channel: globalUserChannel }));
-          ws.send(JSON.stringify({ action: 'subscribe', channel: trackerChannel }));
+    // Centralized Real-time Hub
+    useEffect(() => {
+        if (!user.id) return;
+
+        window.addEventListener('chat-unread-count-changed', refreshUnreadCount);
+
+        const handleProjectCRUD = (payload) => {
+            const type = payload.event.split('-').pop(); 
+            if (type && user.email !== payload.data.userEmail) {
+                projectSound.current.play().catch(() => {});
+                api.success({ description: payload.data.message });
+                window.dispatchEvent(new CustomEvent('project-data-changed', { 
+                    detail: { type, project: payload.data.project } 
+                }));
+            }
         };
 
-        ws.onmessage = (event) => {
-          const response = JSON.parse(event.data);
-          
-          // Route 1: Project CRUD
-          if (response.channel === projectMasterChannel && response.data) {
-            handleProjectCRUD(response.data);
-          }
+        const projectChannel = window.Echo.channel('project-channel');
+        [
+            'event-project-created', 'event-project-updated', 'event-project-update-coloumn',
+            'event-project-delete', 'event-project-joined', 'event-project-leave', 'event-project-bulk-updated'
+        ].forEach(event => {
+            projectChannel.listen(`.${event}`, (data) => handleProjectCRUD({ event, data }));
+        });
 
-          // Route 2: Project Chat Notifications (Phasing out)
-          /*
-          if (response.channel === userNotificationChannel) {
-            const payload = response.data;
-            if (payload && payload.data && payload.data.message) {
-              const incomingMsg = payload.data.message;
-              if (incomingMsg.user_id !== user.id) {
-                chatSound.current.play().catch(() => {});
-                setUnreadCounts(prev => ({ ...prev, project: (prev.project || 0) + 1 }));
-              }
-            }
-            window.dispatchEvent(new CustomEvent('project-chat-notification', { detail: response.data }));
-          }
-          */
+        const trackerChannel = window.Echo.channel('tracker-status');
+        trackerChannel.listen('.tracker-status-notification', (data) => {
+            window.dispatchEvent(new CustomEvent('tracker-status-notification', { detail: data }));
+        });
 
-          // Route 3: Global Chat Notifications
-          if (response.channel === globalUserChannel) {
-            const payload = response.data;
-            if (payload && payload.event === 'message.sent') {
-                const msg = payload.data.message;
-                const senderType = msg.group_id ? 'group' : 'user';
-                const targetId = msg.group_id ? msg.group_id : msg.sender_id;
-                
-                // Mute sound if the user already has this chat open
-                const isActive = window.activeGlobalChat && 
-                                 window.activeGlobalChat.type === senderType && 
-                                 window.activeGlobalChat.id == targetId;
-                
-                if (!isActive && msg.sender_id != user.id) {
-                    chatSound.current.play().catch(() => {});
-                    setUnreadCounts(prev => {
-                        const newDirect = senderType === 'user' ? (prev.direct || 0) + 1 : (prev.direct || 0);
-                        const newGroups = senderType === 'group' ? (prev.groups || 0) + 1 : (prev.groups || 0);
-                        return { 
-                            ...prev, 
-                            direct: newDirect,
-                            groups: newGroups,
-                            global: newDirect + newGroups
-                        };
-                    });
+        // Ably Real-time Connection
+        const ably = new Ably.Realtime({ authUrl: '/api/ably/auth' });
+        ablyRef.current = ably;
+        const presenceChannel = ably.channels.get('presence:global');
+        const userChannel = ably.channels.get(`user.${user.id}`);
+
+    // Presence
+    presenceChannel.presence.subscribe('enter', (member) => setOnlineUsers(prev => new Set([...prev, member.clientId])));
+    presenceChannel.presence.subscribe('leave', (member) => setOnlineUsers(prev => {
+        const next = new Set(prev);
+        next.delete(member.clientId);
+        return next;
+    }));
+    presenceChannel.presence.enter();
+
+    // Chat Notifications
+    userChannel.subscribe('notification', (msgEvent) => {
+        const msg = msgEvent.data.message;
+        const chatType = msgEvent.data.chat_type || 'direct'; 
+
+        if (window.activeChatId !== msg.chat_id) {
+            chatSound.current.play().catch(() => {});
+            setUnreadCounts(prev => {
+                const newChat = { ...(prev.chat || { total: 0, direct: 0, group: 0 }) };
+                newChat.total = (newChat.total || 0) + 1;
+                if (chatType === 'group') {
+                    newChat.group = (newChat.group || 0) + 1;
+                } else {
+                    newChat.direct = (newChat.direct || 0) + 1;
                 }
-            }
-            window.dispatchEvent(new CustomEvent('global-chat-notification', { detail: response }));
-          }
+                return { ...prev, chat: newChat };
+            });
+        }
+    });
 
-          // Route 4: Tracker Status (Screenshots / Online Status)
-          if (response.channel === trackerChannel) {
-            // Unify structure for sub-components
-            const payload = response.data; // This is {event: '...', data: {...}}
-            if (payload && payload.event) {
-              window.dispatchEvent(new CustomEvent('tracker-status-notification', { detail: response }));
+    // WebRTC Signaling
+    userChannel.subscribe('call-signaling', async (msgEvent) => {
+        const { type, from, signal, fromName, callType: incomingType, chatId: incomingChatId } = msgEvent.data;
+        if (from === user.id) return;
+        
+        if (incomingChatId) window.activeChatId = incomingChatId;
+
+        if (type === 'offer') {
+            setIncomingCall({ from, fromName, signal });
+            setCallType(incomingType || 'audio');
+            setCallState('ringing');
+            
+            const ringtone = new Audio(`/uploads/media/sound_effect/chat/chat_message_notification.mp3`);
+            ringtone.loop = true;
+            ringtone.play().catch(() => {});
+            window.ringtone = ringtone;
+        } else if (type === 'answer') {
+            if (window.ringtone) { 
+                window.ringtone.pause(); 
+                window.ringtone.currentTime = 0; 
+                window.ringtone = null; 
             }
-          }
+            if (peerConnection.current) {
+                await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
+                setCallState('connected');
+            }
+        } else if (type === 'ice-candidate') {
+            if (peerConnection.current && signal) {
+                try { await peerConnection.current.addIceCandidate(new RTCIceCandidate(signal)); } catch (e) { console.error('Error adding ice candidate', e); }
+            }
+        } else if (type === 'reject' || type === 'hangup') {
+            let status = type === 'reject' ? 'rejected' : (callState === 'connected' ? 'completed' : 'missed');
+            endCallLocal(status);
+        }
+    });
+
+        return () => {
+            window.removeEventListener('chat-unread-count-changed', refreshUnreadCount);
+            window.Echo.leave('project-channel');
+            window.Echo.leave('tracker-status');
+            try { 
+                presenceChannel.presence.leave();
+                userChannel.unsubscribe();
+                if (ably.connection.state !== 'closed') ably.close();
+            } catch(e) {}
+            endCallLocal();
         };
+    }, [user.id]);
 
-        ws.onclose = () => setTimeout(connect, 3000);
-        ws.onerror = (err) => console.error("Layout Socket Error:", err);
-      } catch (e) {
-        console.error("Could not connect to layout socket:", e);
-        setTimeout(connect, 3000);
-      }
+  useEffect(() => {
+    if (callState === 'connected') {
+        callTimerRef.current = setInterval(() => setCallDuration(prev => prev + 1), 1000);
+    } else {
+        clearInterval(callTimerRef.current);
+    }
+    return () => clearInterval(callTimerRef.current);
+  }, [callState]);
+
+  // WebRTC Helper Functions
+  const sendSignal = (to, data) => {
+    const ably = new Ably.Realtime({ authUrl: '/api/ably/auth' });
+    const channel = ably.channels.get(`user.${to}`);
+    // Include chatId in ALL signaling so both sides can log
+    channel.publish('call-signaling', { ...data, from: user.id, fromName: user.name, callType, chatId: window.activeChatId });
+  };
+
+  const initPeerConnection = (remoteUserId) => {
+    const pc = new RTCPeerConnection(iceServers);
+    pc.onicecandidate = (event) => {
+        if (event.candidate) {
+            sendSignal(remoteUserId, { type: 'ice-candidate', signal: event.candidate });
+        }
     };
+    pc.ontrack = (event) => { setRemoteStream(event.streams[0]); };
+    peerConnection.current = pc;
+    return pc;
+  };
 
-    connect();
-    return () => { if (ws) ws.close(); };
-  }, [user.id]);
+  const endCallLocal = (status = null) => {
+    // If a status is provided, it means we should log this call
+    if (status && window.activeChatId) {
+        saveCallLog(status, callDuration, window.activeChatId);
+    }
+
+    if (window.ringtone) {
+        window.ringtone.pause();
+        window.ringtone.currentTime = 0;
+        window.ringtone = null;
+    }
+    if (peerConnection.current) {
+        peerConnection.current.close();
+        peerConnection.current = null;
+    }
+    if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(t => t.stop());
+        localStreamRef.current = null;
+    }
+    setRemoteStream(null);
+    setLocalStream(null);
+    setCallState('idle');
+    setIncomingCall(null);
+    setCallDuration(0);
+    window.activeChatId = null; // Reset after logging
+  };
+
+  const saveCallLog = async (status, duration, chatId) => {
+    if (!chatId) return;
+    const logMsg = `[CALL_LOG]:${callType}|${status}|${duration}`;
+    try {
+        await axios.post(`/api/chats/${chatId}/messages`, { message: logMsg });
+    } catch (e) { console.error('Error saving call log', e); }
+  };
+
+  const hangupCall = () => {
+    const targetId = incomingCall?.from || window.lastTargetId;
+    if (targetId) {
+        sendSignal(targetId, { type: 'hangup' });
+    }
+    
+    let status = 'completed';
+    if (callState === 'calling') status = 'missed';
+    
+    endCallLocal(status);
+  };
+
+  const acceptCall = async () => {
+    if (!incomingCall) return;
+    if (window.ringtone) {
+        window.ringtone.pause();
+        window.ringtone.currentTime = 0;
+        window.ringtone = null;
+    }
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            }, 
+            video: callType === 'video' 
+        });
+        localStreamRef.current = stream;
+        setLocalStream(stream);
+        const pc = initPeerConnection(incomingCall.from);
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+        await pc.setRemoteDescription(new RTCSessionDescription(incomingCall.signal));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        sendSignal(incomingCall.from, { type: 'answer', signal: answer });
+        setCallState('connected');
+        setIncomingCall(null);
+    } catch (err) {
+        console.error('Accept call error:', err);
+        endCallLocal();
+    }
+  };
+
+  const rejectCall = () => {
+    if (incomingCall) sendSignal(incomingCall.from, { type: 'reject' });
+    endCallLocal('rejected');
+  };
+
+  window.startCall = async (type, otherUserId, chatId) => {
+    window.lastTargetId = otherUserId;
+    window.activeChatId = chatId;
+    setCallType('audio');
+    setCallState('calling');
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            }, 
+            video: false 
+        });
+        localStreamRef.current = stream;
+        setLocalStream(stream);
+        const pc = initPeerConnection(otherUserId);
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        sendSignal(otherUserId, { type: 'offer', signal: offer });
+    } catch (err) {
+        console.error('Call media error:', err);
+        let errorMsg = "Could not access microphone.";
+        if (err.name === 'NotAllowedError') errorMsg = "Microphone access denied. Please enable permissions in your browser.";
+        if (err.name === 'NotFoundError') errorMsg = "No microphone found on this device.";
+        if (err.name === 'NotReadableError') errorMsg = "Microphone is already in use by another app.";
+        
+        antMessage.error(errorMsg);
+        endCallLocal();
+    }
+  };
 
   const handleBulkUpdate = () => {
     if (
@@ -510,6 +675,60 @@ const DashboardLayout = ({ children }) => {
           router.reload();
         }}
       />
+
+      {/* Global Call Overlay */}
+      <AnimatePresence>
+          {callState !== 'idle' && (
+              <motion.div 
+                  initial={{ opacity: 0, y: 50 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 50 }}
+                  style={{
+                      position: 'fixed',
+                      bottom: '30px',
+                      right: '30px',
+                      width: callType === 'video' && callState === 'connected' ? '600px' : '320px',
+                      background: 'rgba(255, 255, 255, 0.95)',
+                      backdropFilter: 'blur(10px)',
+                      borderRadius: '24px',
+                      boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
+                      padding: '20px',
+                      zIndex: 9999,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                  }}
+              >
+                      <>
+                          {callState === 'connected' && (
+                              <audio 
+                                  ref={el => { if (el && remoteStream) el.srcObject = remoteStream; }} 
+                                  autoPlay 
+                                  playsInline 
+                              />
+                          )}
+                          <Avatar size={80} icon={<UserOutlined />} style={{ marginBottom: '15px', background: '#1890ff' }} />
+                          <h3 style={{ margin: '0 0 5px' }}>{incomingCall?.fromName || 'Voice Call'}</h3>
+                          <p style={{ color: '#666', marginBottom: '20px' }}>
+                              {callState === 'calling' && 'Calling...'}
+                              {callState === 'ringing' && `Incoming Voice Call`}
+                              {callState === 'connected' && `Connected • ${formatTime(callDuration)}`}
+                          </p>
+                          <div style={{ display: 'flex', gap: '15px' }}>
+                              {callState === 'ringing' ? (
+                                  <>
+                                      <Button shape="circle" type="primary" icon={<BiPhone />} onClick={acceptCall} style={{ width: '50px', height: '50px', background: '#52c41a', display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
+                                      <Button shape="circle" danger icon={<BiX />} onClick={rejectCall} style={{ width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
+                                  </>
+                              ) : (
+                                  <Button shape="circle" danger icon={<BiX />} onClick={hangupCall} style={{ width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
+                              )}
+                          </div>
+                      </>
+              </motion.div>
+          )}
+      </AnimatePresence>
     </>
   );
 };

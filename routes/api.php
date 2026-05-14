@@ -2,15 +2,20 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\ChatController;
 use App\Http\Controllers\Api\TrackingController;
-use App\Http\Controllers\Api\MobileAttendanceController;
 
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register']);
+
+// Protected Routes
+Route::middleware('auth:sanctum')->group(function () {
+    // Auth
+    Route::post('/logout', [AuthController::class, 'logout']);
+});
 
 // Mobile Attendance
-Route::get('/attendance/today/{user_id}', [MobileAttendanceController::class, 'today']);
-Route::post('/attendance/store', [MobileAttendanceController::class, 'store']);
-Route::put('/attendance/update/{id}', [MobileAttendanceController::class, 'update']);
+
 Route::post('/track/screenshot', [TrackingController::class, 'storeScreenshot']);
 Route::get('/track/screenshots', [TrackingController::class, 'getScreenshots']);
 Route::get('/track/users', [TrackingController::class, 'getAllUsers']);

@@ -10,12 +10,14 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "ably/ably-php": "^1.1",
         "barryvdh/laravel-dompdf": "^3.1",
         "google/auth": "^1.48",
         "inertiajs/inertia-laravel": "^2.0",
         "kreait/firebase-php": "^7.22",
         "laravel/framework": "^12.0",
         "laravel/reverb": "^1.5",
+        "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
         "pusher/pusher-php-server": "^7.2",
         "tightenco/ziggy": "^2.5"

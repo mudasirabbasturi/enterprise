@@ -1,0 +1,923 @@
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { 
+    Layout, 
+    Input, 
+    List, 
+    Avatar, 
+    Typography, 
+    Badge, 
+    Spin, 
+    message as antMessage,
+    Empty,
+    Button,
+    Upload,
+    Image,
+    Popconfirm,
+    Tooltip,
+    Modal,
+    Divider,
+    Tag,
+    Tabs
+} from "antd";
+import { 
+    SearchOutlined, 
+    MessageOutlined, 
+    UserOutlined, 
+    SendOutlined, 
+    PaperClipOutlined, 
+    FileOutlined,
+    DeleteOutlined,
+    PlusOutlined,
+    EllipsisOutlined,
+    CheckOutlined,
+    TeamOutlined,
+    PhoneOutlined,
+    VideoCameraOutlined,
+    EditOutlined
+} from "@ant-design/icons";
+import { BiMicrophone, BiSquare, BiX } from "react-icons/bi";
+import { Head, Link } from "@shared/ui";
+import MainLayout from "@layout";
+import axios from "axios";
+import { usePage } from "@inertiajs/react";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import Ably from 'ably';
+
+dayjs.extend(relativeTime);
+
+const { Sider, Content } = Layout;
+const { Title, Text } = Typography;
+
+const Chat = () => {
+    const { auth } = usePage().props;
+    const currentUser = auth.user;
+
+    const [chats, setChats] = useState([]);
+    const [selectedChat, setSelectedChat] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [loadingChats, setLoadingChats] = useState(true);
+    const [loadingMessages, setLoadingMessages] = useState(false);
+    const [sending, setSending] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [newMessage, setNewMessage] = useState("");
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
+    const [availableUsers, setAvailableUsers] = useState([]);
+    const [loadingUsers, setLoadingUsers] = useState(false);
+    
+    const [replyingTo, setReplyingTo] = useState(null);
+    const [selectedUserIds, setSelectedUserIds] = useState([]);
+    const [groupName, setGroupName] = useState("");
+    const [activeTab, setActiveTab] = useState("direct");
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingGroup, setEditingGroup] = useState(null);
+    const [userSearchTerm, setUserSearchTerm] = useState("");
+    
+    // Recording State
+    const [isRecording, setIsRecording] = useState(false);
+    const [mediaRecorder, setMediaRecorder] = useState(null);
+    const audioChunksRef = useRef([]);
+    
+    // Ably State
+    const ablyRef = useRef(null);
+    const chatChannelRef = useRef(null);
+    const userChannelRef = useRef(null);
+    const scrollRef = useRef(null);
+    const activeChatIdRef = useRef(null);
+
+    // Initialize Ably (Same logic as Layout.jsx)
+    useEffect(() => {
+        const ably = new Ably.Realtime({ authUrl: '/api/ably/auth' });
+        ablyRef.current = ably;
+        
+        const userChannel = ably.channels.get(`user.${currentUser.id}`);
+        userChannelRef.current = userChannel;
+        
+        userChannel.subscribe('notification', (msgEvent) => {
+            const incomingMsg = msgEvent.data.message;
+            moveChatToTop(incomingMsg, true);
+        });
+
+        fetchChats();
+        fetchAvailableUsers();
+
+        return () => {
+            userChannel.unsubscribe();
+            ably.close();
+        };
+    }, [currentUser.id]);
+
+    const moveChatToTop = (message, isIncoming = false) => {
+        setChats(prev => {
+            const chatIndex = prev.findIndex(c => c.id === message.chat_id || c.user_id === message.sender_id);
+            if (chatIndex !== -1) {
+                const updatedChat = { 
+                    ...prev[chatIndex], 
+                    id: message.chat_id, // Ensure we have the real ID now
+                    is_existing: true,
+                    latest_message: message.message || "Sent a file",
+                    latest_message_time: message.created_at,
+                    unread_count: isIncoming && activeChatIdRef.current !== message.chat_id ? (prev[chatIndex].unread_count || 0) + 1 : prev[chatIndex].unread_count
+                };
+                const rest = prev.filter((_, i) => i !== chatIndex);
+                return [updatedChat, ...rest];
+            }
+            return prev;
+        });
+    };
+
+    useEffect(() => {
+        if (editingGroup) {
+            setGroupName(editingGroup.name || "");
+            setSelectedUserIds(editingGroup.participants?.map(p => p.user_id) || []);
+        }
+    }, [editingGroup]);
+
+    useEffect(() => {
+        activeChatIdRef.current = selectedChat?.id;
+        window.activeChatId = selectedChat?.id; // Set globally for Layout.jsx sound logic
+        
+        if (chatChannelRef.current) chatChannelRef.current.unsubscribe();
+        
+        if (selectedChat) {
+            if (selectedChat.is_existing) {
+                fetchMessages(selectedChat.id);
+                markAsRead(selectedChat.id);
+
+                const channel = ablyRef.current.channels.get(`chat.${selectedChat.id}`);
+                chatChannelRef.current = channel;
+                channel.subscribe('message.sent', (msgEvent) => {
+                    const msg = msgEvent.data.message;
+                    setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
+                    moveChatToTop(msg, false);
+                });
+                channel.subscribe('message.deleted', (event) => {
+                    const { messageId } = event.data;
+                    // Use Number() to ensure type compatibility with the state
+                    setMessages(prev => prev.filter(m => Number(m.id) !== Number(messageId)));
+                });
+            } else {
+                setMessages([]);
+            }
+        }
+
+        return () => {
+            window.activeChatId = null; // Clear when leaving
+        };
+    }, [selectedChat?.id, selectedChat?.user_id]);
+
+    useEffect(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }, [messages]);
+
+    const fetchChats = async (showLoading = true) => {
+        if (showLoading) setLoadingChats(true);
+        try {
+            const response = await axios.get("/api/chats");
+            setChats(response.data);
+        } catch (e) {} finally {
+            if (showLoading) setLoadingChats(false);
+        }
+    };
+
+    const fetchAvailableUsers = async () => {
+        setLoadingUsers(true);
+        try {
+            const response = await axios.get("/api/chat-visibility-users");
+            setAvailableUsers(response.data);
+        } catch (e) {} finally {
+            setLoadingUsers(false);
+        }
+    };
+
+    const fetchMessages = async (chatId) => {
+        if (!chatId || String(chatId).startsWith('new-')) return;
+        setLoadingMessages(true);
+        try {
+            const response = await axios.get(`/api/chats/${chatId}/messages`);
+            setMessages(response.data);
+        } catch (e) {} finally {
+            setLoadingMessages(false);
+        }
+    };
+
+    const markAsRead = async (chatId) => {
+        if (!chatId || String(chatId).startsWith('new-')) return;
+        try {
+            await axios.post(`/api/chats/${chatId}/read`);
+            setChats(prev => prev.map(c => c.id === chatId ? { ...c, unread_count: 0 } : c));
+            window.dispatchEvent(new CustomEvent('chat-unread-count-changed'));
+        } catch (e) {}
+    };
+
+    const handleSendMessage = async (audioFile = null) => {
+        if (!selectedChat || (!newMessage.trim() && !selectedFile && !audioFile)) return;
+
+        let chatId = selectedChat.id;
+
+        // If it's a new chat, we need to create it first
+        if (!selectedChat.is_existing) {
+            try {
+                setSending(true);
+                const chatRes = await axios.post("/api/chats", {
+                    user_ids: [selectedChat.user_id],
+                    type: 'direct'
+                });
+                chatId = chatRes.data.id;
+                // Update selected chat to real one
+                const realChat = { ...selectedChat, id: chatId, is_existing: true };
+                setSelectedChat(realChat);
+                // Update in list
+                setChats(prev => prev.map(c => c.user_id === selectedChat.user_id ? realChat : c));
+            } catch (e) {
+                antMessage.error("Failed to initialize chat");
+                setSending(false);
+                return;
+            }
+        }
+
+        const replyId = replyingTo?.id; 
+        setReplyingTo(null);
+
+        const formData = new FormData();
+        if (newMessage.trim()) formData.append("message", newMessage);
+        if (selectedFile) formData.append("file", selectedFile);
+        if (audioFile) formData.append("file", audioFile);
+        if (replyId) formData.append("reply_to_id", replyId);
+
+        try {
+            setSending(true);
+            await axios.post(`/api/chats/${chatId}/messages`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            setNewMessage("");
+            setSelectedFile(null);
+        } catch (e) {
+            antMessage.error("Failed to send");
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const handleDeleteMessage = async (messageId) => {
+        try {
+            await axios.delete(`/api/chats/${selectedChat.id}/messages/${messageId}`);
+            setMessages(prev => prev.filter(m => m.id !== messageId));
+        } catch (e) { antMessage.error("Failed to delete"); }
+    };
+
+    // Voice Recording Logic
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    channelCount: 1,
+                    sampleRate: 44100,
+                    echoCancellation: true,
+                    noiseSuppression: true
+                } 
+            });
+            
+            const mimeTypes = [
+                'audio/webm;codecs=opus',
+                'audio/webm',
+                'audio/mp4',
+                'audio/ogg',
+                'audio/wav'
+            ];
+            
+            let selectedMimeType = '';
+            for (const type of mimeTypes) {
+                if (MediaRecorder.isTypeSupported(type)) {
+                    selectedMimeType = type;
+                    break;
+                }
+            }
+            
+            const recorder = new MediaRecorder(stream, {
+                mimeType: selectedMimeType,
+                audioBitsPerSecond: 128000
+            });
+            
+            audioChunksRef.current = [];
+
+            recorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunksRef.current.push(e.data);
+            };
+
+            recorder.onstop = () => {
+                const mimeType = selectedMimeType || 'audio/webm';
+                const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+                
+                let extension = 'webm';
+                if (mimeType.includes('mp4')) extension = 'mp4';
+                if (mimeType.includes('ogg')) extension = 'ogg';
+                if (mimeType.includes('wav')) extension = 'wav';
+                
+                const audioFile = new File([audioBlob], `voice-message-${Date.now()}.${extension}`, { type: mimeType });
+                handleSendMessage(audioFile);
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            recorder.start(1000); // 1-second chunks
+            setMediaRecorder(recorder);
+            setIsRecording(true);
+            antMessage.success('Recording started');
+        } catch (err) {
+            antMessage.error("Microphone access denied: " + err.message);
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorder && isRecording) {
+            mediaRecorder.stop();
+            setIsRecording(false);
+        }
+    };
+
+    const scrollToMessage = (msgId) => {
+        const el = document.getElementById(`msg-${msgId}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.style.transition = 'background-color 0.5s';
+            el.style.backgroundColor = '#fffbe6';
+            setTimeout(() => el.style.backgroundColor = '', 2000);
+        }
+    };
+
+    const filteredChats = chats.filter(chat => 
+        chat.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const directChats = useMemo(() => chats.filter(c => c.type === 'direct' && c.name.toLowerCase().includes(searchTerm.toLowerCase())), [chats, searchTerm]);
+    const groupChats = useMemo(() => chats.filter(c => c.type === 'group' && c.name.toLowerCase().includes(searchTerm.toLowerCase())), [chats, searchTerm]);
+
+    const handleCreateGroup = async () => {
+        if (selectedUserIds.length === 0) return;
+        
+        // If only 1 user and no group name, treat as direct chat
+        const isGroup = selectedUserIds.length > 1 || groupName.trim() !== "";
+        
+        try {
+            setSending(true);
+            const res = await axios.post("/api/chats", {
+                user_ids: selectedUserIds,
+                name: isGroup ? (groupName || "New Group") : null,
+                type: isGroup ? 'group' : 'direct'
+            });
+            
+            const newChat = {
+                ...res.data,
+                name: res.data.name || availableUsers.find(u => u.id === selectedUserIds[0])?.name,
+                is_existing: true,
+                user_id: isGroup ? null : selectedUserIds[0],
+                unread_count: 0,
+                latest_message: null
+            };
+            
+            setChats(prev => [newChat, ...prev.filter(c => c.id !== newChat.id)]);
+            setSelectedChat(newChat);
+            setIsNewChatModalOpen(false);
+            setSelectedUserIds([]);
+            setGroupName("");
+            antMessage.success(isGroup ? "Group created" : "Chat started");
+        } catch (e) {
+            antMessage.error("Failed to create chat");
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const handleUpdateGroup = async () => {
+        if (!editingGroup || selectedUserIds.length === 0) return;
+        try {
+            setSending(true);
+            const res = await axios.put(`/api/chats/${editingGroup.id}`, {
+                name: groupName,
+                user_ids: selectedUserIds
+            });
+            
+            setChats(prev => prev.map(c => c.id === editingGroup.id ? { ...c, name: groupName } : c));
+            setSelectedChat(prev => ({ ...prev, name: groupName }));
+            setIsEditModalOpen(false);
+            setEditingGroup(null);
+            setSelectedUserIds([]);
+            setGroupName("");
+            antMessage.success("Group updated successfully");
+        } catch (e) {
+            antMessage.error("Failed to update group");
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const handleDeleteGroup = async (chatId) => {
+        try {
+            await axios.delete(`/api/chats/${chatId}`);
+            setChats(prev => prev.filter(c => c.id !== chatId));
+            if (selectedChat?.id === chatId) setSelectedChat(null);
+            antMessage.success("Group deleted successfully");
+        } catch (e) {
+            antMessage.error("Failed to delete group");
+        }
+    };
+
+    const toggleUserSelection = (userId) => {
+        setSelectedUserIds(prev => 
+            prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+        );
+    };
+
+    return (
+        <>
+            <Head title="Chat" />
+            <Layout style={{ height: "calc(100vh - 64px)", background: "#fff", overflow: "hidden" }}>
+                <Sider width={350} theme="light" style={{ borderRight: "1px solid #f0f0f0", height: "100%" }}>
+                    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+
+                    
+                        <div style={{ flex: 1, overflowY: "auto", height: "100%" }} className="custom-scroll">
+                            <Input
+                                prefix={<SearchOutlined />}
+                                placeholder="Search chats..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                style={{ marginBottom: 8, borderRadius: '10px', background: '#f5f5f5', border: 'none' }}
+                            />
+                            <Tabs
+                                activeKey={activeTab} 
+                                onChange={setActiveTab}
+                                
+                                items={[
+                                    {
+                                        key: 'direct',
+                                        label: <span><UserOutlined /> Direct</span>,
+                                        children: (
+                                            <List
+                                                dataSource={directChats}
+                                                locale={{ emptyText: <Empty description="No direct chats" /> }}
+                                                renderItem={chat => (
+                                                    <List.Item 
+                                                        onClick={() => setSelectedChat(chat)}
+                                                        style={{ 
+                                                            padding: "15px 20px", cursor: "pointer", 
+                                                            background: selectedChat?.id === chat.id ? "#f0f7ff" : "transparent",
+                                                            borderLeft: selectedChat?.id === chat.id ? "4px solid #1890ff" : "4px solid transparent"
+                                                        }}
+                                                        className="chat-item"
+                                                    >
+                                                        <List.Item.Meta
+                                                            avatar={
+                                                                <Badge count={chat.unread_count}>
+                                                                    <Avatar size={45} src={chat.avatar ? `/${chat.avatar}` : null} icon={<UserOutlined />} style={{ background: '#1890ff' }} />
+                                                                </Badge>
+                                                            }
+                                                            title={<div className="d-flex justify-content-between"><b>{chat.name}</b> <small style={{ opacity: 0.5 }}>{chat.latest_message_time ? dayjs(chat.latest_message_time).fromNow(true) : ""}</small></div>}
+                                                            description={<Text type="secondary" ellipsis style={{ maxWidth: "200px" }}>{chat.latest_message || "No messages yet"}</Text>}
+                                                        />
+                                                    </List.Item>
+                                                )}
+                                            />
+                                        )
+                                    },
+                                    {
+                                        key: 'groups',
+                                        label: <span><TeamOutlined /> Groups</span>,
+                                        children: (
+                                            <List
+                                                dataSource={groupChats}
+                                                locale={{ emptyText: <Empty description="No groups found" /> }}
+                                                renderItem={chat => (
+                                                    <List.Item 
+                                                        onClick={() => setSelectedChat(chat)}
+                                                        style={{ 
+                                                            padding: "15px 20px", cursor: "pointer", 
+                                                            background: selectedChat?.id === chat.id ? "#f0f7ff" : "transparent",
+                                                            borderLeft: selectedChat?.id === chat.id ? "4px solid #1890ff" : "4px solid transparent"
+                                                        }}
+                                                        className="chat-item"
+                                                    >
+                                                        <List.Item.Meta
+                                                            avatar={
+                                                                <Badge count={chat.unread_count}>
+                                                                    <Avatar size={45} icon={<TeamOutlined />} style={{ background: '#52c41a' }} />
+                                                                </Badge>
+                                                            }
+                                                            title={<div className="d-flex justify-content-between"><b>{chat.name}</b> <small style={{ opacity: 0.5 }}>{chat.latest_message_time ? dayjs(chat.latest_message_time).fromNow(true) : ""}</small></div>}
+                                                            description={<Text type="secondary" ellipsis style={{ maxWidth: "200px" }}>{chat.latest_message || "No messages yet"}</Text>}
+                                                        />
+                                                    </List.Item>
+                                                )}
+                                            />
+                                        )
+                                    }
+                                ]}
+                                style={{ padding: '0 10px' }}
+                            />
+                        </div>
+                    </div>
+                </Sider>
+
+                <Content style={{ display: "flex", flexDirection: "column" }}>
+                    {selectedChat ? (
+                        <>
+                            <div style={{ padding: "15px 25px", borderBottom: "1px solid #f0f0f0", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#fff" }}>
+                                <div className="d-flex align-items-center gap-3">
+                                    <Avatar size={40} src={selectedChat.avatar ? `/${selectedChat.avatar}` : null} icon={<UserOutlined />} style={{ background: '#1890ff' }} />
+                                    <div>
+                                        <Title level={5} style={{ margin: 0 }}>{selectedChat.name}</Title>
+                                        <Text type="secondary" style={{ fontSize: "11px" }}>Direct Message</Text>
+                                    </div>
+                                </div>
+                                <div className="d-flex gap-3">
+                                    {selectedChat.type === 'direct' ? (
+                                        <>
+                                            <Tooltip title="Audio Call">
+                                                <Button 
+                                                    shape="circle" 
+                                                    icon={<PhoneOutlined style={{ fontSize: '18px' }} />} 
+                                                    onClick={() => window.startCall('audio', selectedChat.user_id, selectedChat.id)} 
+                                                    style={{ 
+                                                        width: '42px', 
+                                                        height: '42px', 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        justifyContent: 'center',
+                                                        background: '#f6ffed',
+                                                        border: '1px solid #b7eb8f',
+                                                        color: '#52c41a'
+                                                    }}
+                                                    className="premium-call-btn"
+                                                />
+                                            </Tooltip>
+                                            <Tooltip title="Video Call">
+                                                <Button 
+                                                    shape="circle" 
+                                                    icon={<VideoCameraOutlined style={{ fontSize: '18px' }} />} 
+                                                    onClick={() => window.startCall('video', selectedChat.user_id, selectedChat.id)} 
+                                                    style={{ 
+                                                        width: '42px', 
+                                                        height: '42px', 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        justifyContent: 'center',
+                                                        background: '#e6f7ff',
+                                                        border: '1px solid #91d5ff',
+                                                        color: '#1890ff'
+                                                    }}
+                                                    className="premium-call-btn"
+                                                />
+                                            </Tooltip>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Tooltip title="Edit Group">
+                                                <Button 
+                                                    shape="circle" 
+                                                    icon={<EditOutlined style={{ fontSize: '18px' }} />} 
+                                                    onClick={() => { setEditingGroup(selectedChat); setIsEditModalOpen(true); }} 
+                                                    style={{ 
+                                                        width: '42px', 
+                                                        height: '42px', 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        justifyContent: 'center',
+                                                        background: '#fff7e6',
+                                                        border: '1px solid #ffe7ba',
+                                                        color: '#fa8c16'
+                                                    }}
+                                                    className="premium-call-btn"
+                                                />
+                                            </Tooltip>
+                                            <Tooltip title="Delete Group">
+                                                <Popconfirm title="Are you sure you want to delete this group?" onConfirm={() => handleDeleteGroup(selectedChat.id)}>
+                                                    <Button 
+                                                        shape="circle" 
+                                                        icon={<DeleteOutlined style={{ fontSize: '18px' }} />} 
+                                                        style={{ 
+                                                            width: '42px', 
+                                                            height: '42px', 
+                                                            display: 'flex', 
+                                                            alignItems: 'center', 
+                                                            justifyContent: 'center',
+                                                            background: '#fff1f0',
+                                                            border: '1px solid #ffa39e',
+                                                            color: '#f5222d'
+                                                        }}
+                                                        className="premium-call-btn"
+                                                    />
+                                                </Popconfirm>
+                                            </Tooltip>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div ref={scrollRef} className="custom-scroll" style={{ flex: 1, overflowY: "auto", padding: "20px", background: "#f4f7f6", display: "flex", flexDirection: "column", gap: "12px" }}>
+                                {loadingMessages ? (
+                                    <div className="text-center p-5"><Spin tip="Loading chat..." /></div>
+                                ) : messages.map((msg, i) => {
+                                    const isMe = msg.sender_id === currentUser.id;
+                                    
+                                    // Handle Call Logs
+                                    if (msg.message?.startsWith('[CALL_LOG]:')) {
+                                        const [_, data] = msg.message.split(':');
+                                        const [type, status, duration] = data.split('|');
+                                        const isMissed = status === 'missed' || status === 'rejected';
+                                        
+                                        const formatDuration = (s) => {
+                                            const mins = Math.floor(s / 60);
+                                            const secs = s % 60;
+                                            return `${mins}:${secs.toString().padStart(2, '0')}`;
+                                        };
+
+                                        return (
+                                            <div key={msg.id} style={{ display: "flex", justifyContent: "center", margin: "10px 0" }}>
+                                                <div style={{ background: "#f0f2f5", padding: "8px 20px", borderRadius: "20px", border: "1px solid #e8e8e8", display: "flex", alignItems: "center", gap: "10px" }}>
+                                                    {type === 'video' ? <VideoCameraOutlined style={{ color: isMissed ? "#ff4d4f" : "#1890ff" }} /> : <PhoneOutlined style={{ color: isMissed ? "#ff4d4f" : "#1890ff" }} />}
+                                                    <span style={{ fontSize: "12px", fontWeight: 500, color: "#595959" }}>
+                                                        {isMissed ? (isMe ? `Unanswered ${type} call` : `Missed ${type} call`) : `${type.charAt(0).toUpperCase() + type.slice(1)} call (${formatDuration(duration)})`}
+                                                    </span>
+                                                    <small style={{ fontSize: "10px", opacity: 0.6 }}>{dayjs(msg.created_at).format('H:mm')}</small>
+                                                    {isMe && (
+                                                        <Popconfirm title="Delete call log?" onConfirm={() => handleDeleteMessage(msg.id)}>
+                                                            <DeleteOutlined style={{ fontSize: "11px", cursor: "pointer", opacity: 0.4, marginLeft: "5px" }} />
+                                                        </Popconfirm>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <div key={msg.id} id={`msg-${msg.id}`} style={{ alignSelf: isMe ? "flex-end" : "flex-start", maxWidth: "75%", transition: "background-color 0.5s" }}>
+                                            <div style={{ background: isMe ? "#1890ff" : "#fff", color: isMe ? "#fff" : "#333", padding: "10px 15px", borderRadius: isMe ? "18px 18px 0 18px" : "18px 18px 18px 0", boxShadow: "0 2px 5px rgba(0,0,0,0.05)" }}>
+                                                
+                                                {msg.reply_to && (
+                                                    <div 
+                                                        onClick={() => scrollToMessage(msg.reply_to_id)} 
+                                                        style={{ 
+                                                            background: isMe ? "rgba(255,255,255,0.15)" : "#f0f2f5", 
+                                                            padding: "5px 10px", 
+                                                            borderRadius: "8px", 
+                                                            fontSize: "12px", 
+                                                            marginBottom: "8px", 
+                                                            borderLeft: "3px solid " + (isMe ? "#fff" : "#1890ff"),
+                                                            cursor: "pointer",
+                                                            opacity: 0.8
+                                                        }}
+                                                    >
+                                                        <div style={{ fontWeight: "bold", fontSize: "11px" }}>{msg.reply_to.sender?.name}</div>
+                                                        <div style={{ maxHeight: "40px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.reply_to.message || "File/Media"}</div>
+                                                    </div>
+                                                )}
+
+                                                <div style={{ fontSize: "14px", whiteSpace: "pre-wrap" }}>{msg.message}</div>
+                                                {msg.file_path && (
+                                                    <div style={{ marginTop: "8px" }}>
+                                                        {msg.file_type?.startsWith('image/') ? <Image src={`/${msg.file_path}`} style={{ maxWidth: "250px", borderRadius: "8px" }} /> : msg.file_type?.startsWith('audio/') ? (
+                                                            <audio 
+                                                                controls 
+                                                                preload="metadata"
+                                                                style={{ width: "220px", height: "40px" }}
+                                                                onError={(e) => {
+                                                                    console.error('Audio playback error:', e);
+                                                                    antMessage.error('Failed to load audio');
+                                                                }}
+                                                            >
+                                                                <source src={`/${msg.file_path}`} type={msg.file_type} />
+                                                            </audio>
+                                                        ) : <a href={`/${msg.file_path}`} target="_blank" rel="noreferrer" style={{ color: isMe ? "#fff" : "#1890ff", display: "flex", alignItems: "center", gap: "5px" }}><FileOutlined /> {msg.file_path.split('/').pop()}</a>}
+                                                    </div>
+                                                )}
+                                                <div className="d-flex justify-content-between align-items-center mt-1" style={{ gap: "15px" }}>
+                                                    <small style={{ fontSize: "9px", opacity: 0.6 }}>{dayjs(msg.created_at).format('H:mm')}</small>
+                                                    <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                                                        <Tooltip title="Reply"><span onClick={() => setReplyingTo(msg)} style={{ cursor: "pointer", opacity: 0.6, fontSize: "11px" }}>Reply</span></Tooltip>
+                                                        {isMe && <Popconfirm title="Delete message?" onConfirm={() => handleDeleteMessage(msg.id)}><DeleteOutlined style={{ fontSize: "11px", cursor: "pointer", opacity: 0.6 }} /></Popconfirm>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {messages.length === 0 && !loadingMessages && (
+                                    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", opacity: 0.5, paddingBottom: "100px" }}>
+                                        <MessageOutlined style={{ fontSize: "60px", marginBottom: "20px", color: "#1890ff" }} />
+                                        <div style={{ textAlign: "center" }}>
+                                            <Title level={4} style={{ margin: 0, color: "#8c8c8c" }}>No conversation history yet.</Title>
+                                            <Text type="secondary">Send a message below to start chatting!</Text>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div style={{ padding: "20px", borderTop: "1px solid #f0f0f0", background: "#fff" }}>
+                                {replyingTo && (
+                                    <div style={{ background: "#f0f2f5", padding: "10px 15px", borderRadius: "12px 12px 0 0", borderLeft: "4px solid #1890ff", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "-1px" }}>
+                                        <div style={{ overflow: "hidden" }}>
+                                            <div style={{ fontWeight: "bold", fontSize: "12px", color: "#1890ff" }}>Replying to {replyingTo.sender?.name}</div>
+                                            <div style={{ fontSize: "12px", opacity: 0.7, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{replyingTo.message || "File/Media"}</div>
+                                        </div>
+                                        <Button type="text" size="small" icon={<BiX />} onClick={() => setReplyingTo(null)} />
+                                    </div>
+                                )}
+                                {selectedFile && <Tag closable onClose={() => setSelectedFile(null)} color="blue" icon={<PaperClipOutlined />} style={{ marginBottom: "10px" }}>{selectedFile.name}</Tag>}
+                                <div className="d-flex gap-2 align-items-end">
+                                    <Upload beforeUpload={f => { setSelectedFile(f); return false; }} showUploadList={false}><Button size="large" shape="circle" icon={<PlusOutlined />} /></Upload>
+                                    <Input.TextArea autoSize={{ minRows: 1, maxRows: 4 }} placeholder={isRecording ? "Recording..." : `Message ${selectedChat.name}...`} value={newMessage} onChange={e => setNewMessage(e.target.value)} onPressEnter={e => { if (!e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} style={{ borderRadius: "20px", border: "none", background: "#f0f2f5", padding: "10px 20px" }} disabled={isRecording} />
+                                    
+                                    {isRecording ? (
+                                        <Button type="primary" danger shape="circle" size="large" icon={<BiSquare />} onClick={stopRecording} className="pulse-animation" />
+                                    ) : (
+                                        <Button shape="circle" size="large" icon={<BiMicrophone />} onClick={startRecording} disabled={!!newMessage.trim() || !!selectedFile} />
+                                    )}
+                                    
+                                    <Button type="primary" shape="circle" size="large" icon={<SendOutlined />} onClick={() => handleSendMessage()} loading={sending} disabled={(!newMessage.trim() && !selectedFile) || isRecording} />
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#f4f7f6" }}>
+                            <div className="text-center">
+                                <Avatar size={100} icon={<MessageOutlined />} style={{ background: "#e6f7ff", color: "#1890ff", marginBottom: "20px" }} />
+                                <Title level={3} style={{ color: "#434343" }}>Select a Contact</Title>
+                                <Text type="secondary">Choose someone from the list to start a secure conversation.</Text>
+                            </div>
+                        </div>
+                    )}
+                </Content>
+            </Layout>
+
+            <Modal 
+                title="Create New Conversation" 
+                open={isNewChatModalOpen} 
+                onCancel={() => { setIsNewChatModalOpen(false); setSelectedUserIds([]); setGroupName(""); setUserSearchTerm(""); }} 
+                onOk={handleCreateGroup}
+                okText={selectedUserIds.length > 1 ? "Create Group" : "Start Chat"}
+                okButtonProps={{ disabled: selectedUserIds.length === 0, loading: sending }}
+                centered
+                width={500}
+            >
+                <div style={{ marginBottom: "20px" }}>
+                    <Text strong style={{ display: "block", marginBottom: "8px" }}>Group Name (Optional)</Text>
+                    <Input 
+                        placeholder="Enter group name if creating a group..." 
+                        value={groupName} 
+                        onChange={e => setGroupName(e.target.value)}
+                        prefix={<TeamOutlined style={{ color: '#bfbfbf' }} />}
+                        style={{ borderRadius: '8px' }}
+                    />
+                </div>
+
+                <div style={{ marginBottom: "15px" }}>
+                    <Input 
+                        placeholder="Search team members..." 
+                        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                        value={userSearchTerm}
+                        onChange={e => setUserSearchTerm(e.target.value)}
+                        style={{ borderRadius: '8px' }}
+                    />
+                </div>
+                
+                <Text strong style={{ display: "block", marginBottom: "8px" }}>Select Team Members ({selectedUserIds.length} selected)</Text>
+                <div style={{ maxHeight: "350px", overflowY: "auto", border: '1px solid #f0f0f0', borderRadius: '8px', padding: '10px' }} className="custom-scroll">
+                    <List
+                        loading={loadingUsers}
+                        dataSource={availableUsers.filter(u => u.name.toLowerCase().includes(userSearchTerm.toLowerCase()))}
+                        renderItem={user => {
+                            const isSelected = selectedUserIds.includes(user.id);
+                            return (
+                                <List.Item 
+                                    onClick={() => toggleUserSelection(user.id)} 
+                                    style={{ 
+                                        cursor: "pointer", 
+                                        padding: "12px", 
+                                        borderRadius: "10px",
+                                        background: isSelected ? '#f0f7ff' : 'transparent',
+                                        transition: 'all 0.2s'
+                                    }} 
+                                    className="user-row"
+                                >
+                                    <List.Item.Meta 
+                                        avatar={<Avatar src={user.media?.[0]?.file_path ? `/${user.media[0].file_path}` : null} icon={<UserOutlined />} />} 
+                                        title={<b>{user.name}</b>} 
+                                        description={user.role?.name || "Team Member"} 
+                                    />
+                                    <Badge status={isSelected ? "processing" : "default"} />
+                                </List.Item>
+                            );
+                        }}
+                    />
+                </div>
+            </Modal>
+
+            <Modal 
+                title="Edit Group Settings" 
+                open={isEditModalOpen} 
+                onCancel={() => { setIsEditModalOpen(false); setEditingGroup(null); setSelectedUserIds([]); setGroupName(""); setUserSearchTerm(""); }} 
+                onOk={handleUpdateGroup}
+                okText="Save Changes"
+                okButtonProps={{ loading: sending }}
+                centered
+                width={500}
+            >
+                <div style={{ marginBottom: "20px" }}>
+                    <Text strong style={{ display: "block", marginBottom: "8px" }}>Group Name</Text>
+                    <Input 
+                        placeholder="Enter group name..." 
+                        value={groupName} 
+                        onChange={e => setGroupName(e.target.value)}
+                        prefix={<TeamOutlined style={{ color: '#bfbfbf' }} />}
+                        style={{ borderRadius: '8px' }}
+                    />
+                </div>
+
+                <div style={{ marginBottom: "15px" }}>
+                    <Input 
+                        placeholder="Search team members..." 
+                        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                        value={userSearchTerm}
+                        onChange={e => setUserSearchTerm(e.target.value)}
+                        style={{ borderRadius: '8px' }}
+                    />
+                </div>
+                
+                <Text strong style={{ display: "block", marginBottom: "8px" }}>Group Members ({selectedUserIds.length})</Text>
+                <div style={{ maxHeight: "350px", overflowY: "auto", border: '1px solid #f0f0f0', borderRadius: '8px', padding: '10px' }} className="custom-scroll">
+                    <List
+                        loading={loadingUsers}
+                        dataSource={availableUsers.filter(u => u.name.toLowerCase().includes(userSearchTerm.toLowerCase()))}
+                        renderItem={user => {
+                            const isSelected = selectedUserIds.includes(user.id);
+                            return (
+                                <List.Item 
+                                    onClick={() => toggleUserSelection(user.id)} 
+                                    style={{ 
+                                        cursor: "pointer", 
+                                        padding: "12px", 
+                                        borderRadius: "10px",
+                                        background: isSelected ? '#f0f7ff' : 'transparent',
+                                        transition: 'all 0.2s'
+                                    }} 
+                                    className="user-row"
+                                >
+                                    <List.Item.Meta 
+                                        avatar={<Avatar src={user.media?.[0]?.file_path ? `/${user.media[0].file_path}` : null} icon={<UserOutlined />} />} 
+                                        title={<b>{user.name}</b>} 
+                                        description={user.role?.name || "Team Member"} 
+                                    />
+                                    <Badge status={isSelected ? "processing" : "default"} />
+                                </List.Item>
+                            );
+                        }}
+                    />
+                </div>
+            </Modal>
+
+            <style>{`
+                .chat-item:hover, .user-row:hover { background: #f0f7ff !important; }
+                .custom-scroll::-webkit-scrollbar { width: 5px; }
+                .custom-scroll::-webkit-scrollbar-thumb { background: #ddd; border-radius: 10px; }
+                .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+                .pulse-animation {
+                    animation: pulse-red 1.5s infinite;
+                }
+                @keyframes pulse-red {
+                    0% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0.7); }
+                    70% { box-shadow: 0 0 0 10px rgba(255, 77, 79, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0); }
+                }
+                .premium-call-btn:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+                    transition: all 0.3s ease;
+                }
+                /* Prevent Scrollbar Shifting during Modals/Popovers */
+                html, body {
+                    scrollbar-gutter: stable;
+                    overflow-x: hidden !important;
+                    width: 100% !important;
+                }
+                body {
+                    padding-right: 0 !important; /* Force kill Ant Design padding compensation */
+                }
+                body.ant-scrolling-effect {
+                    width: 100% !important;
+                    overflow: hidden !important;
+                    position: relative;
+                }
+                .ant-modal-open {
+                    overflow: hidden !important;
+                    width: 100% !important;
+                }
+                .ant-popover {
+                    z-index: 10000 !important;
+                }
+            `}</style>
+        </>
+    );
+};
+
+Chat.layout = (page) => <MainLayout children={page} />;
+
+export default Chat;

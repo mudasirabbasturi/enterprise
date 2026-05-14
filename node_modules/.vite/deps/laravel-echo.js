@@ -1,4 +1,4 @@
-import "./chunk-DC5AMYBS.js";
+import "./chunk-2TUXWMP5.js";
 
 // node_modules/laravel-echo/dist/echo.js
 var u = class {

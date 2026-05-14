@@ -102,37 +102,24 @@ class ProjectController extends Controller
 
     private function broadcastMessage($channel, $event, $data)
     {
-        $personalServerUrl = 'https://api-socket.bidwinners.net/publish';
-        $usePersonalServer = false;
-
         try {
-            $client = new \GuzzleHttp\Client(['timeout' => 2, 'verify' => false]);
-            $client->post($personalServerUrl, [
-                'json' => [
-                    'channel' => $channel,
-                    'event' => $event,
-                    'data' => $data
-                ]
-            ]);
-        } catch (\Exception $e) {
-            \Log::info("Personal socket server error: " . $e->getMessage());
-        }
-
-        /* 
-        $usePersonalServer = false;
-        if (!$usePersonalServer) {
-            $options = ['cluster' => 'ap2', 'useTLS' => true];
-            $pusherClient = new \GuzzleHttp\Client(['verify' => false]);
-            $pusher = new \Pusher\Pusher(
-                '5158315c26b8f6732773',
-                '9ba1bfd3baa3f4ec2a4c',
-                '2057639',
+            $options = [
+                'cluster' => 'ap1',
+                'useTLS' => true
+            ];
+            
+            $pusher = new Pusher(
+                'd9306811d5a58be380be',
+                '2baf4cc0c399e9d8207c',
+                '2152798',
                 $options,
-                $pusherClient
+                new \GuzzleHttp\Client(['timeout' => 5, 'verify' => false])
             );
+
             $pusher->trigger($channel, $event, $data);
+        } catch (\Exception $e) {
+            \Log::error("Pusher broadcast error: " . $e->getMessage());
         }
-        */
     }
 
     public function Status(Request $request, $status)

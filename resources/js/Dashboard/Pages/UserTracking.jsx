@@ -100,7 +100,6 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
 
     // Global Settings
     const [screenshotInterval, setScreenshotInterval] = useState(120);
-    const [socketUrl, setSocketUrl] = useState("wss://demo.bidwinners.net");
     const [apiBaseUrl, setApiBaseUrl] = useState("http://127.0.0.1:8000");
     const [syncInterval, setSyncInterval] = useState(5);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -163,7 +162,6 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
         try {
             const resp = await axios.get("/api/track/settings");
             setScreenshotInterval(resp.data.tracker_screenshot_interval || 120);
-            setSocketUrl(resp.data.tracker_socket_url || "wss://demo.bidwinners.net");
             setApiBaseUrl(resp.data.tracker_api_url || "http://127.0.0.1:8000");
             setSyncInterval(resp.data.tracker_sync_interval || 5);
             setAdminPassword(resp.data.tracker_admin_password || "bidwinners");
@@ -178,7 +176,6 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
         try {
             await axios.post("/api/track/settings/update", {
                 tracker_screenshot_interval: screenshotInterval,
-                tracker_socket_url: socketUrl,
                 tracker_api_url: apiBaseUrl,
                 tracker_sync_interval: syncInterval,
                 tracker_admin_password: adminPassword,
@@ -200,46 +197,8 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
         }
     };
 
-    // Real-time status updates via Layout.jsx Events
     useEffect(() => {
         fetchSettings(); // Fetch on load
-        
-        const handleStatusNotification = (event) => {
-            const response = event.detail;
-            if (!response || !response.data) return;
-            
-            const eventType = response.data.event;
-            const payload = response.data.data;
-
-            if (eventType === 'event-user-status-updated') {
-                const userId = payload.userId || payload.user_id;
-                const isOnline = payload.isOnline !== undefined ? payload.isOnline : payload.is_online;
-                setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_online: isOnline } : u));
-            }
-
-            if (eventType === 'event-screenshot-captured') {
-                const userId = payload.userId;
-                setUsers(prev => prev.map(u => {
-                    if (u.id === userId) {
-                        return { ...u, latest_screenshot: payload.screenshot, last_active_at: new Date().toISOString() };
-                    }
-                    return u;
-                }));
-                
-                // Reset loading state and SHOW PREVIEW if this is the user we were waiting for
-                if (takingScreenshotIdRef.current === userId) {
-                    setPreviewImage(payload.screenshot.url);
-                    setIsPreviewVisible(true);
-                    setTakingScreenshotId(null);
-                }
-            }
-        };
-
-        window.addEventListener('tracker-status-notification', handleStatusNotification);
-        
-        return () => {
-            window.removeEventListener('tracker-status-notification', handleStatusNotification);
-        };
     }, [selectedStatus]);
 
     const handleStatusChange = (value) => {
@@ -331,7 +290,6 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
 
     const deleteSelected = async () => {
         if (selectedIds.length === 0) return;
-
         setDeleting(true);
         try {
             await axios.post("/api/track/screenshots/delete", { ids: selectedIds });
@@ -355,54 +313,80 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
 
     const triggerScreenshot = async (user) => {
         setTakingScreenshotId(user.id);
-        const triggerTime = dayjs();
         
         try {
+            // 0. Real-time Status Check: Verify if user is actually online right now
+            const statusRes = await axios.get(`/api/track/active-status/${user.id}`);
+            if (!statusRes.data.active) {
+                api.warning({
+                    message: "User is Offline",
+                    description: `${user.name} has disconnected or shut down. Cannot capture screen.`,
+                    placement: "topRight"
+                });
+                // Update UI to reflect they are now offline
+                setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_online: false } : u));
+                setTakingScreenshotId(null);
+                return;
+            }
+
+            // Get current latest screenshot ID first to compare later (ignores timezone issues)
+            let lastScreenshotId = null;
+            try {
+                const prevRes = await axios.get("/api/track/screenshots", {
+                    params: { user_id: user.id, per_page: 1 }
+                });
+                if (prevRes.data.data && prevRes.data.data.length > 0) {
+                    lastScreenshotId = prevRes.data.data[0].id;
+                }
+            } catch(e) {}
+
+            api.info({
+                message: "Capture Requested",
+                description: `Sent capture signal to ${user.name}'s computer. Please wait...`,
+                placement: "topRight"
+            });
+
             // 1. Trigger the screenshot via API
             await axios.post("/api/track/screenshot/trigger", { user_id: user.id });
             
-            // 2. We primarily rely on the WebSocket (handleStatusNotification) to clear the loading state.
-            // But we'll keep a shorter, background polling loop as a fallback just in case the socket misses.
+            // 2. Poll the server to check when the screenshot is uploaded.
+            // We loop for a maximum of 7.5 seconds (5 checks).
             let found = false;
-            for (let i = 0; i < 6; i++) {
+            for (let i = 0; i < 5; i++) {
                 await new Promise(resolve => setTimeout(resolve, 1500));
-                
-                // If the socket already cleared the state, we can stop polling
-                if (!takingScreenshotId) {
-                    found = true;
-                    break;
-                }
 
                 try {
                     const response = await axios.get("/api/track/screenshots", {
                         params: {
                             user_id: user.id,
-                            start_date: dayjs().format('YYYY-MM-DD'),
-                            end_date: dayjs().format('YYYY-MM-DD'),
                             per_page: 1
                         }
                     });
                     const latest = response.data.data ? response.data.data[0] : null;
-                    if (latest) {
-                        const screenshotTime = dayjs(`${latest.date} ${latest.time}`);
-                        if (screenshotTime.isAfter(triggerTime.subtract(5, 'seconds'))) {
-                            found = true;
-                            setUsers(prev => prev.map(u => u.id === user.id ? { ...u, latest_screenshot: { file_path: latest.url } } : u));
-                            setTakingScreenshotId(null);
-                            
-                            // Optional: show preview
-                            setPreviewImage(latest.url);
-                            setIsPreviewVisible(true);
-                            break;
-                        }
+                    
+                    // If we found a new screenshot that has a different ID from the one we started with
+                    if (latest && latest.id !== lastScreenshotId) {
+                        found = true;
+                        setUsers(prev => prev.map(u => u.id === user.id ? { ...u, latest_screenshot: { file_path: latest.url } } : u));
+                        setTakingScreenshotId(null);
+                        
+                        setPreviewImage(latest.url);
+                        setIsPreviewVisible(true);
+                        
+                        api.success({
+                            message: "Screenshot Uploaded",
+                            description: "Successfully retrieved new screenshot.",
+                            placement: "topRight"
+                        });
+                        break;
                     }
                 } catch (e) {}
             }
 
-            if (!found && takingScreenshotId === user.id) {
-                api.info({
-                    message: "Request Sent",
-                    description: `Capture request sent to ${user.name}. It will appear in the list once uploaded.`,
+            if (!found) {
+                api.warning({
+                    message: "Upload Delayed",
+                    description: `The screenshot is taking longer than 7 seconds to upload. It will appear in the grid shortly if the user is online.`,
                     placement: "topRight"
                 });
             }
@@ -411,7 +395,7 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
             api.error({ message: "Error", description: "Failed to request screenshot" });
         } finally {
             // Ensure loading state is eventually cleared
-            setTimeout(() => setTakingScreenshotId(null), 1000);
+            setTakingScreenshotId(null);
         }
     };
 
@@ -726,6 +710,16 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                             optionFilterProp="label"
                             className="status-select"
                         />
+                        <Tooltip title="Refresh Live Status">
+                            <button
+                                className="btn btn-outline-success btn-sm d-flex align-items-center justify-content-center rounded-circle shadow-sm"
+                                onClick={() => fetchUsers(true)}
+                                style={{ width: '32px', height: '32px' }}
+                                disabled={loading}
+                            >
+                                <SyncOutlined spin={loading} />
+                            </button>
+                        </Tooltip>
                         <button
                             className="btn btn-outline-primary btn-sm d-flex align-items-center rounded-pill px-3 shadow-sm"
                             onClick={() => setIsSettingsModalOpen(true)}
@@ -1254,18 +1248,6 @@ const UserTracking = ({ users: initialUsers, selectedStatus: initialStatus }) =>
                                 min={1}
                             />
                         </div>
-                    </div>
-
-                    <div className="mb-4">
-                        <label className="form-label text-muted small fw-bold mb-1">SOCKET URL</label>
-                        <input
-                            type="text"
-                            className="form-control border shadow-sm"
-                            value={socketUrl}
-                            onChange={(e) => setSocketUrl(e.target.value)}
-                            placeholder="wss://..."
-                            disabled={true}
-                        />
                     </div>
 
                     <div className="mb-4">
