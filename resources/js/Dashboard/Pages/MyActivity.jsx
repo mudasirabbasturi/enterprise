@@ -198,6 +198,13 @@ const MyActivity = ({ targetUser }) => {
         }
     };
 
+    const formatDuration = (mins) => {
+        if (!mins || mins === 0) return '0m';
+        const h = Math.floor(mins / 60);
+        const m = mins % 60;
+        return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    };
+
     const columns = [
         {
             headerName: 'Application / Detail',
@@ -253,6 +260,19 @@ const MyActivity = ({ targetUser }) => {
                     </div>
                 );
             }
+        },
+        {
+            headerName: 'Idle',
+            field: 'idle',
+            width: 120,
+            sortable: true,
+            cellRenderer: (params) => (
+                <div className="d-flex align-items-center h-100">
+                    <Tag color={params.value > 0 ? "orange" : "default"} className="rounded-pill px-2 border-0" style={{ backgroundColor: params.value > 0 ? '#fff7e6' : '#f5f5f5', color: params.value > 0 ? '#fa8c16' : '#bfbfbf' }}>
+                        {formatDuration(params.value)}
+                    </Tag>
+                </div>
+            )
         },
         {
             headerName: 'Clicks',
@@ -365,6 +385,14 @@ const MyActivity = ({ targetUser }) => {
                                     <Statistic 
                                         title={<Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: '11px', fontWeight: 'bold' }}>KEYBOARD STROKES</Text>}
                                         value={activityStats ? activityStats.total_keystrokes : 0}
+                                        valueStyle={{ color: '#fff', fontWeight: '800', fontSize: '24px' }}
+                                    />
+                                </Card>
+                                <Card className="border-0 shadow-sm overflow-hidden position-relative flex-fill" style={{ borderRadius: '16px', background: 'linear-gradient(135deg, #374151 0%, #1f2937 100%)', minHeight: '100px' }}>
+                                    <div className="position-absolute opacity-10" style={{ right: '-10px', bottom: '-10px', fontSize: '60px' }}><ClockCircleOutlined /></div>
+                                    <Statistic 
+                                        title={<Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: '11px', fontWeight: 'bold' }}>TOTAL IDLE TIME</Text>}
+                                        value={activityStats ? formatDuration(activityStats.total_idle_minutes) : '0m'}
                                         valueStyle={{ color: '#fff', fontWeight: '800', fontSize: '24px' }}
                                     />
                                 </Card>

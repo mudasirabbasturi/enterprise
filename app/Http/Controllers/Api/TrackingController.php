@@ -484,6 +484,7 @@ class TrackingController extends Controller
 
         $totalClicks = $activities->sum('clicks');
         $totalKeys = $activities->sum('keystrokes');
+        $totalIdle = $activities->where('is_idle', true)->count();
         // Group by window title and calculate duration
         $appUsage = $activities->groupBy(function($a) {
             $title = $a->window_title ?: 'Unknown Window';
@@ -508,6 +509,7 @@ class TrackingController extends Controller
                 'minutes' => count($group),
                 'clicks' => $group->sum('clicks'),
                 'keystrokes' => $group->sum('keystrokes'),
+                'idle' => $group->where('is_idle', true)->count(),
             ];
         })->sortByDesc('minutes')->take(30)->values(); // Increased to 30 for more detail
 
@@ -524,6 +526,7 @@ class TrackingController extends Controller
         return response()->json([
             'total_clicks' => $totalClicks,
             'total_keystrokes' => $totalKeys,
+            'total_idle_minutes' => $totalIdle,
             'app_usage' => $appUsage,
             'timeline' => $timeline,
             'total_minutes' => $activities->count()
