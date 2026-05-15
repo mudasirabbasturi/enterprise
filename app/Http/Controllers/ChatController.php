@@ -82,7 +82,8 @@ class ChatController extends Controller
                     'latest_message' => $latestMessage ? $latestMessage->message : null,
                     'latest_message_time' => $latestMessage ? $latestMessage->created_at->toIso8601String() : null,
                     'is_online' => (bool)$user->is_online,
-                    'last_active_at' => $user->last_active_at ? $user->last_active_at->toIso8601String() : null,
+                    // 'last_active_at' => $user->last_active_at ? $user->last_active_at->toIso8601String() : null,
+                    'last_active_at' => $user->last_active_at ? (is_object($user->last_active_at) ? $user->last_active_at->toIso8601String() : \Carbon\Carbon::parse($user->last_active_at)->toIso8601String()) : null,
                     'is_existing' => true
                 ];
             }
