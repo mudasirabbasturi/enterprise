@@ -1,0 +1,1 @@
+import{j as s}from"./npm-react-BabVlovW.js";import"./npm-ably-Bsr3NqpC.js";function i({content:r}){return s.jsxs("div",{className:"container pt-4 pb-4",children:[s.jsx("h2",{className:"",children:"Privacy Policy"}),s.jsx("hr",{}),r?s.jsx("div",{className:"prose max-w-none",dangerouslySetInnerHTML:{__html:r}}):s.jsx("p",{children:"Loading content…"})]})}export{i as default};

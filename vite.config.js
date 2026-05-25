@@ -53,31 +53,9 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes("node_modules")) {
-            if (id.includes("ag-grid-community") || id.includes("ag-grid-react") || id.includes("ag-grid-enterprise")) {
-              return "vendor-ag-grid";
-            }
-            if (id.includes("react") || id.includes("react-dom") || id.includes("react-router")) {
-              return "vendor-react";
-            }
-            if (id.includes("antd") || id.includes("@ant-design")) {
-              return "vendor-antd";
-            }
-            if (id.includes("firebase")) {
-              return "vendor-firebase";
-            }
-            if (id.includes("tinymce")) {
-              return "vendor-tinymce";
-            }
-            if (id.includes("framer-motion")) {
-              return "vendor-framer-motion";
-            }
-            if (id.includes("chart.js") || id.includes("react-chartjs-2")) {
-              return "vendor-chart";
-            }
-            if (id.includes("@inertiajs")) {
-              return "vendor-inertia";
-            }
-            return "vendor";
+            const directories = id.toString().split("node_modules/")[1].split("/");
+            const name = directories[0].startsWith("@") ? directories[0] + "-" + directories[1] : directories[0];
+            return `npm-${name}`;
           }
         },
       },
