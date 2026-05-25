@@ -7,27 +7,31 @@ import {
   gridOptionsConfig,
 } from "@agConfig/AgGridConfig";
 import {
-  usePage,
-  useRoute,
   Tooltip,
   Popconfirm,
   Avatar,
+  InputNumber,
+  Input,
+  Badge
+} from "antd";
+
+import {
+  Link,
+  usePage,
+} from "@inertiajs/react";
+import { useRoute } from "@ziggy";
+import NProgress from "nprogress";
+import {
   EditOutlined,
   EyeOutlined,
   DeleteOutlined,
   UserOutlined,
   LockOutlined,
   UnlockOutlined,
-  InputNumber,
-  Input,
   FileExcelOutlined,
-  Badge,
-  Link
-} from "@shared/ui";
-import axios from "axios";
-import NProgress from "nprogress";
-import { CommentOutlined } from "@ant-design/icons";
-import ProjectChatModal from "./ProjectChatModal";
+  CommentOutlined
+} from "@ant-design/icons";
+
 const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
 
   const hasPermission = (userpermission, permName) =>
@@ -64,8 +68,6 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
   const [localRowData, setLocalRowData] = useState(projects);
   const gridRef = useRef(null);
 
-  // const [isChatModalVisible, setIsChatModalVisible] = useState(false);
-  // const [chatProject, setChatProject] = useState(null);
 
   const [colDefs, setColDefs] = useState([
     {
@@ -894,8 +896,6 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
       if (isSSRM) {
         gridRef.current.api.refreshServerSide();
       } else {
-        // For client side, we might need a full refresh from server or just filter
-        // Standard client-side refresh:
         gridRef.current.api.redrawRows();
       }
     }
@@ -1105,7 +1105,6 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
   const onGridReady = useCallback((params) => {
     gridRef.current = params;
 
-    // Restore column state if saved
     gridOptionsConfig.onGridReady(params);
 
     if (isSSRM) {
@@ -1136,8 +1135,6 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
       };
 
       params.api.setGridOption("serverSideDatasource", datasource);
-
-      // Add listener to refresh on filter changes
       params.api.addEventListener('filterChanged', () => {
         params.api.refreshServerSide();
       });
@@ -1184,12 +1181,6 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         detailCellRenderer={DetailCellRenderer}
         rowSelection="single"
       />
-      {/* <ProjectChatModal
-        visible={isChatModalVisible}
-        onClose={() => setIsChatModalVisible(false)}
-        project={chatProject}
-        currentUser={user}
-      /> */}
     </>
   );
 };
