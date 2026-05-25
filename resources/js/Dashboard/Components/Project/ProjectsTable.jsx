@@ -21,7 +21,8 @@ import {
   InputNumber,
   Input,
   FileExcelOutlined,
-  Badge 
+  Badge,
+  Link
 } from "@shared/ui";
 import axios from "axios";
 import NProgress from "nprogress";
@@ -141,19 +142,39 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         if (members.length === 0) {
           return (
             <div className="d-flex align-items-center">
-              <Tooltip title="Group Chat" color="blue" placement="left">
-                <div 
-                  className="btn btn-sm btn-warning text-white me-1"
-                  onClick={() => {
-                    // setChatProject(params.data);
-                    // setIsChatModalVisible(true);
-                    alert("Project Chat is disabled. Please use Global/Group Chat.");
+              <Tooltip title="Project Chat" color="blue" placement="left">
+                <Link
+                  href={`/project-chat?project_id=${params.data.id}`}
+                  className="btn btn-sm me-1"
+                  style={{
+                    background: "linear-gradient(45deg, #1a1a2e, #16213e)",
+                    border: "1px solid #0f3460",
+                    borderRadius: "12px",
+                    padding: "4px 12px",
+                    position: "relative",
+                    overflow: "hidden",
+                    transition: "all 0.3s ease",
+                    boxShadow: "0 0 5px rgba(0, 255, 255, 0.3)",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = "0 0 20px rgba(0, 255, 255, 0.6), 0 0 5px rgba(0, 255, 255, 0.4)";
+                    e.currentTarget.style.borderColor = "#00ffff";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = "0 0 5px rgba(0, 255, 255, 0.3)";
+                    e.currentTarget.style.borderColor = "#0f3460";
                   }}
                 >
-                  <Badge dot color="red" offset={[2, 2]}>
-                    <CommentOutlined />
-                  </Badge>
-                </div>
+                  <CommentOutlined
+                    style={{
+                      color: "#00ffff",
+                      fontWeight: "bold",
+                      fontSize: "16px",
+                      filter: "drop-shadow(0 0 3px #00ffff)",
+                      transition: "all 0.3s ease",
+                    }}
+                  />
+                </Link>
               </Tooltip>
               <Tooltip title="Spread Sheet" color="green" placement="left">
                 <div
@@ -184,19 +205,39 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         return (
           <div className="d-flex flex-column">
             <div className="d-flex align-items-center">
-              <Tooltip title="Group Chat" color="blue" placement="left">
-                <div 
-                  className="btn btn-sm btn-warning text-white me-1"
-                  onClick={() => {
-                    // setChatProject(params.data);
-                    // setIsChatModalVisible(true);
-                    alert("Project Chat is disabled. Please use Global/Group Chat.");
+              <Tooltip title="Project Chat" color="blue" placement="left">
+                <Link
+                  href={`/project-chat?project_id=${params.data.id}`}
+                  className="btn btn-sm me-1"
+                  style={{
+                    background: "linear-gradient(45deg, #1a1a2e, #16213e)",
+                    border: "1px solid #0f3460",
+                    borderRadius: "12px",
+                    padding: "4px 12px",
+                    position: "relative",
+                    overflow: "hidden",
+                    transition: "all 0.3s ease",
+                    boxShadow: "0 0 5px rgba(0, 255, 255, 0.3)",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = "0 0 20px rgba(0, 255, 255, 0.6), 0 0 5px rgba(0, 255, 255, 0.4)";
+                    e.currentTarget.style.borderColor = "#00ffff";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = "0 0 5px rgba(0, 255, 255, 0.3)";
+                    e.currentTarget.style.borderColor = "#0f3460";
                   }}
                 >
-                  <Badge dot color="red" offset={[2, 2]}>
-                    <CommentOutlined />
-                  </Badge>
-                </div>
+                  <CommentOutlined
+                    style={{
+                      color: "#00ffff",
+                      fontWeight: "bold",
+                      fontSize: "16px",
+                      filter: "drop-shadow(0 0 3px #00ffff)",
+                      transition: "all 0.3s ease",
+                    }}
+                  />
+                </Link>
               </Tooltip>
               <Tooltip title="Spread Sheet" color="green" placement="left">
                 <div

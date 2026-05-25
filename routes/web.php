@@ -31,7 +31,7 @@ use App\Http\Controllers\SalarySetupController;
 use App\Http\Controllers\SalarySheetController;
 use App\Http\Controllers\PayrollConfigController;
 use App\Http\Controllers\ChatController;
-
+use App\Http\Controllers\ProjectChatController;
 
 use Illuminate\Support\Facades\DB;
 
@@ -114,17 +114,20 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/project/team-member/score/{TeamMemberId}', [ProjectController::class, 'AddEditScore'])->name('AddEditScore');
     Route::put('/project/{project}/team-members/scores', [ProjectController::class, 'BulkUpdateScores'])->name('project.bulkUpdateScores');
 
-    // Project Chat (Phasing out)
-    /*
-    Route::get('/project-chat', [App\Http\Controllers\Api\ProjectChatController::class, 'fullPageChat'])->name('project-chat.index');
-    Route::get('/api/projects/{project}/chat', [App\Http\Controllers\Api\ProjectChatController::class, 'index'])->name('project.chat.index');
-    Route::post('/api/projects/{project}/chat', [App\Http\Controllers\Api\ProjectChatController::class, 'store'])->name('project.chat.store');
-    Route::delete('/api/projects/{project}/chat/{chatId}', [App\Http\Controllers\Api\ProjectChatController::class, 'destroy'])->name('project.chat.destroy');
-    Route::get('/api/chat/unread-counts', [App\Http\Controllers\Api\ProjectChatController::class, 'getUnreadCounts'])->name('chat.unread-counts');
-    */
+    
+    // Project Chat Routes
+    Route::get('/project-chat', [ProjectChatController::class, 'index'])->name('project-chat.index');
+    Route::get('/projects/{project}/chat', [ProjectChatController::class, 'getMessages']);
+    Route::post('/projects/{project}/chat', [ProjectChatController::class, 'store']);
+    Route::delete('/projects/{project}/chat/{chatId}', [ProjectChatController::class, 'destroy']);
+    Route::get('/chat/unread-counts', [ProjectChatController::class, 'getUnreadCounts']);
+    Route::get('/project-chats', [ProjectChatController::class, 'getProjectsJson']);
+    Route::get('/project-chats/by-status', [ProjectChatController::class, 'getProjectsByStatus']);
+    Route::post('/projects/{project}/chat/read', [ProjectChatController::class, 'markAsRead']);
+
 
     // New Chat System
-    Route::get('/chat', [ChatController::class, 'view'])->name('chat.index');
+    Route::get('/chat/{type?}/{id?}', [ChatController::class, 'view'])->name('chat.index');
     Route::get('/api/chats', [ChatController::class, 'index'])->name('chat.api.index');
     Route::get('/api/chats/{chatId}/messages', [ChatController::class, 'getMessages'])->name('chat.api.messages');
     Route::post('/api/chats/{chatId}/messages', [ChatController::class, 'sendMessage'])->name('chat.api.send');

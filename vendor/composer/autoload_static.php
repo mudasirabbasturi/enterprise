@@ -38,11 +38,12 @@ class ComposerStaticInitd85d370c434a3c4ab7e73ddaf04f9873
         '58571171fd5812e6e447dce228f52f4d' => __DIR__ . '/..' . '/laravel/framework/src/Illuminate/Support/helpers.php',
         '3109cb1a231dcd04bee1f9f620d46975' => __DIR__ . '/..' . '/paragonie/sodium_compat/autoload.php',
         '06b8a576aaa70a8517a94b7ff6b37e5c' => __DIR__ . '/..' . '/beste/json/src/Json.php',
+        '062a54fe8f6f91078b197f2922521dd9' => __DIR__ . '/..' . '/laravel/pint/overrides/Runner/Parallel/ProcessFactory.php',
         'b067bc7112e384b61c701452d53a14a8' => __DIR__ . '/..' . '/mtdowling/jmespath.php/src/JmesPath.php',
         '6124b4c8570aa390c21fafd04a26c69f' => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy/deep_copy.php',
         '801c31d8ed748cfa537fa45402288c95' => __DIR__ . '/..' . '/psy/psysh/src/functions.php',
+        'f641c05521a842027754f9adafba3d7e' => __DIR__ . '/..' . '/erag/laravel-pwa/src/Pwahelpers.php',
         '98caa11a197f6516a8e48aa4abb5ccc6' => __DIR__ . '/..' . '/inertiajs/inertia-laravel/helpers.php',
-        '062a54fe8f6f91078b197f2922521dd9' => __DIR__ . '/..' . '/laravel/pint/overrides/Runner/Parallel/ProcessFactory.php',
         'c72349b1fe8d0deeedd3a52e8aa814d8' => __DIR__ . '/..' . '/mockery/mockery/library/helpers.php',
         'ce9671a430e4846b44e1c68c7611f9f5' => __DIR__ . '/..' . '/mockery/mockery/library/Mockery.php',
         'a1cfe24d14977df6878b9bf804af2d1c' => __DIR__ . '/..' . '/nunomaduro/collision/src/Adapters/Phpunit/Autoload.php',
@@ -213,6 +214,7 @@ class ComposerStaticInitd85d370c434a3c4ab7e73ddaf04f9873
         'E' =>
         array (
             'Evenement\\' => 10,
+            'EragLaravelPwa\\' => 15,
             'Egulias\\EmailValidator\\' => 23,
         ),
         'D' =>
@@ -730,6 +732,10 @@ class ComposerStaticInitd85d370c434a3c4ab7e73ddaf04f9873
         array (
             0 => __DIR__ . '/..' . '/evenement/evenement/src',
         ),
+        'EragLaravelPwa\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/erag/laravel-pwa/src',
+        ),
         'Egulias\\EmailValidator\\' =>
         array (
             0 => __DIR__ . '/..' . '/egulias/email-validator/src',
@@ -893,6 +899,7 @@ class ComposerStaticInitd85d370c434a3c4ab7e73ddaf04f9873
         'App\\Http\\Controllers\\PayrollConfigController' => __DIR__ . '/../..' . '/app/Http/Controllers/PayrollConfigController.php',
         'App\\Http\\Controllers\\PenaltyController' => __DIR__ . '/../..' . '/app/Http/Controllers/PenaltyController.php',
         'App\\Http\\Controllers\\PermissionController' => __DIR__ . '/../..' . '/app/Http/Controllers/PermissionController.php',
+        'App\\Http\\Controllers\\ProjectChatController' => __DIR__ . '/../..' . '/app/Http/Controllers/ProjectChatController.php',
         'App\\Http\\Controllers\\ProjectController' => __DIR__ . '/../..' . '/app/Http/Controllers/ProjectController.php',
         'App\\Http\\Controllers\\RoleController' => __DIR__ . '/../..' . '/app/Http/Controllers/RoleController.php',
         'App\\Http\\Controllers\\SalaryPackageController' => __DIR__ . '/../..' . '/app/Http/Controllers/SalaryPackageController.php',
@@ -1866,6 +1873,12 @@ class ComposerStaticInitd85d370c434a3c4ab7e73ddaf04f9873
         'Egulias\\EmailValidator\\Warning\\QuotedString' => __DIR__ . '/..' . '/egulias/email-validator/src/Warning/QuotedString.php',
         'Egulias\\EmailValidator\\Warning\\TLD' => __DIR__ . '/..' . '/egulias/email-validator/src/Warning/TLD.php',
         'Egulias\\EmailValidator\\Warning\\Warning' => __DIR__ . '/..' . '/egulias/email-validator/src/Warning/Warning.php',
+        'EragLaravelPwa\\Commands\\PWACommand' => __DIR__ . '/..' . '/erag/laravel-pwa/src/Commands/PWACommand.php',
+        'EragLaravelPwa\\Commands\\PwaPublishCommand' => __DIR__ . '/..' . '/erag/laravel-pwa/src/Commands/PwaPublishCommand.php',
+        'EragLaravelPwa\\Core\\PWA' => __DIR__ . '/..' . '/erag/laravel-pwa/src/Core/PWA.php',
+        'EragLaravelPwa\\EragLaravelPwaServiceProvider' => __DIR__ . '/..' . '/erag/laravel-pwa/src/EragLaravelPwaServiceProvider.php',
+        'EragLaravelPwa\\Facades\\PWA' => __DIR__ . '/..' . '/erag/laravel-pwa/src/Facades/PWA.php',
+        'EragLaravelPwa\\Services\\PWAService' => __DIR__ . '/..' . '/erag/laravel-pwa/src/Services/PWAService.php',
         'Evenement\\EventEmitter' => __DIR__ . '/..' . '/evenement/evenement/src/EventEmitter.php',
         'Evenement\\EventEmitterInterface' => __DIR__ . '/..' . '/evenement/evenement/src/EventEmitterInterface.php',
         'Evenement\\EventEmitterTrait' => __DIR__ . '/..' . '/evenement/evenement/src/EventEmitterTrait.php',

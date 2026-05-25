@@ -1,375 +1,887 @@
-import React, { useState, useEffect, useRef, memo } from 'react';
-import { 
-    Input, 
-    List, 
-    Avatar, 
-    Typography, 
-    Badge, 
-    Spin, 
-    message,
+import React, { useState, useEffect, useRef } from "react";
+import {
+    Layout,
+    Input,
+    Avatar,
+    Typography,
+    Badge,
+    Spin,
+    message as antMessage,
     Empty,
     Button,
     Upload,
     Image,
     Popconfirm,
     Tooltip,
-    Select
-} from 'antd';
-import { 
-    SearchOutlined, 
-    MessageOutlined, 
-    UserOutlined, 
-    SendOutlined, 
-    PaperClipOutlined, 
+    Tag,
+    List,
+    Dropdown,
+    Menu
+} from "antd";
+import {
+    SendOutlined,
+    PaperClipOutlined,
     FileOutlined,
     DeleteOutlined,
-    CloseOutlined,
+    PlusOutlined,
+    UserOutlined,
+    MessageOutlined,
     ProjectOutlined,
-    AudioOutlined,
-    StopOutlined,
-    CheckOutlined
-} from '@ant-design/icons';
-import axios from 'axios';
-import { usePage } from '@inertiajs/react';
+    SearchOutlined,
+    DownOutlined,
+    WechatWorkOutlined,
+    ArrowLeftOutlined
+} from "@ant-design/icons";
+
+import { BiMicrophone, BiX } from "react-icons/bi";
+import { Head, Link, useRoute, router, usePage } from "@shared/ui";
+import MainLayout from "@layout";
+import axios from "axios";
+
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import Ably from 'ably';
+
+dayjs.extend(relativeTime);
 
 const { Title, Text } = Typography;
 
-// Isolated Fast Input Component to prevent typing lag
-const ChatInput = memo(({ onSendMessage, replyingTo, setReplyingTo, selectedFile, setSelectedFile, sending }) => {
-    const [inputValue, setInputValue] = useState('');
+const ProjectChat = () => {
+    const route = useRoute();
+    const { auth, projects: initialProjects, currentStatus, projectCounts } = usePage().props;
+    const currentUser = auth.user;
+
+    // Get project ID from URL query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectIdFromUrl = urlParams.get('project_id');
+
+    const [selectedProject, setSelectedProject] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [loadingMessages, setLoadingMessages] = useState(false);
+    const [sending, setSending] = useState(false);
+    const [newMessage, setNewMessage] = useState("");
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [replyingTo, setReplyingTo] = useState(null);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [projects, setProjects] = useState(initialProjects);
+    const [loadingProjects, setLoadingProjects] = useState(false);
+
+    // Recording State
     const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
-    const mediaRecorderRef = useRef(null);
+    const [mediaRecorder, setMediaRecorder] = useState(null);
     const audioChunksRef = useRef([]);
-    const timerRef = useRef(null);
 
-    const handleSend = () => {
-        if (!inputValue.trim() && !selectedFile) return;
-        onSendMessage(inputValue, () => setInputValue(''));
+    // Ably State
+    const ablyRef = useRef(null);
+    const projectChannelRef = useRef(null);
+    const scrollRef = useRef(null);
+    const recordingIntervalRef = useRef(null);
+    const shouldSendRecordingRef = useRef(true);
+
+    // Select project from URL on component mount
+    useEffect(() => {
+        if (projectIdFromUrl && initialProjects.length > 0) {
+            const project = initialProjects.find(p => p.id === parseInt(projectIdFromUrl));
+            if (project) {
+                setSelectedProject(project);
+            }
+        }
+    }, [projectIdFromUrl, initialProjects]);
+
+    // Update URL when project is selected
+    const handleProjectSelect = (project) => {
+        setSelectedProject(project);
+        // Update URL without refreshing the page
+        const newUrl = `${window.location.pathname}?project_id=${project.id}`;
+        window.history.pushState({ project_id: project.id }, '', newUrl);
+    };
+
+    // Handle browser back/forward buttons
+    useEffect(() => {
+        const handlePopState = (event) => {
+            const params = new URLSearchParams(window.location.search);
+            const id = params.get('project_id');
+            if (id) {
+                const project = projects.find(p => p.id === parseInt(id));
+                if (project) {
+                    setSelectedProject(project);
+                }
+            } else {
+                setSelectedProject(null);
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [projects]);
+
+    // Status Menu
+    const statusMenu = (
+        <Menu
+            onClick={({ key }) => {
+                setLoadingProjects(true);
+                router.visit('/project-chat', {
+                    data: { status: key },
+                    preserveState: false,
+                    preserveScroll: true,
+                    replace: true,
+                    onSuccess: () => setLoadingProjects(false),
+                    onError: () => setLoadingProjects(false)
+                });
+            }}
+        >
+            <Menu.Item key="All">
+                <span>All ({projectCounts?.Total || 0})</span>
+            </Menu.Item>
+            <Menu.Item key="Takeoff On Progress">
+                <span>Takeoff In Progress ({projectCounts?.TakeoffOnProgress || 0})</span>
+            </Menu.Item>
+            <Menu.Item key="Pricing On Progress">
+                <span>Pricing In Progress ({projectCounts?.PricingOnProgress || 0})</span>
+            </Menu.Item>
+            <Menu.Item key="Completed">
+                <span>Completed ({projectCounts?.Completed || 0})</span>
+            </Menu.Item>
+            <Menu.Item key="Revision">
+                <span>Revision ({projectCounts?.Revision || 0})</span>
+            </Menu.Item>
+            <Menu.Item key="Hold">
+                <span>Hold ({projectCounts?.Hold || 0})</span>
+            </Menu.Item>
+            <Menu.Item key="Deliver">
+                <span>Deliver ({projectCounts?.Deliver || 0})</span>
+            </Menu.Item>
+            <Menu.Item key="Cancelled">
+                <span>Cancelled ({projectCounts?.Cancelled || 0})</span>
+            </Menu.Item>
+        </Menu>
+    );
+
+    // Initialize Ably
+    useEffect(() => {
+        const ably = new Ably.Realtime({ authUrl: '/api/ably/auth' });
+        ablyRef.current = ably;
+
+        return () => {
+            if (ablyRef.current) {
+                ablyRef.current.close();
+            }
+        };
+    }, []);
+
+    // Subscribe to project chat channel
+    useEffect(() => {
+        if (selectedProject && ablyRef.current) {
+            fetchMessages();
+            markAsRead();
+
+            const channel = ablyRef.current.channels.get(`project-chat.${selectedProject.id}`);
+            projectChannelRef.current = channel;
+
+            channel.subscribe('message.sent', (msgEvent) => {
+                const rawMsg = msgEvent.data.message;
+                const msg = {
+                    id: rawMsg.id,
+                    chat_id: selectedProject.id,
+                    sender_id: rawMsg.user_id,
+                    message: rawMsg.message,
+                    created_at: rawMsg.created_at,
+                    sender: {
+                        name: rawMsg.user_name,
+                        media: rawMsg.avatar ? [{ file_path: rawMsg.avatar.replace(/^\//, '') }] : []
+                    },
+                    reply_to_id: rawMsg.reply_to_id,
+                    reply_to: rawMsg.reply_to_message ? {
+                        id: rawMsg.reply_to_id,
+                        message: rawMsg.reply_to_message,
+                        sender: {
+                            name: rawMsg.reply_to_user_name
+                        }
+                    } : null,
+                    file_path: rawMsg.file ? rawMsg.file.url.replace(/^\//, '') : null,
+                    file_type: rawMsg.file ? (
+                        rawMsg.file.name.match(/\.(webm|wav|mp3|ogg)$/i) ? 'audio/webm' :
+                            rawMsg.file.name.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) ? 'image/png' :
+                                'application/octet-stream'
+                    ) : null,
+                };
+                setMessages(prev => {
+                    if (prev.some(m => m.id === msg.id)) return prev;
+                    if (msg.sender_id === currentUser.id) {
+                        const optIndex = prev.findIndex(m => m.isOptimistic);
+                        if (optIndex !== -1) {
+                            const newMsgs = [...prev];
+                            newMsgs[optIndex] = msg;
+                            return newMsgs;
+                        }
+                    }
+                    return [...prev, msg];
+                });
+            });
+
+            channel.subscribe('message.deleted', (event) => {
+                const { messageId } = event.data;
+                setMessages(prev => prev.filter(m => Number(m.id) !== Number(messageId)));
+            });
+        }
+
+        return () => {
+            if (projectChannelRef.current) {
+                projectChannelRef.current.unsubscribe();
+                projectChannelRef.current = null;
+            }
+        };
+    }, [selectedProject?.id]);
+
+    // Auto-scroll
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [messages]);
+
+    const fetchMessages = async () => {
+        if (!selectedProject?.id) return;
+        setLoadingMessages(true);
+        try {
+            const response = await axios.get(`/projects/${selectedProject.id}/chat`);
+            const normalized = response.data.map(msg => ({
+                id: msg.id,
+                chat_id: selectedProject.id,
+                sender_id: msg.user_id,
+                message: msg.message,
+                created_at: msg.created_at,
+                sender: {
+                    name: msg.user_name,
+                    media: msg.avatar ? [{ file_path: msg.avatar.replace(/^\//, '') }] : []
+                },
+                reply_to_id: msg.reply_to_id,
+                reply_to: msg.reply_to_message ? {
+                    id: msg.reply_to_id,
+                    message: msg.reply_to_message,
+                    sender: {
+                        name: msg.reply_to_user_name
+                    }
+                } : null,
+                file_path: msg.file ? msg.file.url.replace(/^\//, '') : null,
+                file_type: msg.file ? (
+                    msg.file.name.match(/\.(webm|wav|mp3|ogg)$/i) ? 'audio/webm' :
+                        msg.file.name.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) ? 'image/png' :
+                            'application/octet-stream'
+                ) : null,
+            }));
+            setMessages(normalized);
+        } catch (e) {
+            console.error('Failed to fetch messages:', e);
+        } finally {
+            setLoadingMessages(false);
+        }
+    };
+
+    const markAsRead = async () => {
+        if (!selectedProject?.id) return;
+        try {
+            await axios.post(`/projects/${selectedProject.id}/chat/read`);
+        } catch (e) { }
+    };
+
+    const handleSendMessage = async (audioFile = null) => {
+        if (!selectedProject || (!newMessage.trim() && !selectedFile && !audioFile)) return;
+
+        const messageText = newMessage;
+        const fileToUpload = selectedFile || audioFile;
+        const replyId = replyingTo?.id;
+        const currentReplyTo = replyingTo;
+
+        const tempId = `temp-${Date.now()}`;
+        const optimisticMsg = {
+            id: tempId,
+            sender_id: currentUser.id,
+            chat_id: selectedProject.id,
+            message: messageText,
+            created_at: new Date().toISOString(),
+            isOptimistic: true,
+            reply_to: currentReplyTo,
+            file_path: fileToUpload ? URL.createObjectURL(fileToUpload) : null,
+            file_type: fileToUpload ? fileToUpload.type : null,
+        };
+        setMessages(prev => [...prev, optimisticMsg]);
+        setNewMessage("");
+        setSelectedFile(null);
+        setReplyingTo(null);
+
+        const formData = new FormData();
+        if (messageText.trim()) formData.append("message", messageText);
+        if (selectedFile) formData.append("file", selectedFile);
+        if (audioFile) formData.append("file", audioFile);
+        if (replyId) formData.append("reply_to_id", replyId);
+
+        try {
+            setSending(true);
+            const response = await axios.post(`/projects/${selectedProject.id}/chat`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            const d = response.data.data;
+            const realMsg = {
+                id: d.id,
+                chat_id: selectedProject.id,
+                sender_id: d.user_id,
+                message: d.message,
+                created_at: d.created_at,
+                sender: {
+                    name: d.user_name,
+                    media: d.avatar ? [{ file_path: d.avatar.replace(/^\//, '') }] : []
+                },
+                reply_to_id: d.reply_to_id,
+                reply_to: d.reply_to_message ? {
+                    id: d.reply_to_id,
+                    message: d.reply_to_message,
+                    sender: {
+                        name: d.reply_to_user_name
+                    }
+                } : null,
+                file_path: d.file ? d.file.url.replace(/^\//, '') : null,
+                file_type: d.file ? (
+                    d.file.name.match(/\.(webm|wav|mp3|ogg)$/i) ? 'audio/webm' :
+                        d.file.name.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) ? 'image/png' :
+                            'application/octet-stream'
+                ) : null,
+            };
+
+            setMessages(prev => prev.map(m => m.id === tempId ? realMsg : m));
+        } catch (e) {
+            antMessage.error("Failed to send message");
+            setMessages(prev => prev.filter(m => m.id !== tempId));
+            setNewMessage(messageText);
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const handleDeleteMessage = async (messageId) => {
+        try {
+            await axios.delete(`/projects/${selectedProject.id}/chat/${messageId}`);
+            setMessages(prev => prev.filter(m => m.id !== messageId));
+            antMessage.success("Message deleted");
+        } catch (e) {
+            antMessage.error("Failed to delete message");
+        }
     };
 
     const startRecording = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
-            mediaRecorderRef.current = mediaRecorder;
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    channelCount: 1,
+                    sampleRate: 44100,
+                    echoCancellation: true,
+                    noiseSuppression: true
+                }
+            });
+
+            const mimeTypes = [
+                'audio/webm;codecs=opus',
+                'audio/webm',
+                'audio/mp4',
+                'audio/ogg',
+                'audio/wav'
+            ];
+
+            let selectedMimeType = '';
+            for (const type of mimeTypes) {
+                if (MediaRecorder.isTypeSupported(type)) {
+                    selectedMimeType = type;
+                    break;
+                }
+            }
+
+            const recorder = new MediaRecorder(stream, {
+                mimeType: selectedMimeType,
+                audioBitsPerSecond: 128000
+            });
+
             audioChunksRef.current = [];
 
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) audioChunksRef.current.push(event.data);
+            recorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunksRef.current.push(e.data);
             };
 
-            mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                const audioFile = new File([audioBlob], `voice-message-${Date.now()}.webm`, { type: 'audio/webm' });
-                setSelectedFile(audioFile);
+            recorder.onstop = () => {
+                if (shouldSendRecordingRef.current) {
+                    const mimeType = selectedMimeType || 'audio/webm';
+                    const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+
+                    let extension = 'webm';
+                    if (mimeType.includes('mp4')) extension = 'mp4';
+                    if (mimeType.includes('ogg')) extension = 'ogg';
+                    if (mimeType.includes('wav')) extension = 'wav';
+
+                    const audioFile = new File([audioBlob], `voice-message-${Date.now()}.${extension}`, { type: mimeType });
+                    handleSendMessage(audioFile);
+                }
                 stream.getTracks().forEach(track => track.stop());
             };
 
-            mediaRecorder.start();
+            recorder.start(1000);
+            setMediaRecorder(recorder);
             setIsRecording(true);
             setRecordingTime(0);
-            timerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
+            shouldSendRecordingRef.current = true;
+            recordingIntervalRef.current = setInterval(() => {
+                setRecordingTime(prev => prev + 1);
+            }, 1000);
+            antMessage.success('Recording started');
         } catch (err) {
-            message.error("Microphone access denied");
+            antMessage.error("Microphone access denied: " + err.message);
         }
     };
 
     const stopRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
-            mediaRecorderRef.current.stop();
+        if (mediaRecorder && isRecording) {
+            shouldSendRecordingRef.current = true;
+            mediaRecorder.stop();
             setIsRecording(false);
-            clearInterval(timerRef.current);
+            clearInterval(recordingIntervalRef.current);
         }
     };
 
     const cancelRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
-            mediaRecorderRef.current.stop();
+        if (mediaRecorder && isRecording) {
+            shouldSendRecordingRef.current = false;
+            mediaRecorder.stop();
             setIsRecording(false);
-            clearInterval(timerRef.current);
-            setTimeout(() => setSelectedFile(null), 100);
+            clearInterval(recordingIntervalRef.current);
+            antMessage.info('Recording cancelled');
         }
     };
 
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    return (
-        <div style={{ padding: '20px 25px', borderTop: '1px solid #f0f0f0', backgroundColor: '#fff' }}>
-            {replyingTo && (
-                <div style={{ padding: '8px 15px', backgroundColor: '#f0f2f5', borderRadius: '8px 8px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text size="small" italic>Replying to {replyingTo.user_name}...</Text>
-                    <Button type="text" size="small" icon={<CloseOutlined />} onClick={() => setReplyingTo(null)} />
-                </div>
-            )}
-            {selectedFile && (
-                <div style={{ padding: '8px 15px', backgroundColor: '#e6f7ff', borderRadius: '8px 8px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text size="small" strong>
-                        {selectedFile.type.startsWith('audio/') ? <AudioOutlined /> : <PaperClipOutlined />} {selectedFile.name}
-                    </Text>
-                    <Button type="text" size="small" icon={<CloseOutlined />} onClick={() => setSelectedFile(null)} />
-                </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                {!isRecording ? (
-                    <>
-                        <Upload beforeUpload={file => { setSelectedFile(file); return false; }} showUploadList={false}>
-                            <Button shape="circle" icon={<PaperClipOutlined />} size="large" />
-                        </Upload>
-                        <Input.TextArea 
-                            autoSize={{ minRows: 1, maxRows: 4 }}
-                            placeholder="Type your message..."
-                            value={inputValue}
-                            onChange={e => setInputValue(e.target.value)}
-                            onPressEnter={e => {
-                                if (!e.shiftKey) {
-                                    e.preventDefault();
-                                    handleSend();
-                                }
-                            }}
-                            style={{ borderRadius: '24px', padding: '10px 20px', backgroundColor: '#f0f2f5', border: 'none', flex: 1 }}
-                        />
-                        <Button shape="circle" icon={<AudioOutlined />} size="large" onClick={startRecording} style={{ color: '#ff4d4f' }} />
-                        <Button type="primary" shape="circle" icon={<SendOutlined />} size="large" onClick={handleSend} loading={sending} disabled={(!inputValue.trim() && !selectedFile) || sending} />
-                    </>
-                ) : (
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '15px', backgroundColor: '#fff1f0', padding: '8px 20px', borderRadius: '24px' }}>
-                        <Badge status="processing" color="red" text={<Text strong style={{ color: '#ff4d4f' }}>Recording {formatTime(recordingTime)}</Text>} />
-                        <div style={{ flex: 1 }} />
-                        <Button type="text" danger icon={<CloseOutlined />} onClick={cancelRecording}>Cancel</Button>
-                        <Button type="primary" danger shape="round" icon={<CheckOutlined />} onClick={stopRecording}>Stop & Attach</Button>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-});
-
-const ProjectChat = ({ projects: initialProjects }) => {
-    const { auth } = usePage().props;
-    const currentUser = auth.user;
-    
-    const [projects, setProjects] = useState(initialProjects);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedStatus, setSelectedStatus] = useState('All');
-    const [selectedProject, setSelectedProject] = useState(null);
-    const [messages, setMessages] = useState([]);
-    const [loadingHistory, setLoadingHistory] = useState(false);
-    const [sending, setSending] = useState(false);
-    const [replyingTo, setReplyingTo] = useState(null);
-    const [selectedFile, setSelectedFile] = useState(null);
-
-    const scrollRef = useRef(null);
-    const selectedProjectRef = useRef(null);
-    const projectSound = useRef(new Audio('/uploads/media/sound_effect/project/project_notification.wav'));
-
-    useEffect(() => {
-        selectedProjectRef.current = selectedProject;
-        if (selectedProject) {
-            fetchChatHistory(selectedProject.id);
-            // Clear unread count locally when selecting
-            setProjects(prev => prev.map(p => p.id === selectedProject.id ? { ...p, unread_count: 0 } : p));
+    const scrollToMessage = (msgId) => {
+        const el = document.getElementById(`msg-bubble-${msgId}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.classList.add('message-focused');
+            setTimeout(() => el.classList.remove('message-focused'), 2000);
         }
-    }, [selectedProject?.id]);
+    };
 
-    // 1. Listen for global notifications from Layout.jsx (Badges/Unread Counts)
-    useEffect(() => {
-        const handleNotification = (event) => {
-            if (!event.detail || !event.detail.data) return;
-            const { project_id, message: incomingMsg } = event.detail.data;
-            if (incomingMsg.user_id !== currentUser.id) {
-                // Update sidebar badges for any project
-                if (!selectedProjectRef.current || selectedProjectRef.current.id !== project_id) {
-                    setProjects(prev => prev.map(p => p.id === project_id ? { ...p, unread_count: (parseInt(p.unread_count) || 0) + 1 } : p));
-                    projectSound.current.play().catch(() => {});
-                }
-            }
-        };
-        window.addEventListener('project-chat-notification', handleNotification);
-        return () => window.removeEventListener('project-chat-notification', handleNotification);
-    }, [currentUser.id]);
-
-    // 2. Active Chat WebSocket (ONLY for the selected project)
-    useEffect(() => {
-        if (!selectedProject?.id) return;
-
-        const channelName = `project-chat-${selectedProject.id}`;
-        const channel = window.Echo.channel(channelName);
-
-        channel.listen('.event-new-message', (payload) => {
-            setMessages(prev => (prev.some(m => m.id === payload.id) ? prev : [...prev, payload]));
-        });
-
-        channel.listen('.event-delete-message', (payload) => {
-            const deletedId = payload.id;
-            setMessages(prev => prev.filter(m => m.id !== deletedId));
-        });
-
-        return () => {
-            window.Echo.leave(channelName);
-        };
-    }, [selectedProject?.id]);
-
-    // Project CRUD Sync
-    useEffect(() => {
-        const handleProjectChange = (event) => {
-            const { type, project } = event.detail;
-            setProjects((prevData) => {
-                if (type === 'created') return [{ ...project, unread_count: 0 }, ...prevData];
-                if (type === 'updated') {
-                    if (project.project_status === 'Deliver') return prevData.filter(p => p.id !== project.id);
-                    return prevData.map(p => p.id === project.id ? { ...p, ...project } : p);
-                }
-                if (type === 'deleted') {
-                    if (selectedProjectRef.current?.id === project.id) setSelectedProject(null);
-                    return prevData.filter(p => p.id !== project.id);
-                }
-                return prevData;
-            });
-        };
-        window.addEventListener('project-data-changed', handleProjectChange);
-        return () => window.removeEventListener('project-data-changed', handleProjectChange);
-    }, []);
-
-    const filteredProjects = projects.filter(p => 
-        p.project_title.toLowerCase().includes(searchTerm.toLowerCase()) && 
-        (selectedStatus === 'All' || p.project_status === selectedStatus)
+    // Filter projects by search
+    const filteredProjects = projects.filter(p =>
+        p.project_title?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
-
-    const fetchChatHistory = async (projectId) => {
-        setLoadingHistory(true);
-        try {
-            const response = await axios.get(`/api/projects/${projectId}/chat`);
-            setMessages(response.data);
-            window.dispatchEvent(new CustomEvent('refresh-unread-counts'));
-        } catch (err) {} finally { setLoadingHistory(false); }
-    };
-
-    const handleSendMessage = async (text, clearInput) => {
-        if (!selectedProject || (!text.trim() && !selectedFile)) return;
-        try {
-            setSending(true);
-            const formData = new FormData();
-            if (text.trim()) formData.append('message', text);
-            if (replyingTo) formData.append('reply_to_id', replyingTo.id);
-            if (selectedFile) formData.append('file', selectedFile);
-            await axios.post(`/api/projects/${selectedProject.id}/chat`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-            clearInput();
-            setReplyingTo(null);
-            setSelectedFile(null);
-        } catch (err) { message.error("Failed to send"); } finally { setSending(false); }
-    };
-
-    const handleDeleteMessage = async (messageId) => {
-        try {
-            await axios.delete(`/api/projects/${selectedProject.id}/chat/${messageId}`);
-            setMessages(prev => prev.filter(m => m.id !== messageId));
-            message.success("Deleted");
-        } catch (err) {}
+    // Get display status name
+    const getStatusDisplayName = () => {
+        if (currentStatus === 'All') return 'All Projects';
+        if (currentStatus === 'Takeoff On Progress') return 'Takeoff In Progress';
+        if (currentStatus === 'Pricing On Progress') return 'Pricing In Progress';
+        return currentStatus;
     };
 
     return (
-        <div style={{ height: 'calc(100vh - 64px)', display: 'flex', backgroundColor: '#fff', overflow: 'hidden' }}>
-            {/* Sidebar */}
-            <div style={{ width: '350px', borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', backgroundColor: '#fafafa' }}>
-                <div style={{ padding: '15px 20px', borderBottom: '1px solid #f0f0f0' }}>
-                    <Title level={5} style={{ marginBottom: '12px' }}>Project Chats</Title>
-                    <Input prefix={<SearchOutlined />} placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} allowClear style={{ marginBottom: '10px' }} />
-                    <Select value={selectedStatus} onChange={setSelectedStatus} style={{ width: '100%' }} options={[{ value: 'All', label: 'All Statuses' }, { value: 'Pending', label: 'Pending' }, { value: 'Takeoff On Progress', label: 'Takeoff In Progress' }, { value: 'Pricing On Progress', label: 'Pricing In Progress' }, { value: 'Completed', label: 'Completed' }, { value: 'Revision', label: 'Revision' }, { value: 'Hold', label: 'Hold' }, { value: 'Cancelled', label: 'Cancelled' }]} />
-                </div>
-                <div style={{ flex: 1, overflowY: 'auto' }}>
-                    <List dataSource={filteredProjects} renderItem={p => {
-                        const members = p.project_team_members || [];
-                        return (
-                            <List.Item onClick={() => setSelectedProject(p)} style={{ padding: '15px 20px', cursor: 'pointer', backgroundColor: selectedProject?.id === p.id ? '#e6f7ff' : 'transparent', borderLeft: selectedProject?.id === p.id ? '4px solid #1890ff' : '4px solid transparent' }}>
-                                <List.Item.Meta 
-                                    avatar={<Badge count={p.unread_count} overflowCount={99}><Avatar icon={<ProjectOutlined />} style={{ backgroundColor: '#1890ff' }} /></Badge>} 
-                                    title={<Text strong ellipsis>{p.project_title}</Text>} 
-                                    description={
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                                            <Text type="secondary" style={{ fontSize: '12px' }}>
-                                                {members.length > 0 ? `Joined by ${members.length} members` : 'Joined by 0 members'}
-                                            </Text>
-                                            <Avatar.Group maxCount={3} size="small">
-                                                {members.map((m, i) => (
-                                                    <Avatar 
-                                                        key={i} 
-                                                        src={m.user?.media?.[0]?.file_path ? `/${m.user.media[0].file_path}` : null} 
-                                                        icon={<UserOutlined />} 
-                                                    />
-                                                ))}
-                                            </Avatar.Group>
-                                        </div>
-                                    } 
-                                />
-                            </List.Item>
-                        );
-                    }} />
-                </div>
-            </div>
+        <>
+            <Head title="Project Chat" />
+            <style>{`
+                .message-focused {
+                    animation: highlightPulse 2s ease-out;
+                }
+                @keyframes highlightPulse {
+                    0% { background-color: #ffe58f !important; transform: scale(1.02); }
+                    50% { background-color: #fffbe6 !important; transform: scale(1); }
+                    100% { background-color: inherit; }
+                }
+                .reply-preview-box {
+                    transition: all 0.2s ease;
+                }
+                .reply-preview-box:hover {
+                    filter: contrast(1.1) brightness(0.95);
+                    opacity: 1 !important;
+                }
+                .project-item:hover {
+                    background: #f0f7ff !important;
+                }
+                .custom-scroll::-webkit-scrollbar { width: 5px; }
+                .custom-scroll::-webkit-scrollbar-thumb { background: #ddd; border-radius: 10px; }
+                .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+                .pulse-dot {
+                    animation: dot-pulse 1.2s infinite;
+                }
+                @keyframes dot-pulse {
+                    0% { opacity: 1; transform: scale(1); }
+                    50% { opacity: 0.3; transform: scale(0.8); }
+                    100% { opacity: 1; transform: scale(1); }
+                }
+            `}</style>
 
-            {/* Chat Area */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                {selectedProject ? (
-                    <>
-                        <div style={{ padding: '15px 25px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                <Avatar size="large" icon={<ProjectOutlined />} style={{ backgroundColor: '#1890ff' }} />
-                                <div><Title level={5} style={{ margin: 0 }}>{selectedProject.project_title}</Title><Text type="secondary">Group Chat</Text></div>
-                            </div>
-                            <Avatar.Group maxCount={4} size="small">
-                                {(selectedProject.project_team_members || []).map((m, i) => (
-                                    <Tooltip title={m.user?.name} key={i}><Avatar src={m.user?.media?.[0]?.file_path ? `/${m.user.media[0].file_path}` : null} icon={<UserOutlined />} /></Tooltip>
-                                ))}
-                            </Avatar.Group>
+            <div style={{ display: "flex", height: "calc(100vh - 64px)", background: "#fff" }}>
+                {/* Left Sidebar - Projects */}
+                <div style={{ width: 320, borderRight: "1px solid #f0f0f0", display: "flex", flexDirection: "column" }}>
+                    {/* <div style={{ padding: "16px", borderBottom: "1px solid #f0f0f0" }}>
+                        <Title level={4} style={{ marginBottom: "5px" }}>Project Chats</Title>
+                        <Input
+                            placeholder="Search projects..."
+                            prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            allowClear
+                            style={{ borderRadius: '20px', marginBottom: "12px" }}
+                        />
+                        <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
+                            <Dropdown overlay={statusMenu} trigger={['click']} className="me-1">
+                                <Button size="medium" icon={<ProjectOutlined />}>
+                                    {getStatusDisplayName()} <DownOutlined />
+                                </Button>
+                            </Dropdown>
+                            <Button size="medium" icon={<WechatWorkOutlined />}>
+                                <Link href={route("chat.index")}>Direct Chat</Link>
+                            </Button>
                         </div>
-                        <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '25px', backgroundColor: '#f9f9f9', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                            {loadingHistory ? <Spin tip="Loading..." style={{ marginTop: '50px' }} /> : messages.map((item) => {
-                                const isMe = item.user_id === currentUser.id;
-                                return (
-                                    <div key={item.id} id={`msg-${item.id}`} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
-                                        <div style={{ display: 'flex', flexDirection: isMe ? 'row-reverse' : 'row', alignItems: 'flex-end', maxWidth: '75%', gap: '10px' }}>
-                                            <Avatar src={item.avatar} icon={<UserOutlined />} size="small" />
-                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
-                                                {!isMe && <Text type="secondary" style={{ fontSize: '11px', marginBottom: '2px' }}>{item.user_name}</Text>}
-                                                <div style={{ backgroundColor: isMe ? '#1890ff' : '#fff', color: isMe ? '#fff' : '#000', padding: '10px 15px', borderRadius: isMe ? '15px 15px 0 15px' : '15px 15px 15px 0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                                                    {item.reply_to_message && <div style={{ fontSize: '11px', opacity: 0.7, borderLeft: '2px solid', paddingLeft: '5px', marginBottom: '5px' }}>{item.reply_to_message}</div>}
-                                                    {item.message && <div>{item.message}</div>}
-                                                    {item.file && (
-                                                        <div style={{ marginTop: '8px' }}>
-                                                            {item.file.name.match(/\.(webm|wav|mp3|ogg)$/i) ? <audio controls style={{ height: '35px', maxWidth: '240px' }}><source src={item.file.url} type="audio/webm" /></audio> : item.file.name.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) ? <Image src={item.file.url} style={{ maxWidth: '250px', borderRadius: '8px' }} /> : <a href={item.file.url} target="_blank" rel="noreferrer" style={{ color: isMe ? '#fff' : '#1890ff', display: 'flex', alignItems: 'center', gap: '5px' }}><FileOutlined /> {item.file.name}</a>}
-                                                        </div>
+                    </div> */}
+                    <div style={{ padding: "16px", borderBottom: "1px solid #f0f0f0" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <Button
+                                    type="text"
+                                    icon={<ArrowLeftOutlined />}
+                                    onClick={() => window.history.back()}
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "6px",
+                                        padding: "4px 12px",
+                                        borderRadius: "20px",
+                                        transition: "all 0.3s ease"
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.background = "#f0f0f0";
+                                        e.currentTarget.style.transform = "translateX(-2px)";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.background = "transparent";
+                                        e.currentTarget.style.transform = "translateX(0)";
+                                    }}
+                                >
+                                    Back
+                                </Button>
+                                <div style={{
+                                    width: "2px",
+                                    height: "24px",
+                                    background: "#e0e0e0",
+                                    borderRadius: "2px"
+                                }} />
+                                <Title level={4} style={{ margin: 0, color: "#1890ff" }}>
+                                    <MessageOutlined style={{ marginRight: "8px", color: "#1890ff" }} />
+                                    Project Chats
+                                </Title>
+                            </div>
+                        </div>
+                        <Input
+                            placeholder="Search projects..."
+                            prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            allowClear
+                            style={{ borderRadius: '20px', marginBottom: "12px" }}
+                        />
+                        <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
+                            <Dropdown overlay={statusMenu} trigger={['click']} className="me-1">
+                                <Button size="medium" icon={<ProjectOutlined />}>
+                                    {getStatusDisplayName()} <DownOutlined />
+                                </Button>
+                            </Dropdown>
+                            <Button size="medium" icon={<WechatWorkOutlined />}>
+                                <Link href={route("chat.index")}>Direct Chat</Link>
+                            </Button>
+                        </div>
+                    </div>
+                    <div style={{ flex: 1, overflowY: "auto" }} className="custom-scroll">
+                        <Spin spinning={loadingProjects}>
+                            <List
+                                dataSource={filteredProjects}
+                                locale={{ emptyText: <Empty description="No projects found" /> }}
+                                renderItem={project => (
+                                    <List.Item
+                                        onClick={() => handleProjectSelect(project)}
+                                        style={{
+                                            padding: "15px 20px",
+                                            cursor: "pointer",
+                                            background: selectedProject?.id === project.id ? "#f0f7ff" : "transparent",
+                                            borderLeft: selectedProject?.id === project.id ? "4px solid #1890ff" : "4px solid transparent"
+                                        }}
+                                        className="project-item"
+                                    >
+                                        <List.Item.Meta
+                                            avatar={
+                                                <Badge count={project.unread_count}>
+                                                    <Avatar size={45} icon={<ProjectOutlined />} style={{ background: '#1890ff' }} />
+                                                </Badge>
+                                            }
+                                            title={<b>{project.project_title}</b>}
+                                            description={
+                                                <div>
+                                                    <Text type="secondary" ellipsis style={{ fontSize: "11px", display: "block" }}>
+                                                        {project.project_team_members?.length || 0} members
+                                                    </Text>
+                                                    {project.project_status && (
+                                                        <Badge
+                                                            status={project.project_status === 'Completed' ? 'success' : 'processing'}
+                                                            text={project.project_status}
+                                                            style={{ fontSize: "10px" }}
+                                                        />
                                                     )}
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '5px', gap: '15px' }}>
-                                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                                            <Text onClick={() => setReplyingTo(item)} style={{ fontSize: '10px', color: isMe ? 'rgba(255,255,255,0.7)' : '#1890ff', cursor: 'pointer' }}>Reply</Text>
-                                                            {isMe && <Popconfirm title="Delete?" onConfirm={() => handleDeleteMessage(item.id)}><DeleteOutlined style={{ fontSize: '10px', color: isMe ? 'rgba(255,255,255,0.7)' : '#ff4d4f', cursor: 'pointer' }} /></Popconfirm>}
+                                                </div>
+                                            }
+                                        />
+                                    </List.Item>
+                                )}
+                            />
+                        </Spin>
+                    </div>
+                </div>
+
+                {/* Right Side - Chat */}
+                <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                    {selectedProject ? (
+                        <>
+                            {/* Header */}
+                            <div style={{
+                                padding: "15px 25px",
+                                borderBottom: "1px solid #f0f0f0",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                background: "#fff"
+                            }}>
+                                <div style={{ display: "flex", alignItems: "center" }}>
+                                    <Avatar size={40} icon={<ProjectOutlined />} style={{ background: '#1890ff', marginRight: 12 }} />
+                                    <div>
+                                        <Title level={5} style={{ margin: 0 }}>{selectedProject.project_title}</Title>
+                                        <Text type="secondary" style={{ fontSize: "12px" }}>
+                                            {selectedProject.project_team_members?.length || 0} Team Members •
+                                            <Badge
+                                                status={selectedProject.project_status === 'Completed' ? 'success' : 'processing'}
+                                                text={selectedProject.project_status}
+                                                style={{ marginLeft: 5 }}
+                                            />
+                                        </Text>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Messages */}
+                            <div
+                                ref={scrollRef}
+                                className="custom-scroll"
+                                style={{
+                                    flex: 1,
+                                    overflowY: "auto",
+                                    padding: "20px",
+                                    background: "#f4f7f6",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "12px"
+                                }}
+                            >
+                                {loadingMessages ? (
+                                    <div className="text-center p-5"><Spin tip="Loading..." /></div>
+                                ) : messages.map((msg) => {
+                                    const isMe = msg.sender_id === currentUser.id;
+
+                                    return (
+                                        <div
+                                            key={msg.id}
+                                            style={{
+                                                alignSelf: isMe ? "flex-end" : "flex-start",
+                                                maxWidth: "75%",
+                                                transition: "all 0.5s",
+                                                opacity: msg.isOptimistic ? 0.7 : 1
+                                            }}
+                                        >
+                                            <div
+                                                id={`msg-bubble-${msg.id}`}
+                                                style={{
+                                                    background: isMe ? "#1890ff" : "#fff",
+                                                    color: isMe ? "#fff" : "#333",
+                                                    padding: "10px 15px",
+                                                    borderRadius: isMe ? "18px 18px 0 18px" : "18px 18px 18px 0",
+                                                    boxShadow: "0 2px 5px rgba(0,0,0,0.05)"
+                                                }}
+                                            >
+                                                {!isMe && (
+                                                    <div style={{ fontSize: "12px", fontWeight: "bold", marginBottom: "5px", color: "#1890ff" }}>
+                                                        {msg.sender?.name}
+                                                    </div>
+                                                )}
+
+                                                {msg.reply_to && (
+                                                    <div
+                                                        onClick={() => scrollToMessage(msg.reply_to_id)}
+                                                        className="reply-preview-box"
+                                                        style={{
+                                                            background: isMe ? "rgba(255,255,255,0.15)" : "#f0f2f5",
+                                                            padding: "5px 10px",
+                                                            borderRadius: "8px",
+                                                            fontSize: "12px",
+                                                            marginBottom: "8px",
+                                                            borderLeft: "3px solid " + (isMe ? "#fff" : "#1890ff"),
+                                                            cursor: "pointer",
+                                                            opacity: 0.8
+                                                        }}
+                                                    >
+                                                        <div style={{ fontWeight: "bold", fontSize: "11px" }}>{msg.reply_to.sender?.name}</div>
+                                                        <div style={{ maxHeight: "40px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                            {msg.reply_to.message || "File/Media"}
                                                         </div>
-                                                        <Text style={{ fontSize: '10px', color: isMe ? 'rgba(255,255,255,0.7)' : '#bfbfbf' }}>{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                                                    </div>
+                                                )}
+
+                                                <div style={{ fontSize: "14px", whiteSpace: "pre-wrap" }}>{msg.message}</div>
+
+                                                {msg.file_path && (
+                                                    <div style={{ marginTop: "8px" }}>
+                                                        {msg.file_type?.startsWith('image/') ?
+                                                            <Image src={msg.file_path} style={{ maxWidth: "250px", borderRadius: "8px" }} /> :
+                                                            msg.file_type?.startsWith('audio/') ? (
+                                                                <audio controls style={{ width: "220px", height: "40px" }}>
+                                                                    <source src={msg.file_path} type={msg.file_type} />
+                                                                </audio>
+                                                            ) :
+                                                                <a href={msg.file_path} target="_blank" rel="noreferrer" style={{ color: isMe ? "#fff" : "#1890ff" }}>
+                                                                    <FileOutlined /> {msg.file_path.split('/').pop()}
+                                                                </a>
+                                                        }
+                                                    </div>
+                                                )}
+
+                                                <div className="d-flex justify-content-between align-items-center mt-1" style={{ gap: "15px" }}>
+                                                    <small style={{ fontSize: "9px", opacity: 0.6 }}>
+                                                        {msg.isOptimistic ? "Sending..." : dayjs(msg.created_at).format('H:mm')}
+                                                    </small>
+                                                    <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                                                        {!msg.isOptimistic && (
+                                                            <Tooltip title="Reply">
+                                                                <span onClick={() => setReplyingTo(msg)} style={{ cursor: "pointer", opacity: 0.6, fontSize: "11px" }}>
+                                                                    Reply
+                                                                </span>
+                                                            </Tooltip>
+                                                        )}
+                                                        {isMe && !msg.isOptimistic && (
+                                                            <Popconfirm title="Delete message?" onConfirm={() => handleDeleteMessage(msg.id)}>
+                                                                <DeleteOutlined style={{ fontSize: "11px", cursor: "pointer", opacity: 0.6 }} />
+                                                            </Popconfirm>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
+                                    );
+                                })}
+
+                                {messages.length === 0 && !loadingMessages && (
+                                    <div style={{ textAlign: "center", padding: "40px", opacity: 0.5 }}>
+                                        <MessageOutlined style={{ fontSize: "60px", color: "#1890ff" }} />
+                                        <Title level={4}>No messages yet</Title>
+                                        <Text type="secondary">Start the conversation!</Text>
                                     </div>
-                                );
-                            })}
+                                )}
+                            </div>
+
+                            {/* Input */}
+                            <div style={{ padding: "20px", borderTop: "1px solid #f0f0f0", background: "#fff" }}>
+                                {replyingTo && (
+                                    <div style={{
+                                        background: "#f0f2f5",
+                                        padding: "10px 15px",
+                                        borderRadius: "12px 12px 0 0",
+                                        borderLeft: "4px solid #1890ff",
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        marginBottom: "-1px"
+                                    }}>
+                                        <div>
+                                            <div style={{ fontWeight: "bold", fontSize: "12px", color: "#1890ff" }}>
+                                                Replying to {replyingTo.sender?.name}
+                                            </div>
+                                            <div style={{ fontSize: "12px", opacity: 0.7 }}>
+                                                {replyingTo.message || "File/Media"}
+                                            </div>
+                                        </div>
+                                        <Button type="text" size="small" icon={<BiX />} onClick={() => setReplyingTo(null)} />
+                                    </div>
+                                )}
+
+                                {selectedFile && (
+                                    <Tag closable onClose={() => setSelectedFile(null)} color="blue" style={{ marginBottom: "10px" }}>
+                                        {selectedFile.name}
+                                    </Tag>
+                                )}
+
+                                <div className="d-flex gap-2 align-items-end">
+                                    {!isRecording && (
+                                        <Upload beforeUpload={f => { setSelectedFile(f); return false; }} showUploadList={false}>
+                                            <Button size="large" shape="circle" icon={<PlusOutlined />} />
+                                        </Upload>
+                                    )}
+
+                                    {isRecording ? (
+                                        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "15px", background: "#fef2f2", borderRadius: "20px", padding: "8px 20px" }}>
+                                            <div className="pulse-dot" style={{ width: "10px", height: "10px", background: "#ff4d4f", borderRadius: "50%" }} />
+                                            <span style={{ fontWeight: "bold" }}>{formatTime(recordingTime)}</span>
+                                            <span style={{ color: "#ff4d4f", flex: 1 }}>Recording...</span>
+                                            <Button type="text" danger icon={<DeleteOutlined />} onClick={cancelRecording}>Cancel</Button>
+                                        </div>
+                                    ) : (
+                                        <Input.TextArea
+                                            autoSize={{ minRows: 1, maxRows: 4 }}
+                                            placeholder={`Message ${selectedProject.project_title}...`}
+                                            value={newMessage}
+                                            onChange={e => setNewMessage(e.target.value)}
+                                            onPressEnter={e => {
+                                                if (!e.shiftKey) {
+                                                    e.preventDefault();
+                                                    handleSendMessage();
+                                                }
+                                            }}
+                                            style={{ borderRadius: "20px", border: "none", background: "#f0f2f5", padding: "10px 20px" }}
+                                        />
+                                    )}
+
+                                    {isRecording ? (
+                                        <Button type="primary" shape="circle" size="large" icon={<SendOutlined />} onClick={stopRecording} style={{ background: '#52c41a' }} />
+                                    ) : (
+                                        <>
+                                            {(!newMessage.trim() && !selectedFile) ? (
+                                                <Button shape="circle" size="large" icon={<BiMicrophone />} onClick={startRecording} />
+                                            ) : (
+                                                <Button type="primary" shape="circle" size="large" icon={<SendOutlined />} onClick={() => handleSendMessage()} loading={sending} />
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#f4f7f6" }}>
+                            <div className="text-center">
+                                <Avatar size={100} icon={<ProjectOutlined />} style={{ background: "#e6f7ff", color: "#1890ff", marginBottom: "20px" }} />
+                                <Title level={3}>Select a Project</Title>
+                                <Text type="secondary">Choose a project from the list to start chatting</Text>
+                            </div>
                         </div>
-                        <ChatInput onSendMessage={handleSendMessage} replyingTo={replyingTo} setReplyingTo={setReplyingTo} selectedFile={selectedFile} setSelectedFile={setSelectedFile} sending={sending} />
-                    </>
-                ) : (
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Select a project to start chatting" /></div>
-                )}
-            </div>
-            <style>{`.project-list-item:hover { background-color: #f0f5ff !important; }`}</style>
-        </div>
+                    )}
+                </div>
+            </div >
+        </>
     );
 };
+
+ProjectChat.layout = (page) => <MainLayout children={page} />;
 
 export default ProjectChat;

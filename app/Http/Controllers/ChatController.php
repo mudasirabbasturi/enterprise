@@ -21,9 +21,37 @@ class ChatController extends Controller
      */
 
     
-    public function view()
+    public function view($type = null, $id = null)
     {
-        return inertia('Pages/Chat/Chat');
+        $userId = Auth::id();
+        $projects = \App\Models\Project::with([
+            'projectTeamMembers.user.media' => function($query) {
+                $query->where('category', 'profile')->latest()->limit(1);
+            }
+        ])
+        ->where('project_status', '!=', 'Deliver')
+        ->orderBy('created_at', 'desc')
+        ->limit(100)
+        ->get()
+        ->map(function ($project) use ($userId) {
+            $lastRead = \App\Models\ProjectChatRead::where('user_id', $userId)
+                ->where('project_id', $project->id)
+                ->first();
+
+            $query = \App\Models\ProjectChat::where('project_id', $project->id);
+            if ($lastRead) {
+                $query->where('created_at', '>', $lastRead->last_read_at);
+            }
+            
+            $project->unread_count = $query->where('user_id', '!=', $userId)->count();
+            return $project;
+        });
+
+        return inertia('Pages/Chat/Chat', [
+            'initialChatType' => $type,
+            'initialChatId' => $id,
+            'projects' => $projects,
+        ]);
     }
 
     public function ablyAuth(Request $request)

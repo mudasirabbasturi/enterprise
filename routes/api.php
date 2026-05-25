@@ -2,7 +2,6 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\ChatController;
 use App\Http\Controllers\Api\TrackingController;
 
 Route::post('/login', [AuthController::class, 'login']);

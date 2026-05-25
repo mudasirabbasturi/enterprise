@@ -122,15 +122,19 @@ export {
   CloudDownloadOutlined,
   CheckOutlined,
   CloseCircleFilled,
- FileExcelOutlined , 
- MessageOutlined,
- CameraOutlined,
- PictureOutlined,
- LineChartOutlined,
- VideoCameraAddOutlined,
- WechatWorkOutlined,
- QuestionCircleOutlined,
- LinkOutlined 
+  FileExcelOutlined,
+  MessageOutlined,
+  CameraOutlined,
+  PictureOutlined,
+  LineChartOutlined,
+  VideoCameraAddOutlined,
+  WechatWorkOutlined,
+  QuestionCircleOutlined,
+  LinkOutlined,
+  FileProtectOutlined,
+  MoneyCollectOutlined,
+  TeamOutlined,
+  AppstoreOutlined
 } from "@ant-design/icons";
 
 export { PhoneInput } from "react-international-phone";

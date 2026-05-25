@@ -82,6 +82,38 @@ class ProjectChatController extends Controller
     }
 
     /**
+     * Get list of projects for project chats (as JSON).
+     */
+    public function getProjectsJson()
+    {
+        $userId = Auth::id();
+        $projects = Project::with([
+            'projectTeamMembers.user.media' => function($query) {
+                $query->where('category', 'profile')->latest()->limit(1);
+            }
+        ])
+        ->where('project_status', '!=', 'Deliver')
+        ->orderBy('created_at', 'desc')
+        ->limit(100)
+        ->get()
+        ->map(function ($project) use ($userId) {
+            $lastRead = ProjectChatRead::where('user_id', $userId)
+                ->where('project_id', $project->id)
+                ->first();
+
+            $query = ProjectChat::where('project_id', $project->id);
+            if ($lastRead) {
+                $query->where('created_at', '>', $lastRead->last_read_at);
+            }
+            
+            $project->unread_count = $query->where('user_id', '!=', $userId)->count();
+            return $project;
+        });
+
+        return response()->json($projects);
+    }
+
+    /**
      * Show the full page chat view.
      */
     public function fullPageChat()
@@ -265,62 +297,46 @@ class ProjectChatController extends Controller
 
     private function broadcastMessage($projectId, $event, $data)
     {
-        $channel = 'project-chat-' . $projectId;
-        $personalServerUrl = 'https://api-socket.bidwinners.net/publish';
-        $usePersonalServer = false;
-
         try {
-            $client = new \GuzzleHttp\Client(['timeout' => 2, 'verify' => false]);
-            $client->post($personalServerUrl, [
-                'json' => [
-                    'channel' => $channel,
-                    'event' => $event,
-                    'data' => $data
-                ]
-            ]);
-        } catch (\Exception $e) {
-            \Log::info("Personal socket server error: " . $e->getMessage());
-        }
+            $ablyKey = config('broadcasting.connections.ably.key') ?? env('ABLY_KEY');
+            $name = $event === 'event-new-message' ? 'message.sent' : 'message.deleted';
+            $payload = ['name' => $name];
+            if ($name === 'message.deleted') {
+                $payload['data'] = ['messageId' => $data['id']];
+            } else {
+                $payload['data'] = ['message' => $data];
+            }
 
-        /* 
-        $usePersonalServer = false;
-        if (!$usePersonalServer) {
-            $options = [ 
-                'cluster' => 'ap2', 
-                'useTLS' => true, 
-            ];
-            $pusherClient = new \GuzzleHttp\Client(['verify' => false]);
-            $pusher = new Pusher(
-                '5158315c26b8f6732773', // app key
-                '9ba1bfd3baa3f4ec2a4c', // app secret
-                '2057639', // app id
-                $options,
-                $pusherClient
-            );
-            $pusher->trigger($channel, $event, [
-                'data' => $data,
-                'channel' => $channel
-            ]);
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, "https://rest.ably.io/channels/project-chat.{$projectId}/messages");
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+            if (config('app.env') === 'local') curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Basic ' . base64_encode($ablyKey), 'Content-Type: application/json']);
+            curl_exec($ch);
+            curl_close($ch);
+        } catch (\Exception $e) {
+            \Log::error("Ably Project Message Broadcast Error: " . $e->getMessage());
         }
-        */
     }
 
     private function broadcastToUser($userId, $event, $data)
     {
-        $channel = 'user-notifications-' . $userId;
-        $personalServerUrl = 'https://api-socket.bidwinners.net/publish';
-
         try {
-            $client = new \GuzzleHttp\Client(['timeout' => 2, 'verify' => false]);
-            $client->post($personalServerUrl, [
-                'json' => [
-                    'channel' => $channel,
-                    'event' => $event,
-                    'data' => $data
-                ]
-            ]);
+            $ablyKey = config('broadcasting.connections.ably.key') ?? env('ABLY_KEY');
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, "https://rest.ably.io/channels/user.{$userId}/messages");
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['name' => 'project-notification', 'data' => $data]));
+            if (config('app.env') === 'local') curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Basic ' . base64_encode($ablyKey), 'Content-Type: application/json']);
+            curl_exec($ch);
+            curl_close($ch);
         } catch (\Exception $e) {
-            \Log::info("Personal socket server error (User Notification): " . $e->getMessage());
+            \Log::error("Ably User Notification Broadcast Error: " . $e->getMessage());
         }
     }
 }

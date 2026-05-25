@@ -1,0 +1,47 @@
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "erag/laravel-pwa",
+    "description": "A simple and easy-to-use PWA (Progressive Web App) package for Laravel applications.",
+    "license": "MIT",
+    "keywords": [
+        "laravel",
+        "pwa",
+        "progressive web app",
+        "offline",
+        "service worker",
+        "manifest",
+        "laravel package",
+        "laravel pwa"
+    ],
+    "authors": [
+        {
+            "name": "Er Amiit Gupta",
+            "email": "info.eramitgupta@gmail.com",
+            "homepage": "https://github.com/eramitgupta"
+        }
+    ],
+    "require": {
+        "php": ">=8.0.0",
+        "laravel/pint": "^1.13",
+        "illuminate/support": "^8.12|^9.0|^10.0|^11.0|^12.0|^13.0"
+    },
+    "autoload": {
+        "files": [
+            "src/Pwahelpers.php"
+        ],
+        "psr-4": {
+            "EragLaravelPwa\\": "src/"
+        }
+    },
+    "prefer-stable": true,
+    "extra": {
+        "laravel": {
+            "providers": [
+                "EragLaravelPwa\\EragLaravelPwaServiceProvider"
+            ],
+            "aliases": {
+                "PWA": "EragLaravelPwa\\Facades\\PWA"
+            }
+        }
+    }
+}

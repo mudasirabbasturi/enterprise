@@ -12,6 +12,7 @@
         "php": "^8.2",
         "ably/ably-php": "^1.1",
         "barryvdh/laravel-dompdf": "^3.1",
+        "erag/laravel-pwa": "^2.1",
         "google/auth": "^1.48",
         "inertiajs/inertia-laravel": "^2.0",
         "kreait/firebase-php": "^7.22",
