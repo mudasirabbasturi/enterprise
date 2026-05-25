@@ -1,0 +1,1 @@
+import{j as r}from"./vendor-react-C2xqwMw4.js";import"./vendor-inertia-DLoN6V7S.js";import"./vendor-Ca2vlWXu.js";import"./vendor-antd-DojYAy1L.js";import"./vendor-chart-DwXpjXxm.js";const p=()=>r.jsx(r.Fragment,{children:r.jsx("h1",{children:"HOME PAGE."})});export{p as default};

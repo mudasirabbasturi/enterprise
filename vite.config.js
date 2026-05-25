@@ -47,4 +47,40 @@ export default defineConfig({
       host: "localhost", // force HMR to use localhost instead of [::1]
     },
   },
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("ag-grid-community") || id.includes("ag-grid-react") || id.includes("ag-grid-enterprise")) {
+              return "vendor-ag-grid";
+            }
+            if (id.includes("react") || id.includes("react-dom") || id.includes("react-router")) {
+              return "vendor-react";
+            }
+            if (id.includes("antd") || id.includes("@ant-design")) {
+              return "vendor-antd";
+            }
+            if (id.includes("firebase")) {
+              return "vendor-firebase";
+            }
+            if (id.includes("tinymce")) {
+              return "vendor-tinymce";
+            }
+            if (id.includes("framer-motion")) {
+              return "vendor-framer-motion";
+            }
+            if (id.includes("chart.js") || id.includes("react-chartjs-2")) {
+              return "vendor-chart";
+            }
+            if (id.includes("@inertiajs")) {
+              return "vendor-inertia";
+            }
+            return "vendor";
+          }
+        },
+      },
+    },
+  },
 });
