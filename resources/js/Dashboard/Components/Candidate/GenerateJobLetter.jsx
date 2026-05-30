@@ -12,17 +12,8 @@ import {
   Select,
 } from "@shared/ui";
 import html2canvas from "html2canvas";
-
-import { Editor } from "@tinymce/tinymce-react";
-import "tinymce/tinymce";
-import "tinymce/icons/default";
-import "tinymce/themes/silver";
-import "tinymce/models/dom";
-import "tinymce/plugins/table";
-import "tinymce/plugins/code";
-import "tinymce/plugins/lists";
-import "tinymce/plugins/link";
-import "tinymce/skins/ui/oxide/skin.css";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 
 const GenerateJobLetter = forwardRef(
   ({ data, onClose, setParentLoading }, ref) => {
@@ -148,42 +139,14 @@ const GenerateJobLetter = forwardRef(
         <div className="row">
           {/* Editor side */}
           <div className="col-md-6 col-12 m-0 p-0">
-            <Editor
+            <ReactQuill
+                    theme="snow"
               initialValue={initialContent}
-              onEditorChange={(content) => {
+              onChange={(content) => {
                 onChangeValue("job_letter_content", content);
               }}
-              disabled={loading}
-              init={{
-                height: "100%",
-                menubar: false,
-                plugins: "table code lists link",
-                toolbar:
-                  "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                block_formats:
-                  "Paragraph=p; Heading 1=h1; Heading 2=h2; Heading 3=h3",
-                skin: false,
-                content_css: false,
-                content_style: `
-                  body, body * {
-                    font-family: "Adobe Clean Regular", sans-serif !important;
-                  }
-                  body {
-                    font-size: 14px;
-                    line-height: 1.5;
-                    color: #333;
-                  }
-                  h1, h2, h3, h4, h5, h6 {
-                    font-family: "Adobe Clean Regular", sans-serif !important;
-                  }
-                  table, table * {
-                    font-family: "Adobe Clean Regular", sans-serif !important;
-                  }
-                `,
-                font_family_formats:
-                  "Adobe Clean Regular=Adobe Clean Regular, sans-serif",
-              }}
-            />
+              readOnly={loading}
+                    />
           </div>
           <div className="col-md-6 col-12 border p-1 rounded" ref={pdfRef}>
             <div className="p-5">

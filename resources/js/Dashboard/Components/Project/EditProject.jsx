@@ -9,18 +9,11 @@ import {
   dayjs,
   usePage,
 } from "@shared/ui";
-import { Editor } from "@tinymce/tinymce-react";
-import "tinymce/tinymce";
-import "tinymce/icons/default";
-import "tinymce/themes/silver";
-import "tinymce/models/dom";
-import "tinymce/plugins/table";
-import "tinymce/plugins/code";
-import "tinymce/plugins/lists";
-import "tinymce/plugins/link";
-import "tinymce/skins/ui/oxide/skin.css"; // important!
+// important!
 import NProgress from "nprogress";
 import axios from "axios";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 const EditProject = forwardRef(
   (
     {
@@ -252,19 +245,11 @@ const EditProject = forwardRef(
                 </div>
                 <div className="mb-3">
                   <label htmlFor="project_address">Project Address:</label>
-                  <Editor
-                    disabled={loading || !hasUpdateProjectAddressPermission}
-                    init={{
-                      height: 150,
-                      menubar: false,
-                      plugins: "table code lists link",
-                      toolbar:
-                        "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                      skin: false,
-                      content_css: false,
-                    }}
+                  <ReactQuill
+                    theme="snow"
+                    readOnly={loading || !hasUpdateProjectAddressPermission}
                     value={values.project_address}
-                    onEditorChange={(content) =>
+                    onChange={(content) =>
                       onChangeValue("project_address", content)
                     }
                   />
@@ -341,19 +326,10 @@ const EditProject = forwardRef(
                     disabled={loading || !hasUpdateProjectClientPermission}
                   />
                   {values.client_id && (
-                    <Editor
-                      disabled={true}
-                      init={{
-                        readonly: true,
-                        height: 150,
-                        menubar: false,
-                        plugins: "table code lists link",
-                        toolbar:
-                          "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                        skin: false,
-                        content_css: false,
-                      }}
-                      value={values.notes}
+                    <ReactQuill
+                    theme="snow"
+                      readOnly={true}
+                    value={values.notes}
                     />
                   )}
                 </div>
@@ -616,38 +592,22 @@ const EditProject = forwardRef(
                 <hr className="mt-2 mb-2" />
                 <div className="mb-3">
                   <label>Project Main Scope:</label>
-                  <Editor
-                    disabled={loading || !hasUpdateMainScopePermission}
-                    init={{
-                      height: 150,
-                      menubar: false,
-                      plugins: "table code lists link",
-                      toolbar:
-                        "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                      skin: false,
-                      content_css: false,
-                    }}
+                  <ReactQuill
+                    theme="snow"
+                    readOnly={loading || !hasUpdateMainScopePermission}
                     value={values.project_main_scope}
-                    onEditorChange={(content) =>
+                    onChange={(content) =>
                       onChangeValue("project_main_scope", content)
                     }
                   />
                 </div>
                 <div className="mb-3">
                   <label>Project Scope Details:</label>
-                  <Editor
-                    disabled={loading || !hasUpdateScopeDetailsPermission}
-                    init={{
-                      height: 150,
-                      menubar: false,
-                      plugins: "table code lists link",
-                      toolbar:
-                        "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                      skin: false,
-                      content_css: false,
-                    }}
+                  <ReactQuill
+                    theme="snow"
+                    readOnly={loading || !hasUpdateScopeDetailsPermission}
                     value={values.project_scope_details}
-                    onEditorChange={(content) =>
+                    onChange={(content) =>
                       onChangeValue("project_scope_details", content)
                     }
                   />
@@ -663,38 +623,22 @@ const EditProject = forwardRef(
                 <hr className="mt-2 mb-2" />
                 <div className="mb-3">
                   <label>Admin Notes:</label>
-                  <Editor
-                    disabled={loading || !hasUpdateAdminNotesPermission}
-                    init={{
-                      height: 150,
-                      menubar: false,
-                      plugins: "table code lists link",
-                      toolbar:
-                        "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                      skin: false,
-                      content_css: false,
-                    }}
+                  <ReactQuill
+                    theme="snow"
+                    readOnly={loading || !hasUpdateAdminNotesPermission}
                     value={values.project_admin_notes}
-                    onEditorChange={(c) =>
+                    onChange={(c) =>
                       onChangeValue("project_admin_notes", c)
                     }
                   />
                 </div>
                 <div className="mb-3">
                   <label>Estimator Notes:</label>
-                  <Editor
-                    disabled={loading || !hasUpdateEstimatorNotesPermission}
-                    init={{
-                      height: 150,
-                      menubar: false,
-                      plugins: "table code lists link",
-                      toolbar:
-                        "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                      skin: false,
-                      content_css: false,
-                    }}
+                  <ReactQuill
+                    theme="snow"
+                    readOnly={loading || !hasUpdateEstimatorNotesPermission}
                     value={values.project_notes_estimator}
-                    onEditorChange={(c) =>
+                    onChange={(c) =>
                       onChangeValue("project_notes_estimator", c)
                     }
                   />
@@ -702,19 +646,11 @@ const EditProject = forwardRef(
                 {hasUpdateClientAdminNotesPermission && (
                   <div>
                     <label>Client Notes Admin Only:</label>
-                    <Editor
-                      disabled={loading}
-                      init={{
-                        height: 150,
-                        menubar: false,
-                        plugins: "table code lists link",
-                        toolbar:
-                          "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                        skin: false,
-                        content_css: false,
-                      }}
-                      value={values.notes_private}
-                      onEditorChange={(c) => onChangeValue("notes_private", c)}
+                    <ReactQuill
+                    theme="snow"
+                      readOnly={loading}
+                    value={values.notes_private}
+                      onChange={(c) => onChangeValue("notes_private", c)}
                     />
                   </div>
                 )}

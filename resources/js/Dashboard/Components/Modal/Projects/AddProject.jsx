@@ -1,15 +1,8 @@
 import { useState } from "react";
 import { Input, Select, Button } from "@shared/ui";
-import { Editor } from "@tinymce/tinymce-react";
-import "tinymce/tinymce";
-import "tinymce/icons/default";
-import "tinymce/themes/silver";
-import "tinymce/models/dom";
-import "tinymce/plugins/table";
-import "tinymce/plugins/code";
-import "tinymce/plugins/lists";
-import "tinymce/plugins/link";
-import "tinymce/skins/ui/oxide/skin.css"; // important!
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
+// important!
 import "react-international-phone/style.css";
 const { TextArea } = Input;
 const AddProject = () => {
@@ -39,17 +32,9 @@ const AddProject = () => {
               </div>
               <div className="mb-3">
                 <label htmlFor="project_address">Project Address:</label>
-                <Editor
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                />
+                <ReactQuill
+                    theme="snow"
+                    />
               </div>
             </div>
 
@@ -386,33 +371,17 @@ const AddProject = () => {
               <hr className="mt-2 mb-2"></hr>
               <div className="mb-3">
                 <label htmlFor="project_main_scope">Project Main Scope:</label>
-                <Editor
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                />
+                <ReactQuill
+                    theme="snow"
+                    />
               </div>
               <div className="mb-3">
                 <label htmlFor="project_scope_details">
                   Project Scope Details:
                 </label>
-                <Editor
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                />
+                <ReactQuill
+                    theme="snow"
+                    />
               </div>
             </div>
             {/* Main Scope & Scope Details End */}
@@ -432,17 +401,9 @@ const AddProject = () => {
                 >
                   Admin Or Supervisor Notes:<hr className="m-0"></hr>
                 </label>
-                <Editor
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                />
+                <ReactQuill
+                    theme="snow"
+                    />
               </div>
               <div className="mb-3">
                 <label
@@ -452,17 +413,9 @@ const AddProject = () => {
                 >
                   Estimator Notes:<hr className="m-0"></hr>
                 </label>
-                <Editor
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                />
+                <ReactQuill
+                    theme="snow"
+                    />
               </div>
               <div className="mb-3">
                 <label
@@ -472,17 +425,9 @@ const AddProject = () => {
                 >
                   General Notes:<hr className="m-0"></hr>
                 </label>
-                <Editor
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                />
+                <ReactQuill
+                    theme="snow"
+                    />
               </div>
               <div className="mb-3">
                 <label
@@ -492,17 +437,9 @@ const AddProject = () => {
                 >
                   Private Notes:<hr className="m-0"></hr>
                 </label>
-                <Editor
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                />
+                <ReactQuill
+                    theme="snow"
+                    />
               </div>
             </div>
             {/* Notes End */}

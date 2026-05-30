@@ -355,4 +355,5 @@ const Index = ({ projects, clients }) => {
     </>
   );
 };
-export default Index;
+import React from 'react';
+export default React.memo(Index);

@@ -15,18 +15,9 @@ import {
   PhoneInput,
   useForm,
 } from "@shared/ui";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 const { TextArea } = Input;
-
-import { Editor } from "@tinymce/tinymce-react";
-import "tinymce/tinymce";
-import "tinymce/icons/default";
-import "tinymce/themes/silver";
-import "tinymce/models/dom";
-import "tinymce/plugins/table";
-import "tinymce/plugins/code";
-import "tinymce/plugins/lists";
-import "tinymce/plugins/link";
-import "tinymce/skins/ui/oxide/skin.css";
 
 const EditUser = forwardRef(
   (
@@ -487,19 +478,11 @@ const EditUser = forwardRef(
                   >
                     Notes:<hr className="m-0"></hr>
                   </label>
-                  <Editor
-                    disabled={loading}
-                    init={{
-                      height: 150,
-                      menubar: false,
-                      plugins: "table code lists link",
-                      toolbar:
-                        "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                      skin: false,
-                      content_css: false,
-                    }}
+                  <ReactQuill
+                    theme="snow"
+                    readOnly={loading}
                     value={values.notes}
-                    onEditorChange={(content, editor) => {
+                    onChange={(content, editor) => {
                       onChangeValue("notes", content);
                     }}
                   />
@@ -512,19 +495,11 @@ const EditUser = forwardRef(
                   >
                     Private Notes:<hr className="m-0"></hr>
                   </label>
-                  <Editor
-                    disabled={loading}
-                    init={{
-                      height: 150,
-                      menubar: false,
-                      plugins: "table code lists link",
-                      toolbar:
-                        "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                      skin: false,
-                      content_css: false,
-                    }}
+                  <ReactQuill
+                    theme="snow"
+                    readOnly={loading}
                     value={values.notes_private}
-                    onEditorChange={(content, editor) => {
+                    onChange={(content, editor) => {
                       onChangeValue("notes_private", content);
                     }}
                   />

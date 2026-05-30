@@ -1,33 +1,60 @@
 import React, {
-  useEffect,
-  useRef,
   forwardRef,
   useImperativeHandle,
+  useState,
+  useEffect
 } from "react";
-import { Editor } from "@tinymce/tinymce-react";
-import "tinymce/tinymce";
-import "tinymce/icons/default";
-import "tinymce/themes/silver";
-import "tinymce/models/dom";
-import "tinymce/plugins/table";
-import "tinymce/plugins/code";
-import "tinymce/plugins/lists";
-import "tinymce/plugins/link";
-import "tinymce/skins/ui/oxide/skin.css";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 
 const MyRichTextEditor = forwardRef(({ value, onValueChange }, ref) => {
-  const editorRef = useRef();
+  const [content, setContent] = useState(value || "");
+
   useEffect(() => {
-    setTimeout(() => {
-      editorRef.current?.editor?.focus();
-    }, 100);
-  }, []);
+    setContent(value || "");
+  }, [value]);
+
+  const handleChange = (newContent) => {
+    setContent(newContent);
+    if (onValueChange) {
+      onValueChange(newContent);
+    }
+  };
 
   useImperativeHandle(ref, () => ({
     getValue: () => {
-      return editorRef.current?.getContent?.() || "";
+      return content;
     },
   }));
+
+  const modules = {
+    toolbar: [
+      [{ header: [1, 2, false] }],
+      ["bold", "italic", "underline", "strike", "blockquote"],
+      [
+        { list: "ordered" },
+        { list: "bullet" },
+        { indent: "-1" },
+        { indent: "+1" },
+      ],
+      ["link", "code-block"],
+      ["clean"],
+    ],
+  };
+
+  const formats = [
+    "header",
+    "bold",
+    "italic",
+    "underline",
+    "strike",
+    "blockquote",
+    "list",
+    "bullet",
+    "indent",
+    "link",
+    "code-block",
+  ];
 
   return (
     <div
@@ -40,30 +67,21 @@ const MyRichTextEditor = forwardRef(({ value, onValueChange }, ref) => {
         left: 0,
         right: 0,
         margin: "auto",
+        backgroundColor: "white", // ensure background is white
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      <Editor
-        disabled={true}
-        onInit={(evt, editor) => {
-          editorRef.current = editor;
-        }}
-        initialValue={value || ""}
-        init={{
-          height: "100%",
-          width: "100%",
-          menubar: false,
-          plugins: "table code lists link",
-          toolbar:
-            "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-          skin: false,
-          content_css: false,
-        }}
-        onEditorChange={(content) => {
-          onValueChange?.(content);
-        }}
+      <ReactQuill
+        theme="snow"
+        value={content}
+        onChange={handleChange}
+        modules={modules}
+        formats={formats}
+        style={{ height: "calc(100% - 42px)", marginBottom: "42px" }}
       />
     </div>
   );
 });
 
-export default MyRichTextEditor;
+export default React.memo(MyRichTextEditor);

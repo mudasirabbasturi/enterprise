@@ -9,17 +9,9 @@ import {
   usePage,
 } from "@shared/ui";
 import axios from "axios";
-import { Editor } from "@tinymce/tinymce-react";
-import "tinymce/tinymce";
-import "tinymce/icons/default";
-import "tinymce/themes/silver";
-import "tinymce/models/dom";
-import "tinymce/plugins/table";
-import "tinymce/plugins/code";
-import "tinymce/plugins/lists";
-import "tinymce/plugins/link";
-import "tinymce/skins/ui/oxide/skin.css";
 import NProgress from "nprogress";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 
 const AddProject = forwardRef(
   ({ onClose, clients, setParentLoading, api, setRowData }, ref) => {
@@ -237,19 +229,11 @@ const AddProject = forwardRef(
 
                 <div className="mb-3">
                   <label htmlFor="project_address">Project Address:</label>
-                  <Editor
-                    disabled={loading || !hasAddProjectAddressPermission}
-                    init={{
-                      height: 150,
-                      menubar: false,
-                      plugins: "table code lists link",
-                      toolbar:
-                        "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                      skin: false,
-                      content_css: false,
-                    }}
+                  <ReactQuill
+                    theme="snow"
+                    readOnly={loading || !hasAddProjectAddressPermission}
                     value={values.project_address}
-                    onEditorChange={(content) =>
+                    onChange={(content) =>
                       onChangeValue("project_address", content)
                     }
                   />
@@ -305,19 +289,10 @@ const AddProject = forwardRef(
                   />
 
                   {values.client_id && (
-                    <Editor
-                      disabled={true}
-                      init={{
-                        readonly: true,
-                        height: 150,
-                        menubar: false,
-                        plugins: "table code lists link",
-                        toolbar:
-                          "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                        skin: false,
-                        content_css: false,
-                      }}
-                      value={values.notes}
+                    <ReactQuill
+                    theme="snow"
+                      readOnly={true}
+                    value={values.notes}
                     />
                   )}
                 </div>
@@ -597,19 +572,11 @@ const AddProject = forwardRef(
 
                 <div className="mb-3">
                   <label>Project Main Scope:</label>
-                  <Editor
-                    disabled={loading || !hasAddMainScopePermission}
-                    init={{
-                      height: 150,
-                      menubar: false,
-                      plugins: "table code lists link",
-                      toolbar:
-                        "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                      skin: false,
-                      content_css: false,
-                    }}
+                  <ReactQuill
+                    theme="snow"
+                    readOnly={loading || !hasAddMainScopePermission}
                     value={values.project_main_scope}
-                    onEditorChange={(content) =>
+                    onChange={(content) =>
                       onChangeValue("project_main_scope", content)
                     }
                   />
@@ -617,19 +584,11 @@ const AddProject = forwardRef(
 
                 <div className="mb-3">
                   <label>Project Scope Details:</label>
-                  <Editor
-                    disabled={loading || !hasAddScopeDetailsPermission}
-                    init={{
-                      height: 150,
-                      menubar: false,
-                      plugins: "table code lists link",
-                      toolbar:
-                        "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                      skin: false,
-                      content_css: false,
-                    }}
+                  <ReactQuill
+                    theme="snow"
+                    readOnly={loading || !hasAddScopeDetailsPermission}
                     value={values.project_scope_details}
-                    onEditorChange={(content) =>
+                    onChange={(content) =>
                       onChangeValue("project_scope_details", content)
                     }
                   />
@@ -646,19 +605,11 @@ const AddProject = forwardRef(
 
                 <div className="mb-3">
                   <label>Admin Notes:</label>
-                  <Editor
-                    disabled={loading || !hasAddAdminNotesPermission}
-                    init={{
-                      height: 150,
-                      menubar: false,
-                      plugins: "table code lists link",
-                      toolbar:
-                        "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                      skin: false,
-                      content_css: false,
-                    }}
+                  <ReactQuill
+                    theme="snow"
+                    readOnly={loading || !hasAddAdminNotesPermission}
                     value={values.project_admin_notes}
-                    onEditorChange={(content) =>
+                    onChange={(content) =>
                       onChangeValue("project_admin_notes", content)
                     }
                   />
@@ -666,19 +617,11 @@ const AddProject = forwardRef(
 
                 <div className="mb-3">
                   <label>Estimator Notes:</label>
-                  <Editor
-                    disabled={loading || !hasAddEstimatorNotesPermission}
-                    init={{
-                      height: 150,
-                      menubar: false,
-                      plugins: "table code lists link",
-                      toolbar:
-                        "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                      skin: false,
-                      content_css: false,
-                    }}
+                  <ReactQuill
+                    theme="snow"
+                    readOnly={loading || !hasAddEstimatorNotesPermission}
                     value={values.project_notes_estimator}
-                    onEditorChange={(content) =>
+                    onChange={(content) =>
                       onChangeValue("project_notes_estimator", content)
                     }
                   />
@@ -686,19 +629,11 @@ const AddProject = forwardRef(
                 {hasAddClientAdminNotesPermission && (
                   <div>
                     <label>Client Admin Notes:</label>
-                    <Editor
-                      disabled={loading}
-                      init={{
-                        height: 150,
-                        menubar: false,
-                        plugins: "table code lists link",
-                        toolbar:
-                          "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                        skin: false,
-                        content_css: false,
-                      }}
-                      value={values.notes_private}
-                      onEditorChange={(content) =>
+                    <ReactQuill
+                    theme="snow"
+                      readOnly={loading}
+                    value={values.notes_private}
+                      onChange={(content) =>
                         onChangeValue("notes_private", content)
                       }
                     />

@@ -5,18 +5,9 @@ import {
   Input,
   usePage,
 } from "@shared/ui";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 const { TextArea } = Input;
-
-import { Editor } from "@tinymce/tinymce-react";
-import "tinymce/tinymce";
-import "tinymce/icons/default";
-import "tinymce/themes/silver";
-import "tinymce/models/dom";
-import "tinymce/plugins/table";
-import "tinymce/plugins/code";
-import "tinymce/plugins/lists";
-import "tinymce/plugins/link";
-import "tinymce/skins/ui/oxide/skin.css";
 
 const AddClient = forwardRef(({ onClose, setParentLoading }, ref) => {
   const hasPermission = (userpermission, permName) => userpermission?.some((p) => p.name === permName);
@@ -183,19 +174,11 @@ const AddClient = forwardRef(({ onClose, setParentLoading }, ref) => {
                     >
                       Client Notes:<hr className="m-0"></hr>
                     </label>
-                    <Editor
-                      disabled={loading}
-                      init={{
-                        height: 150,
-                        menubar: false,
-                        plugins: "table code lists link",
-                        toolbar:
-                          "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                        skin: false,
-                        content_css: false,
-                      }}
-                      value={values.notes}
-                      onEditorChange={(content, editor) => {
+                    <ReactQuill
+                    theme="snow"
+                      readOnly={loading}
+                    value={values.notes}
+                      onChange={(content, editor) => {
                         onChangeValue("notes", content);
                       }}
                     />

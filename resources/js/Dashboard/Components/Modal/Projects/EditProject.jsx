@@ -1,15 +1,8 @@
 import { useState } from "react";
 import { Input, Select, Button } from "@shared/ui";
-import { Editor } from "@tinymce/tinymce-react";
-import "tinymce/tinymce";
-import "tinymce/icons/default";
-import "tinymce/themes/silver";
-import "tinymce/models/dom";
-import "tinymce/plugins/table";
-import "tinymce/plugins/code";
-import "tinymce/plugins/lists";
-import "tinymce/plugins/link";
-import "tinymce/skins/ui/oxide/skin.css"; // important!
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
+// important!
 import "react-international-phone/style.css";
 const { TextArea } = Input;
 const EditProject = (props) => {
@@ -43,18 +36,10 @@ const EditProject = (props) => {
               </div>
               <div className="mb-3">
                 <label htmlFor="project_address">Project Address:</label>
-                <Editor
+                <ReactQuill
+                    theme="snow"
                   initialValue={selectedProject.project_address || ""}
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                  // onEditorChange={(newValue) => {}}
+                    // onChange={(newValue) => {}}
                 />
               </div>
             </div>
@@ -478,35 +463,19 @@ const EditProject = (props) => {
               <hr className="mt-2 mb-2"></hr>
               <div className="mb-3">
                 <label htmlFor="project_main_scope">Project Main Scope:</label>
-                <Editor
+                <ReactQuill
+                    theme="snow"
                   initialValue={selectedProject.project_main_scope || ""}
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                />
+                    />
               </div>
               <div className="mb-3">
                 <label htmlFor="project_scope_details">
                   Project Scope Details:
                 </label>
-                <Editor
+                <ReactQuill
+                    theme="snow"
                   initialValue={selectedProject.project_scope_details || ""}
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                />
+                    />
               </div>
             </div>
             {/* Main Scope & Scope Details End */}
@@ -526,20 +495,12 @@ const EditProject = (props) => {
                 >
                   Admin Or Supervisor Notes:<hr className="m-0"></hr>
                 </label>
-                <Editor
+                <ReactQuill
+                    theme="snow"
                   initialValue={
                     selectedProject.project_notes_owner_or_supervisor || ""
                   }
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                />
+                    />
               </div>
               <div className="mb-3">
                 <label
@@ -549,18 +510,10 @@ const EditProject = (props) => {
                 >
                   Estimator Notes:<hr className="m-0"></hr>
                 </label>
-                <Editor
+                <ReactQuill
+                    theme="snow"
                   initialValue={selectedProject.project_notes_estimator || ""}
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                />
+                    />
               </div>
               <div className="mb-3">
                 <label
@@ -570,18 +523,10 @@ const EditProject = (props) => {
                 >
                   General Notes:<hr className="m-0"></hr>
                 </label>
-                <Editor
+                <ReactQuill
+                    theme="snow"
                   initialValue={selectedProject.general_notes || ""}
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                />
+                    />
               </div>
               <div className="mb-3">
                 <label
@@ -591,18 +536,10 @@ const EditProject = (props) => {
                 >
                   Private Notes:<hr className="m-0"></hr>
                 </label>
-                <Editor
+                <ReactQuill
+                    theme="snow"
                   initialValue={selectedProject.notes_private || ""}
-                  init={{
-                    height: 150,
-                    menubar: false,
-                    plugins: "table code lists link",
-                    toolbar:
-                      "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                    skin: false,
-                    content_css: false,
-                  }}
-                />
+                    />
               </div>
             </div>
             {/* Notes End */}

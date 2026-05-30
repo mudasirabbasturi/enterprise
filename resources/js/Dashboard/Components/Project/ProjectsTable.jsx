@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { debounce } from "lodash";
 import {
   AgGridReact,
   gridTheme,
@@ -69,7 +70,7 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
   const gridRef = useRef(null);
 
 
-  const [colDefs, setColDefs] = useState([
+  const colDefs = useMemo(() => [
     {
       headerName: "Project Points",
       headerTooltip: "Estimator Points",
@@ -883,6 +884,14 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         </>
       ),
     },
+  ], [
+    userPermissions,
+    auth?.user?.id,
+    hasViewProjectTeamPermission,
+    hasViewScoreDetailsPermission,
+    hasViewPersonalScoreDetailsPermission,
+    hasUpdateScorePermission,
+    hasDeleteProjectPermission
   ]);
 
   useEffect(() => {
@@ -1087,18 +1096,21 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
     );
   };
 
-  const onFilterTextBoxChanged = useCallback(() => {
-    if (gridRef.current?.api) {
-      if (isSSRM) {
-        gridRef.current.api.refreshServerSide();
-      } else {
-        gridRef.current.api.setGridOption(
-          "quickFilterText",
-          document.getElementById("filter-text-box")?.value
-        );
+  const onFilterTextBoxChanged = useCallback(
+    debounce(() => {
+      if (gridRef.current?.api) {
+        if (isSSRM) {
+          gridRef.current.api.refreshServerSide();
+        } else {
+          gridRef.current.api.setGridOption(
+            "quickFilterText",
+            document.getElementById("filter-text-box")?.value
+          );
+        }
       }
-    }
-  }, [isSSRM]);
+    }, 300),
+    [isSSRM]
+  );
 
   const isSelf = url.includes("/project/self");
 
@@ -1184,4 +1196,4 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
     </>
   );
 };
-export default ProjectsTable;
+export default React.memo(ProjectsTable);

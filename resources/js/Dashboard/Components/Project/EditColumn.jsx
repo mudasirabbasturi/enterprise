@@ -9,18 +9,10 @@ import {
   dayjs,
   usePage,
 } from "@shared/ui";
-import { Editor } from "@tinymce/tinymce-react";
-import "tinymce/tinymce";
-import "tinymce/icons/default";
-import "tinymce/themes/silver";
-import "tinymce/models/dom";
-import "tinymce/plugins/table";
-import "tinymce/plugins/code";
-import "tinymce/plugins/lists";
-import "tinymce/plugins/link";
-import "tinymce/skins/ui/oxide/skin.css";
 import NProgress from "nprogress";
 import axios from "axios";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 const EditColumn = forwardRef(
   (
     { clients, onClose, setParentLoading, field, value, id, api, setRowData },
@@ -283,19 +275,11 @@ const EditColumn = forwardRef(
               if (richTextFields.includes(field)) {
                 return (
                   <div style={{ width: "100%" }}>
-                    <Editor
+                    <ReactQuill
+                    theme="snow"
                       value={currentValue || ""}
-                      onEditorChange={setCurrentValue}
-                      disabled={loading || !canEditField}
-                      init={{
-                        height: 300,
-                        menubar: false,
-                        plugins: "table code lists link",
-                        toolbar:
-                          "undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link | table | code",
-                        skin: false,
-                        content_css: false,
-                      }}
+                      onChange={setCurrentValue}
+                      readOnly={loading || !canEditField}
                     />
                   </div>
                 );
