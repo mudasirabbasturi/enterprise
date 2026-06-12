@@ -14,13 +14,8 @@ import {
   FileTextOutlined,
   FieldTimeOutlined,
   CreditCardOutlined,
-  ScheduleOutlined,
-  MessageOutlined,
-  WechatWorkOutlined,
-  Tooltip
+  ScheduleOutlined
 } from "@shared/ui";
-
-import { Badge } from "antd";
 
 // 🔑 helper function to check permission
 const hasPermission = (userpermission, permName) =>
@@ -189,43 +184,6 @@ export const getSidebarItems = ({
       ]
       : []),
 
-    ...(can("View Chat")
-      ? [
-        {
-          key: "chat",
-          label: (
-            <div className="d-flex justify-content-between align-items-center w-100">
-              <Link href={route("chat.index")}>
-              Chat 
-              {!collapsed && unreadCounts.chat?.total > 0 && (
-                <sup className="ms-2">
-                  <Badge 
-                  count={unreadCounts.chat.total} 
-                  style={{ backgroundColor: '#ff4d4f'}} 
-                />
-                </sup>
-              )}
-              </Link>
-            </div>
-          ),
-          icon: (
-            <div className={`${collapsed ? "d-flex justify-content-between align-items-center w-100" : ""}`}>
-              <WechatWorkOutlined style={{ fontSize: "20px" }}/>
-              {collapsed && unreadCounts.chat?.total > 0 && (
-                <sup className="ms-1">
-                  <Badge 
-                  count={unreadCounts.chat.total} 
-                  style={{ backgroundColor: '#ff4d4f'}} 
-                />
-                </sup>
-              )}
-            </div>
-          ),
-        },
-
-      ]
-      : []),
-
     ...(can("View User")
       ? [
         {
@@ -372,17 +330,6 @@ export const getSidebarItems = ({
                 },
               ]
               : []),
-            // ...(can("View User Allowed IP")
-            //   ? [
-            //     {
-            //       key: "allowed-ips",
-            //       label: (
-            //         <Link href={route("allowed-ips.index")}>Allowed IPs</Link>
-            //       ),
-            //       icon: <CheckCircleOutlined />,
-            //     },
-            //   ]
-            //   : []),
             ...(can("View User Attendance")
               ? [
                 {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import Ably from "ably";
 import { debounce } from "lodash";
 import {
   AgGridReact,
@@ -20,6 +21,7 @@ import {
   Link,
   usePage,
 } from "@inertiajs/react";
+import { Collapse } from "@shared/ui";
 import { useRoute } from "@ziggy";
 import NProgress from "nprogress";
 import {
@@ -32,6 +34,7 @@ import {
   FileExcelOutlined,
   CommentOutlined
 } from "@ant-design/icons";
+import ProjectChatModal from "@component/Chat/ProjectChatModal";
 
 const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
 
@@ -44,6 +47,55 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
   const can = (perm) => hasPermission(userPermissions, perm);
   const user = inertiaProps?.auth?.user ?? {};
   const permissions = inertiaProps?.permissions ?? []; // master list
+  
+  // Chat Modal State
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
+  const [selectedProjectForChat, setSelectedProjectForChat] = useState(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const ably = new Ably.Realtime({ authUrl: '/api/ably/auth' });
+    const userChannel = ably.channels.get(`user.${user.id}`);
+    
+    userChannel.subscribe('project-notification', (msgEvent) => {
+      const data = msgEvent.data;
+      const projectId = data.project_id;
+      const msg = data.message;
+      
+      if (msg.user_id !== user.id && window.activeProjectChatId !== projectId) {
+        // Play sound notification
+        const sound = new Audio("/uploads/media/sound_effect/chat/chat_message_notification.mp3");
+        sound.play().catch(() => { });
+
+        // Update row data in ag-grid to increment unread_count for the matching project
+        if (gridRef.current?.api) {
+          const rowNode = gridRef.current.api.getRowNode(projectId);
+          if (rowNode) {
+            rowNode.setData({
+              ...rowNode.data,
+              unread_count: (rowNode.data.unread_count || 0) + 1
+            });
+          }
+        }
+        
+        // Also update the parent rows state
+        if (setRowData) {
+          setRowData(prev => prev.map(p => {
+            if (p.id === projectId) {
+              return { ...p, unread_count: (p.unread_count || 0) + 1 };
+            }
+            return p;
+          }));
+        }
+      }
+    });
+
+    return () => {
+      userChannel.unsubscribe();
+      ably.close();
+    };
+  }, [user?.id, setRowData]);
+
   const hasViewProjectTeamPermission =
     Array.isArray(userPermissions) &&
     userPermissions.some((perm) => perm.name === "View Project Team");
@@ -141,44 +193,55 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
       cellRenderer: (params) => {
         const members = params.data.project_team_members || [];
         const names = params.value;
+        const isJoined = members.some((m) => m.user?.id === auth.user.id);
+        const isSuperAdmin = auth.user.role_id === 1;
+        const showChatIcon = isSuperAdmin || (params.data.project_status !== "Pending" && isJoined);
 
         if (members.length === 0) {
           return (
             <div className="d-flex align-items-center">
-              <Tooltip title="Project Chat" color="blue" placement="left">
-                <Link
-                  href={`/project-chat?project_id=${params.data.id}`}
-                  className="btn btn-sm me-1"
-                  style={{
-                    background: "linear-gradient(45deg, #1a1a2e, #16213e)",
-                    border: "1px solid #0f3460",
-                    borderRadius: "12px",
-                    padding: "4px 12px",
-                    position: "relative",
-                    overflow: "hidden",
-                    transition: "all 0.3s ease",
-                    boxShadow: "0 0 5px rgba(0, 255, 255, 0.3)",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = "0 0 20px rgba(0, 255, 255, 0.6), 0 0 5px rgba(0, 255, 255, 0.4)";
-                    e.currentTarget.style.borderColor = "#00ffff";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = "0 0 5px rgba(0, 255, 255, 0.3)";
-                    e.currentTarget.style.borderColor = "#0f3460";
-                  }}
-                >
-                  <CommentOutlined
-                    style={{
-                      color: "#00ffff",
-                      fontWeight: "bold",
-                      fontSize: "16px",
-                      filter: "drop-shadow(0 0 3px #00ffff)",
-                      transition: "all 0.3s ease",
-                    }}
-                  />
-                </Link>
-              </Tooltip>
+              {showChatIcon && (
+                <Tooltip title="Project Chat" color="blue" placement="left">
+                  <Badge count={params.data.unread_count || 0} size="small" offset={[5, -5]}>
+                    <button
+                      onClick={() => {
+                        setSelectedProjectForChat(params.data);
+                        setIsChatModalOpen(true);
+                      }}
+                      className="btn btn-sm me-1"
+                      style={{
+                        background: "linear-gradient(45deg, #1a1a2e, #16213e)",
+                        border: "1px solid #0f3460",
+                        borderRadius: "12px",
+                        padding: "4px 12px",
+                        position: "relative",
+                        overflow: "hidden",
+                        transition: "all 0.3s ease",
+                        boxShadow: "0 0 5px rgba(0, 255, 255, 0.3)",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.boxShadow = "0 0 20px rgba(0, 255, 255, 0.6), 0 0 5px rgba(0, 255, 255, 0.4)";
+                        e.currentTarget.style.borderColor = "#00ffff";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.boxShadow = "0 0 5px rgba(0, 255, 255, 0.3)";
+                        e.currentTarget.style.borderColor = "#0f3460";
+                      }}
+                    >
+                      <CommentOutlined
+                        style={{
+                          color: "#00ffff",
+                          fontWeight: "bold",
+                          fontSize: "16px",
+                          filter: "drop-shadow(0 0 3px #00ffff)",
+                          transition: "all 0.3s ease",
+                        }}
+                      />
+                    </button>
+                  </Badge>
+                </Tooltip>
+              )}
               <Tooltip title="Spread Sheet" color="green" placement="left">
                 <div
                   className="btn btn-sm btn-success me-1"
@@ -208,40 +271,48 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         return (
           <div className="d-flex flex-column">
             <div className="d-flex align-items-center">
-              <Tooltip title="Project Chat" color="blue" placement="left">
-                <Link
-                  href={`/project-chat?project_id=${params.data.id}`}
-                  className="btn btn-sm me-1"
-                  style={{
-                    background: "linear-gradient(45deg, #1a1a2e, #16213e)",
-                    border: "1px solid #0f3460",
-                    borderRadius: "12px",
-                    padding: "4px 12px",
-                    position: "relative",
-                    overflow: "hidden",
-                    transition: "all 0.3s ease",
-                    boxShadow: "0 0 5px rgba(0, 255, 255, 0.3)",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = "0 0 20px rgba(0, 255, 255, 0.6), 0 0 5px rgba(0, 255, 255, 0.4)";
-                    e.currentTarget.style.borderColor = "#00ffff";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = "0 0 5px rgba(0, 255, 255, 0.3)";
-                    e.currentTarget.style.borderColor = "#0f3460";
-                  }}
-                >
-                  <CommentOutlined
-                    style={{
-                      color: "#00ffff",
-                      fontWeight: "bold",
-                      fontSize: "16px",
-                      filter: "drop-shadow(0 0 3px #00ffff)",
-                      transition: "all 0.3s ease",
-                    }}
-                  />
-                </Link>
-              </Tooltip>
+              {showChatIcon && (
+                <Tooltip title="Project Chat" color="blue" placement="left">
+                  <Badge count={params.data.unread_count || 0} size="small" offset={[5, -5]}>
+                    <button
+                      onClick={() => {
+                        setSelectedProjectForChat(params.data);
+                        setIsChatModalOpen(true);
+                      }}
+                      className="btn btn-sm me-1"
+                      style={{
+                        background: "linear-gradient(45deg, #1a1a2e, #16213e)",
+                        border: "1px solid #0f3460",
+                        borderRadius: "12px",
+                        padding: "4px 12px",
+                        position: "relative",
+                        overflow: "hidden",
+                        transition: "all 0.3s ease",
+                        boxShadow: "0 0 5px rgba(0, 255, 255, 0.3)",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.boxShadow = "0 0 20px rgba(0, 255, 255, 0.6), 0 0 5px rgba(0, 255, 255, 0.4)";
+                        e.currentTarget.style.borderColor = "#00ffff";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.boxShadow = "0 0 5px rgba(0, 255, 255, 0.3)";
+                        e.currentTarget.style.borderColor = "#0f3460";
+                      }}
+                    >
+                      <CommentOutlined
+                        style={{
+                          color: "#00ffff",
+                          fontWeight: "bold",
+                          fontSize: "16px",
+                          filter: "drop-shadow(0 0 3px #00ffff)",
+                          transition: "all 0.3s ease",
+                        }}
+                      />
+                    </button>
+                  </Badge>
+                </Tooltip>
+              )}
               <Tooltip title="Spread Sheet" color="green" placement="left">
                 <div
                   className="btn btn-sm btn-success me-1"
@@ -975,21 +1046,40 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
   const DetailCellRenderer = (props) => {
     const data = props.data;
     if (!data) return null;
+    
+    const isSuperAdmin = user.role_id === 1;
+    const projectMembers = data?.project_team_members ?? [];
+    const currentUserMember = projectMembers.find((m) => m.user_id === user.id);
+    
+    // Filter members based on permissions
+    const displayMembers = isSuperAdmin ? projectMembers : (currentUserMember ? [currentUserMember] : []);
+    
     const [loading, setLoading] = useState(false);
-    const [members, setMembers] = useState(data?.project_team_members ?? []);
+    const [members, setMembers] = useState(displayMembers);
     const totalPoints = Number(data?.project_points ?? 0);
-    const usedPoints = members.reduce(
-      (sum, m) => sum + Number(m.points_gain || 0),
-      0
-    );
+    const usedPoints = isSuperAdmin 
+      ? projectMembers.reduce((sum, m) => sum + Number(m.points_gain || 0), 0)
+      : (currentUserMember ? Number(currentUserMember.points_gain || 0) : 0);
     const leftPoints = Math.max(0, totalPoints - usedPoints);
+    
     const handleChange = (id, value) => {
+      if (!isSuperAdmin) return; // Non-super admin cannot edit
       const newVal = Number(value) || 0;
       setMembers((prev) =>
         prev.map((m) => (m.id === id ? { ...m, points_gain: newVal } : m))
       );
     };
+    
     const handleUpdate = async () => {
+      if (!isSuperAdmin) {
+        api.error({
+          message: "Permission Denied",
+          description: "Only Super Admin can update team member scores.",
+          placement: "topRight",
+        });
+        return;
+      }
+      
       const totalUsed = members.reduce(
         (sum, m) => sum + Number(m.points_gain || 0),
         0
@@ -1031,67 +1121,220 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         setLoading(false);
       }
     };
+
+    const stripHtml = (html) => {
+      if (!html) return "";
+      const div = document.createElement("div");
+      div.innerHTML = html;
+      return div.textContent || div.innerText || "";
+    };
+
+    const DataField = ({ label, value, show = true }) => {
+      if (!show || !value) return null;
+      return (
+        <div className="row mb-3">
+          <div className="col-4">
+            <span className="fw-semibold text-muted" style={{ fontSize: "0.95rem", userSelect: "text" }}>{label}:</span>
+          </div>
+          <div className="col-8">
+            <span className="text-dark" style={{ fontSize: "0.95rem", userSelect: "text" }}>{value}</span>
+          </div>
+        </div>
+      );
+    };
+
     return (
-      <div className="p-4 shadow-sm">
-        <h4 className="text-blue-700 font-semibold mb-2">
-          Project Team Member Score Detail
-        </h4>
-        <ul style={{ listStyle: "circle", fontStyle: "italic" }}>
-          <li>
-            Total Project Points:{" "}
-            <span className="font-semibold">{totalPoints}</span>
-          </li>
-          <li>
-            Total Points Used:{" "}
-            <span className="font-semibold">{usedPoints}</span>
-          </li>
-          <li>
-            Total Points Left:{" "}
-            <span
-              className={`font-semibold ${leftPoints < 0 ? "text-red-500" : "text-green-600"
-                }`}
-            >
-              {leftPoints}
-            </span>
-          </li>
-        </ul>
-        {members.length > 0 ? (
-          <>
-            <hr className="my-3" />
-            <h5 className="mb-1">Member Breakdown:</h5>
-            <ul style={{ listStyle: "circle", fontStyle: "italic" }}>
-              {members.map((m) => (
-                <li key={m.id} className="mb-1">
-                  {m.user?.name || "Unknown"}:
-                  {hasUpdateScorePermission ? (
-                    <InputNumber
-                      size="small"
-                      value={Number(m.points_gain || 0)}
-                      min={0}
-                      onChange={(v) => handleChange(m.id, v)}
-                    />
+      <div className="p-3" style={{ maxHeight: "90vh", overflowY: "auto", userSelect: "text" }}>
+        <div className="row m-0 g-4">
+          {/* Left Column - Project Details from Grid */}
+          <div className={isSuperAdmin ? "col-12 col-lg-6" : "col-12"}>
+            <div className="card border-light shadow-sm">
+              <div className="card-body p-4">
+                <h5 className="card-title mb-4" style={{ color: "#1890ff", fontWeight: "700", fontSize: "1.1rem" }}>
+                  📋 Project Details
+                </h5>
+                
+                {/* Main Project Info */}
+                <DataField label="Title" value={data.project_title} show={!!data.project_title} />
+                <DataField label="Status" value={data.project_status} show={!!data.project_status} />
+                
+                <hr className="my-3" />
+                
+                {/* Address & Template */}
+                <DataField label="Address" value={stripHtml(data.project_address)} show={!!data.project_address} />
+                <DataField label="Template" value={stripHtml(data.project_template)} show={!!data.project_template} />
+                
+                {/* Client Info */}
+                {can("View Client Admin") && isSuperAdmin && (
+                  <DataField label="Client (Admin)" value={stripHtml(data.client_name_for_admin)} show={!!data.client_name_for_admin} />
+                )}
+                <DataField label="Mask Client" value={`bid#${stripHtml(data.client_name_for_admin || "").slice(0, 3).toLowerCase()}${stripHtml(data.client_name_for_admin || "").slice(-3).toLowerCase()}`} show={!!data.client_name_for_admin} />
+                
+                {/* Construction & Area Info */}
+                <DataField label="Construction Type" value={data.project_construction_type} show={!!data.project_construction_type} />
+                <DataField label="Area" value={data.project_area} show={!!data.project_area} />
+                <DataField label="Floor Number" value={data.project_floor_number} show={!!data.project_floor_number} />
+                <DataField label="Line Items Pricing" value={data.project_line_items_pricing} show={!!data.project_line_items_pricing} />
+                
+                <hr className="my-3" />
+                
+                {/* Scopes & Pricing */}
+                <DataField label="Main Scope" value={stripHtml(data.project_main_scope)} show={!!data.project_main_scope} />
+                <DataField label="Scope Details" value={stripHtml(data.project_scope_details)} show={!!data.project_scope_details} />
+                <DataField label="Pricing" value={stripHtml(data.project_pricing)} show={!!data.project_pricing} />
+                
+                <hr className="my-3" />
+                
+                {/* Notes */}
+                {can("View Client") && (
+                  <DataField label="Client Notes" value={stripHtml(data.client?.notes)} show={!!data.client?.notes} />
+                )}
+                {can("View Admin Notes") && isSuperAdmin && (
+                  <DataField label="Admin Notes" value={stripHtml(data.project_admin_notes)} show={!!data.project_admin_notes} />
+                )}
+                <DataField label="Estimator Notes" value={stripHtml(data.project_notes_estimator)} show={!!data.project_notes_estimator} />
+                {can("View Private Notes") && (
+                  <DataField label="Private Notes" value={stripHtml(data.notes_private)} show={!!data.notes_private} />
+                )}
+                
+                <hr className="my-3" />
+                
+                {/* Links */}
+                {can("View Initial Link(onside)") && data.project_init_link && (
+                  <div className="row mb-3">
+                    <div className="col-4">
+                      <span className="fw-semibold text-muted" style={{ fontSize: "0.95rem", userSelect: "text" }}>Admin Link:</span>
+                    </div>
+                    <div className="col-8">
+                      <a href={data.project_init_link} target="_blank" rel="noreferrer" className="text-primary" style={{ fontSize: "0.95rem", userSelect: "text" }}>
+                        View Link
+                      </a>
+                    </div>
+                  </div>
+                )}
+                {data.project_final_link && (
+                  <div className="row mb-3">
+                    <div className="col-4">
+                      <span className="fw-semibold text-muted" style={{ fontSize: "0.95rem", userSelect: "text" }}>Estimator Link:</span>
+                    </div>
+                    <div className="col-8">
+                      <a href={data.project_final_link} target="_blank" rel="noreferrer" className="text-primary" style={{ fontSize: "0.95rem", userSelect: "text" }}>
+                        View Link
+                      </a>
+                    </div>
+                  </div>
+                )}
+                
+                <hr className="my-3" />
+                
+                {/* Budget Info */}
+                {can("View Budget") && (
+                  <>
+                    <DataField label="Total Budget" value={`$${data.budget_total}`} show={!!data.budget_total} />
+                    {can("View Deduction") && (
+                      <DataField label="Deduction" value={`$${data.deduction_amount}`} show={!!data.deduction_amount} />
+                    )}
+                    <DataField label="Final Price" value={`$${data.budget_total - (data.deduction_amount ?? 0)}`} show={!!data.budget_total} />
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Team Member Scores (Only for Super Admin) */}
+          {isSuperAdmin && (
+            <div className="col-12 col-lg-6">
+              <div className="card border-primary shadow-sm">
+                <div className="card-body p-4">
+                  <h5 className="card-title mb-4" style={{ color: "#1890ff", fontWeight: "700", fontSize: "1.1rem" }}>
+                    👥 Team Member Scores
+                  </h5>
+                  
+                  {/* Stats Grid */}
+                  <div className="row g-3 mb-4">
+                    <div className="col-4">
+                      <div className="p-3 rounded" style={{ backgroundColor: "#f0f5ff", border: "1px solid #b3d8ff" }}>
+                        <div className="fw-semibold text-muted" style={{ fontSize: "0.85rem", userSelect: "text" }}>Total Points</div>
+                        <div className="h4 mb-0 text-primary fw-bold" style={{ userSelect: "text" }}>{totalPoints}</div>
+                      </div>
+                    </div>
+                    <div className="col-4">
+                      <div className="p-3 rounded" style={{ backgroundColor: "#e6f7ff", border: "1px solid #91d5ff" }}>
+                        <div className="fw-semibold text-muted" style={{ fontSize: "0.85rem", userSelect: "text" }}>Used</div>
+                        <div className="h4 mb-0 text-info fw-bold" style={{ userSelect: "text" }}>{usedPoints}</div>
+                      </div>
+                    </div>
+                    <div className="col-4">
+                      <div className="p-3 rounded" style={{ backgroundColor: leftPoints < 0 ? "#fff2e8" : "#f6ffed", border: `1px solid ${leftPoints < 0 ? "#ffbb96" : "#b7eb8f"}` }}>
+                        <div className="fw-semibold text-muted" style={{ fontSize: "0.85rem", userSelect: "text" }}>Remaining</div>
+                        <div className={`h4 mb-0 fw-bold ${leftPoints < 0 ? "text-danger" : "text-success"}`} style={{ userSelect: "text" }}>
+                          {leftPoints}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <hr className="my-4" />
+                  
+                  {/* Members Section */}
+                  {members.length > 0 ? (
+                    <>
+                      <h6 className="mb-3 fw-bold" style={{ fontSize: "1rem", color: "#262626" }}>Team Members:</h6>
+                      <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+                        {members.map((m, idx) => (
+                          <div key={m.id} className="mb-3 p-3 rounded" style={{ backgroundColor: idx % 2 === 0 ? "#fafafa" : "#fff", border: "1px solid #f0f0f0", transition: "all 0.2s" }}>
+                            <div className="d-flex justify-content-between align-items-center">
+                              <div>
+                                <div className="fw-semibold mb-2" style={{ fontSize: "0.95rem", color: "#262626", userSelect: "text" }}>
+                                  {m.user?.name || "Unknown User"}
+                                </div>
+                                <div className="text-muted" style={{ fontSize: "0.85rem", userSelect: "text" }}>
+                                  Current Points: <span className="fw-bold text-primary">{Number(m.points_gain || 0)}</span>
+                                </div>
+                              </div>
+                              <div>
+                                <InputNumber
+                                  size="large"
+                                  value={Number(m.points_gain || 0)}
+                                  min={0}
+                                  max={totalPoints}
+                                  onChange={(v) => handleChange(m.id, v)}
+                                  style={{ width: "100px", fontSize: "0.95rem" }}
+                                  prefix={<span style={{ fontSize: "0.85rem" }}>pts</span>}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        className="btn btn-primary w-100 mt-4"
+                        disabled={loading}
+                        style={{ fontSize: "0.95rem", padding: "0.6rem", fontWeight: "600" }}
+                        onClick={handleUpdate}
+                      >
+                        {loading ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            Updating...
+                          </>
+                        ) : (
+                          "💾 Update All Scores"
+                        )}
+                      </button>
+                    </>
                   ) : (
-                    m.points_gain || 0
-                  )}{" "}
-                  Points
-                </li>
-              ))}
-            </ul>
-            {hasUpdateScorePermission && (
-              <button
-                className="btn btn-sm btn-primary mt-2"
-                disabled={loading}
-                onClick={handleUpdate}
-              >
-                {loading ? "Updating..." : "Update All"}
-              </button>
-            )}
-          </>
-        ) : (
-          <p className="italic text-gray-500 mt-3">
-            No members have joined this project yet.
-          </p>
-        )}
+                    <div className="text-center p-4">
+                      <p className="text-muted mb-0" style={{ fontSize: "0.95rem", userSelect: "text" }}>
+                        📭 No members have joined this project yet.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -1192,6 +1435,31 @@ const ProjectsTable = ({ projects, showDrawer, setRowData, api, onClose }) => {
         maintainColumnOrder={true}
         detailCellRenderer={DetailCellRenderer}
         rowSelection="single"
+      />
+
+       {/* Project Chat Modal */}
+      <ProjectChatModal
+        isOpen={isChatModalOpen}
+        onClose={() => {
+          setIsChatModalOpen(false);
+          if (selectedProjectForChat) {
+            const projectId = selectedProjectForChat.id;
+            if (gridRef.current?.api) {
+              const rowNode = gridRef.current.api.getRowNode(projectId);
+              if (rowNode) {
+                rowNode.setData({
+                  ...rowNode.data,
+                  unread_count: 0
+                });
+              }
+            }
+            if (setRowData) {
+              setRowData(prev => prev.map(p => p.id === projectId ? { ...p, unread_count: 0 } : p));
+            }
+          }
+        }}
+        project={selectedProjectForChat}
+        auth={auth}
       />
     </>
   );

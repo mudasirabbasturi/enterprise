@@ -1,0 +1,1 @@
+import{j as e}from"./npm-react-ByWNrU8C.js";import"./npm-ably-CjJpl8zu.js";const o=({data:r})=>e.jsx(e.Fragment,{children:e.jsxs("h1",{children:["Show Permission Will Go Here: ",r.name]})});export{o as default};

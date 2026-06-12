@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import Echo from "laravel-echo";
 import Pusher from "pusher-js";
-import * as Ably from 'ably';
 
 window.Pusher = Pusher;
 
@@ -45,7 +44,8 @@ import {
    */
   useRoute,
 } from "@shared/ui";
-import { Layout, Button, Dropdown, Avatar, notification } from "antd";
+import { Layout, Button, Dropdown, Avatar, notification, Badge } from "antd";
+
 import axios from "axios";
 
 import Sidebar from "@component/Sidebar/Sidebar";
@@ -66,7 +66,7 @@ const DashboardLayout = ({ children }) => {
   const [onlineUsers, setOnlineUsers] = useState(new Set());
 
   useEffect(() => {
-    // Logic for other unread counts if any
+    refreshUnreadCount();
   }, []);
 
   const hasPermission = (userpermission, permName) =>
@@ -208,18 +208,37 @@ const DashboardLayout = ({ children }) => {
 
   // Chat Menu Items (Project Chat + Direct Chat)
   const getChatMenuItems = () => {
-    return [
-      {
-        key: "project-chat",
-        icon: <ProjectOutlined />,
-        label: <Link href={route("project-chat.index")}>Project Chat</Link>,
-      },
-      {
+    const items = [];
+
+    items.push({
+      key: "project-chat",
+      icon: <ProjectOutlined />,
+      label: (
+        <Link href={route("project-chat.index")} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", gap: "12px" }}>
+          <span>Project Chat</span>
+          {unreadCounts.project > 0 && (
+            <Badge count={unreadCounts.project} style={{ backgroundColor: '#52c41a' }} size="small" />
+          )}
+        </Link>
+      ),
+    });
+
+    if (can("View Chat")) {
+      items.push({
         key: "direct-chat",
         icon: <MessageOutlined />,
-        label: <Link href={route("chat.index")}>Direct Chat</Link>,
-      },
-    ];
+        label: (
+          <Link href={route("chat.index")} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", gap: "12px" }}>
+            <span>Direct Chat</span>
+            {unreadCounts.chat?.total > 0 && (
+              <Badge count={unreadCounts.chat.total} style={{ backgroundColor: '#1890ff' }} size="small" />
+            )}
+          </Link>
+        ),
+      });
+    }
+
+    return items;
   };
 
   // Useful Menu Items (Activity, Projects, Employee Self Service)
@@ -282,8 +301,15 @@ const DashboardLayout = ({ children }) => {
 
   const refreshUnreadCount = async () => {
     try {
-      const res = await axios.get('/api/chat/unread-count');
-      setUnreadCounts(prev => ({ ...prev, chat: res.data }));
+      const res = await axios.get('/chat/unread-counts');
+      setUnreadCounts({
+        project: res.data.project || 0,
+        chat: {
+          total: res.data.global || 0,
+          direct: res.data.direct || 0,
+          group: res.data.groups || 0
+        }
+      });
     } catch (e) { console.error(e); }
   };
 
@@ -317,50 +343,10 @@ const DashboardLayout = ({ children }) => {
       window.dispatchEvent(new CustomEvent('tracker-status-notification', { detail: data }));
     });
 
-    // Ably Real-time Connection
-    const ably = new Ably.Realtime({ authUrl: '/api/ably/auth' });
-    ablyRef.current = ably;
-    const presenceChannel = ably.channels.get('presence:global');
-    const userChannel = ably.channels.get(`user.${user.id}`);
-
-    // Presence
-    presenceChannel.presence.subscribe('enter', (member) => setOnlineUsers(prev => new Set([...prev, member.clientId])));
-    presenceChannel.presence.subscribe('leave', (member) => setOnlineUsers(prev => {
-      const next = new Set(prev);
-      next.delete(member.clientId);
-      return next;
-    }));
-    presenceChannel.presence.enter();
-
-    // Chat Notifications
-    userChannel.subscribe('notification', (msgEvent) => {
-      const msg = msgEvent.data.message;
-      const chatType = msgEvent.data.chat_type || 'direct';
-
-      if (window.activeChatId !== msg.chat_id) {
-        chatSound.current.play().catch(() => { });
-        setUnreadCounts(prev => {
-          const newChat = { ...(prev.chat || { total: 0, direct: 0, group: 0 }) };
-          newChat.total = (newChat.total || 0) + 1;
-          if (chatType === 'group') {
-            newChat.group = (newChat.group || 0) + 1;
-          } else {
-            newChat.direct = (newChat.direct || 0) + 1;
-          }
-          return { ...prev, chat: newChat };
-        });
-      }
-    });
-
     return () => {
       window.removeEventListener('chat-unread-count-changed', refreshUnreadCount);
       window.Echo.leave('project-channel');
       window.Echo.leave('tracker-status');
-      try {
-        presenceChannel.presence.leave();
-        userChannel.unsubscribe();
-        if (ably.connection.state !== 'closed') ably.close();
-      } catch (e) { }
     };
   }, [user.id]);
 
@@ -432,21 +418,6 @@ const DashboardLayout = ({ children }) => {
 
             <div className="right">
               <div className="d-flex">
-                {/* Chat Menu Button - Project Chat + Direct Chat */}
-                <div className="me-3">
-                  <Dropdown
-                    menu={{
-                      items: getChatMenuItems(),
-                    }}
-                    trigger={["click"]}
-                    placement="bottomRight"
-                  >
-                    <button className="btn btn-sm btn-outline-primary">
-                      <MessageOutlined /> Chat
-                    </button>
-                  </Dropdown>
-                </div>
-
                 {/* Useful Menu Button - Activity, Projects, Employee Self Service */}
                 <div className="me-3">
                   <Dropdown

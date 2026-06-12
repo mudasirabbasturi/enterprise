@@ -3,340 +3,357 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 
-use App\Models\ProjectChat;
-use App\Models\Media;
-use App\Models\ProjectChatRead;
+use Illuminate\Http\Request;
+use App\Models\User;
 use App\Models\Project;
-use Illuminate\Support\Facades\Auth;
-use Pusher\Pusher;
+use App\Models\ProjectChat;
+use Illuminate\Support\Facades\DB;
 
 class ProjectChatController extends Controller
 {
-    /**
-     * Get total unread counts for sidebar badges.
-     */
-    public function getUnreadCounts()
+
+    public function chatUserList(Request $request) {
+        $users = DB::table('users')
+            // FIX: Change 'id as userId' to 'users.id as userId'
+            ->select('users.id as userId', 'users.name', 'users.email', 'users.picture_path', 'media.file_path') 
+            ->join('media', 'users.id', '=', 'media.user_id')
+            ->where('users.status', '=', 'active') // Good practice to prefix here too
+            ->where('media.category', '=', 'profile')
+            ->orderBy('users.id', 'desc')
+            ->get();
+
+        return response()->json([
+            'users' => $users
+        ]);
+    }
+
+    public function chatProjectList(Request $request)
     {
-        $userId = Auth::id();
-        
-        // 1. Project Chat Unread
-        $totalProjectUnread = 0;
-        $projects = Project::where('project_status', '!=', 'Deliver')->get();
-        
+        $status = $request->get('status', 'All');
+
+        $query = DB::table('projects')
+            ->select('id', 'project_title as name', 'project_status')
+            ->orderBy('id', 'desc');
+
+        if ($status !== 'All') {
+            $query->where('project_status', $status);
+        }
+
+        $projects = $query->paginate(500);
+
+        $projectIds = collect($projects->items())->pluck('id')->toArray();
+
+        $teamMembers = DB::table('project_team_members')
+            ->join('users', 'users.id', '=', 'project_team_members.user_id')
+            ->leftJoin('media', function ($join) {
+                $join->on('users.id', '=', 'media.user_id')
+                    ->where('media.category', '=', 'profile');
+            })
+            ->select(
+                'project_team_members.project_id',
+                'project_team_members.id as team_member_id',
+                'project_team_members.user_id',
+                'project_team_members.steps',
+                'project_team_members.status',
+                'users.name as user_name',
+                'media.id as media_id',
+                'media.file_path',
+                'media.category'
+            )
+            ->whereIn('project_team_members.project_id', $projectIds)
+            ->get()
+            ->groupBy('project_id');
+
         foreach ($projects as $project) {
-            $lastRead = ProjectChatRead::where('user_id', $userId)
-                ->where('project_id', $project->id)
-                ->first();
+            $members = $teamMembers[$project->id] ?? collect();
 
-            $query = ProjectChat::where('project_id', $project->id)->where('user_id', '!=', $userId);
-            if ($lastRead) {
-                $query->where('created_at', '>', $lastRead->last_read_at);
-            }
-            $totalProjectUnread += $query->count();
-        }
-
-        // 2. Direct Chat Unread
-        $directUnreads = 0;
-        $directReads = \App\Models\GlobalChatRead::where('user_id', $userId)
-            ->whereNotNull('receiver_id')
-            ->pluck('last_read_at', 'receiver_id');
-            
-        $directMessages = \App\Models\GlobalMessage::whereNull('group_id')
-            ->where('receiver_id', $userId)
-            ->get();
-            
-        foreach ($directMessages as $msg) {
-            $lastRead = $directReads->get($msg->sender_id);
-            if (!$lastRead || \Carbon\Carbon::parse($msg->created_at)->gt(\Carbon\Carbon::parse($lastRead))) {
-                $directUnreads++;
-            }
-        }
-
-        // 3. Group Chat Unread
-        $groupUnreads = 0;
-        $myGroupIds = Auth::user()->chatGroups()->pluck('chat_groups.id');
-        
-        $groupReads = \App\Models\GlobalChatRead::where('user_id', $userId)
-            ->whereNotNull('group_id')
-            ->pluck('last_read_at', 'group_id');
-            
-        $groupMessages = \App\Models\GlobalMessage::whereIn('group_id', $myGroupIds)
-            ->where('sender_id', '!=', $userId)
-            ->get();
-            
-        foreach ($groupMessages as $msg) {
-            $lastRead = $groupReads->get($msg->group_id);
-            if (!$lastRead || \Carbon\Carbon::parse($msg->created_at)->gt(\Carbon\Carbon::parse($lastRead))) {
-                $groupUnreads++;
-            }
+            $project->team_members = $members->map(function ($item) {
+                return [
+                    'id' => $item->team_member_id,
+                    'project_id' => $item->project_id,
+                    'user_id' => $item->user_id,
+                    'steps' => $item->steps,
+                    'status' => $item->status,
+                    'user' => [
+                        'id' => $item->user_id,
+                        'name' => $item->user_name,
+                        'media' => $item->media_id ? [
+                            'id' => $item->media_id,
+                            'user_id' => $item->user_id,
+                            'file_path' => $item->file_path,
+                            'category' => $item->category,
+                        ] : null
+                    ]
+                ];
+            })->values()->all();
         }
 
         return response()->json([
-            'project' => $totalProjectUnread,
-            'global' => $directUnreads + $groupUnreads,
-            'direct' => $directUnreads,
-            'groups' => $groupUnreads
+            'projects' => $projects,
         ]);
     }
 
-    /**
-     * Get list of projects for project chats (as JSON).
-     */
-    public function getProjectsJson()
-    {
-        $userId = Auth::id();
-        $projects = Project::with([
-            'projectTeamMembers.user.media' => function($query) {
-                $query->where('category', 'profile')->latest()->limit(1);
-            }
-        ])
-        ->where('project_status', '!=', 'Deliver')
-        ->orderBy('created_at', 'desc')
-        ->limit(100)
-        ->get()
-        ->map(function ($project) use ($userId) {
-            $lastRead = ProjectChatRead::where('user_id', $userId)
-                ->where('project_id', $project->id)
-                ->first();
+    public function getProjectChatMessages($project_id) {
+        $chatMessages = DB::table('project_chats')
+            ->where('project_chats.project_id', $project_id)
+            ->join('users', 'users.id', '=', 'project_chats.user_id')
+            ->leftJoin('media as profile_media', function ($join) {
+                $join->on('users.id', '=', 'profile_media.user_id')
+                    ->where('profile_media.category', '=', 'profile');
+            })
+            ->select(
+                'project_chats.id',
+                'project_chats.project_id',
+                'project_chats.user_id as senderId',
+                'project_chats.message as content',
+                'project_chats.created_at as timestamp',
+                'project_chats.reply_to_id',
+                'users.name as user_name',
+                'users.email as user_email',
+                'profile_media.file_path as user_avatar'
+            )
+            ->orderBy('project_chats.created_at', 'asc')
+            ->get();
 
-            $query = ProjectChat::where('project_id', $project->id);
-            if ($lastRead) {
-                $query->where('created_at', '>', $lastRead->last_read_at);
-            }
-            
-            $project->unread_count = $query->where('user_id', '!=', $userId)->count();
-            return $project;
-        });
+        $messageIds = $chatMessages->pluck('id')->toArray();
 
-        return response()->json($projects);
-    }
-
-    /**
-     * Show the full page chat view.
-     */
-    public function fullPageChat()
-    {
-        $userId = Auth::id();
-        $projects = Project::with([
-            'projectTeamMembers.user.media' => function($query) {
-                $query->where('category', 'profile')->latest()->limit(1);
-            }
-        ])
-        ->where('project_status', '!=', 'Deliver')
-        ->orderBy('created_at', 'desc')
-        ->get()
-        ->map(function ($project) use ($userId) {
-            $lastRead = ProjectChatRead::where('user_id', $userId)
-                ->where('project_id', $project->id)
-                ->first();
-
-            $query = ProjectChat::where('project_id', $project->id);
-            if ($lastRead) {
-                $query->where('created_at', '>', $lastRead->last_read_at);
-            }
-            
-            $project->unread_count = $query->where('user_id', '!=', $userId)->count();
-            return $project;
-        });
-
-        return \Inertia\Inertia::render('Pages/chat/ProjectChat', [
-            'projects' => $projects
-        ]);
-    }
-
-    /**
-     * Get chat history for a project.
-     */
-    public function index($projectId)
-    {
-        $userId = Auth::id();
-        
-        // Mark as read
-        ProjectChatRead::updateOrCreate(
-            ['user_id' => $userId, 'project_id' => $projectId],
-            ['last_read_at' => now()]
-        );
-
-        $chats = ProjectChat::with(['user:id,name', 'user.media', 'replyTo.user:id,name', 'media'])
-            ->where('project_id', $projectId)
-            ->orderBy('created_at', 'asc')
+        // Fetch all file attachments for these messages
+        $attachments = DB::table('media')
+            ->where('model_type', 'App\Models\ProjectChat')
+            ->whereIn('model_id', $messageIds)
+            ->select('model_id', 'file_path', 'id as media_id')
             ->get()
-            ->map(function ($chat) {
-                return [
-                    'id' => $chat->id,
-                    'message' => $chat->message,
-                    'user_id' => $chat->user_id,
-                    'user_name' => $chat->user->name,
-                    'avatar' => $chat->user->media->first() ? '/' . $chat->user->media->first()->file_path : null,
-                    'reply_to_id' => $chat->reply_to_id,
-                    'reply_to_message' => $chat->replyTo ? $chat->replyTo->message : null,
-                    'reply_to_user_name' => $chat->replyTo && $chat->replyTo->user ? $chat->replyTo->user->name : null,
-                    'file' => $chat->media->first() ? [
-                        'name' => basename($chat->media->first()->file_path),
-                        'url' => '/' . $chat->media->first()->file_path
-                    ] : null,
-                    'created_at' => $chat->created_at->toDateTimeString(),
-                ];
-            });
+            ->keyBy('model_id');
 
-        return response()->json($chats);
+        // Fetch reply-to message content
+        $replyIds = $chatMessages->pluck('reply_to_id')->filter()->unique()->toArray();
+        $replyMessages = [];
+        if (!empty($replyIds)) {
+            $replyMessages = DB::table('project_chats')
+                ->join('users', 'users.id', '=', 'project_chats.user_id')
+                ->whereIn('project_chats.id', $replyIds)
+                ->select('project_chats.id', 'project_chats.message', 'users.name as user_name')
+                ->get()
+                ->keyBy('id');
+        }
+
+        // Attach file and reply data to each message
+        $chatMessages->each(function ($msg) use ($attachments, $replyMessages) {
+            $attachment = $attachments[$msg->id] ?? null;
+            if ($attachment) {
+                $fileName = basename($attachment->file_path);
+                $msg->file = [
+                    'name' => $fileName,
+                    'url'  => $attachment->file_path,
+                ];
+            } else {
+                $msg->file = null;
+            }
+
+            if ($msg->reply_to_id && isset($replyMessages[$msg->reply_to_id])) {
+                $reply = $replyMessages[$msg->reply_to_id];
+                $msg->reply_to_message = $reply->message;
+                $msg->reply_to_user_name = $reply->user_name;
+            } else {
+                $msg->reply_to_message = null;
+                $msg->reply_to_user_name = null;
+            }
+        });
+
+        return response()->json([
+            'chat_messages' => $chatMessages
+        ]);
     }
 
-    /**
-     * Store a new chat message.
-     */
-    public function store(Request $request, $projectId)
+    // public function sendProjectMessage(Request $request)
+    // {
+    //     $request->validate([
+    //         'project_id' => 'required|integer|exists:projects,id',
+    //         'user_id' => 'required|integer|exists:users,id',
+    //         'message' => 'required|string',
+    //         'reply_to_id' => 'nullable|integer'
+    //     ]);
+
+    //     $messageId = DB::table('project_chats')->insertGetId([
+    //         'project_id' => $request->project_id,
+    //         'user_id' => $request->user_id,
+    //         'message' => $request->message,
+    //         'reply_to_id' => $request->reply_to_id,
+    //         'created_at' => now(),
+    //         'updated_at' => now(),
+    //     ]);
+
+    //     // return full message object (useful for UI append)
+    //     $message = DB::table('project_chats')
+    //         ->where('project_chats.id', $messageId)
+    //         ->join('users', 'users.id', '=', 'project_chats.user_id')
+    //         ->leftJoin('media', function ($join) {
+    //             $join->on('users.id', '=', 'media.user_id')
+    //                 ->where('media.category', '=', 'profile');
+    //         })
+    //         ->select(
+    //             'project_chats.id',
+    //             'project_chats.project_id',
+    //             'project_chats.user_id as senderId',
+    //             'project_chats.message as content',
+    //             'project_chats.created_at as timestamp',
+    //             'project_chats.reply_to_id',
+    //             'users.name as user_name',
+    //             'media.file_path as user_avatar'
+    //         )
+    //         ->first();
+
+    //     return response()->json([
+    //         'success' => true,
+    //         'message' => $message
+    //     ]);
+    // }
+
+    public function sendProjectMessage(Request $request)
     {
         $request->validate([
+            'project_id' => 'required|exists:projects,id',
+            'user_id' => 'required|exists:users,id',
             'message' => 'nullable|string',
-            'file' => 'nullable|file',
             'reply_to_id' => 'nullable|exists:project_chats,id',
+            'file' => 'nullable|file|max:20480',
         ]);
 
         if (!$request->filled('message') && !$request->hasFile('file')) {
-            return response()->json(['error' => 'Message or file is required'], 422);
+            return response()->json([
+                'success' => false,
+                'message' => 'Message or file is required'
+            ], 422);
         }
 
-        $chat = ProjectChat::create([
-            'project_id' => $projectId,
-            'user_id' => Auth::id(),
+        $messageId = DB::table('project_chats')->insertGetId([
+            'project_id' => $request->project_id,
+            'user_id' => $request->user_id,
             'message' => $request->message ?? '',
             'reply_to_id' => $request->reply_to_id,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
+        $fileData = null;
+
         if ($request->hasFile('file')) {
+
             $file = $request->file('file');
+
             $fileName = time() . '_' . $file->getClientOriginalName();
-            $path = public_path('uploads/media/group_chat_file');
+
+            $path = public_path('uploads/media/project_chat');
+
             if (!file_exists($path)) {
                 mkdir($path, 0777, true);
             }
+
             $file->move($path, $fileName);
 
-            Media::create([
-                'user_id' => Auth::id(),
-                'file_path' => 'uploads/media/group_chat_file/' . $fileName,
-                'category' => 'group_chat',
+            $mediaId = DB::table('media')->insertGetId([
+                'user_id' => $request->user_id,
+                'file_path' => 'uploads/media/project_chat/' . $fileName,
+                'category' => 'project_chat',
                 'model_type' => 'App\Models\ProjectChat',
-                'model_id' => $chat->id,
+                'model_id' => $messageId,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
+
+            $fileData = [
+                'id' => $mediaId,
+                'name' => $fileName,
+                'url' => '/uploads/media/project_chat/' . $fileName,
+            ];
         }
 
-        $chat->load(['user:id,name', 'user.media', 'replyTo.user:id,name', 'media']);
+        $message = DB::table('project_chats')
+            ->join('users', 'users.id', '=', 'project_chats.user_id')
+            ->leftJoin('media as profile_media', function ($join) {
+                $join->on('users.id', '=', 'profile_media.user_id')
+                    ->where('profile_media.category', '=', 'profile');
+            })
+            ->where('project_chats.id', $messageId)
+            ->select(
+                'project_chats.id',
+                'project_chats.project_id',
+                'project_chats.user_id as senderId',
+                'project_chats.message as content',
+                'project_chats.created_at as timestamp',
+                'project_chats.reply_to_id',
+                'users.name as user_name',
+                'profile_media.file_path as user_avatar'
+            )
+            ->first();
 
-        $messageData = [
-            'id' => $chat->id,
-            'message' => $chat->message,
-            'user_id' => $chat->user_id,
-            'user_name' => $chat->user->name,
-            'avatar' => $chat->user->media->first() ? '/' . $chat->user->media->first()->file_path : null,
-            'reply_to_id' => $chat->reply_to_id,
-            'reply_to_message' => $chat->replyTo ? $chat->replyTo->message : null,
-            'reply_to_user_name' => $chat->replyTo && $chat->replyTo->user ? $chat->replyTo->user->name : null,
-            'file' => $chat->media->first() ? [
-                'name' => basename($chat->media->first()->file_path),
-                'url' => '/' . $chat->media->first()->file_path
-            ] : null,
-            'created_at' => $chat->created_at->toDateTimeString(),
-        ];
+        if ($message->reply_to_id) {
 
-        // Broadcast to the specific project chat (for people looking at the chat)
-        $this->broadcastMessage($projectId, 'event-new-message', $messageData);
+            $replyMessage = DB::table('project_chats')
+                ->join('users', 'users.id', '=', 'project_chats.user_id')
+                ->where('project_chats.id', $message->reply_to_id)
+                ->select(
+                    'project_chats.id',
+                    'project_chats.message',
+                    'users.name as user_name'
+                )
+                ->first();
 
-        // Broadcast a notification to all team members' private channels
-        $project = Project::with('projectTeamMembers')->find($projectId);
-        if ($project) {
-            foreach ($project->projectTeamMembers as $member) {
-                // Don't notify the sender themselves for the badge, but keep them in sync if needed
-                $this->broadcastToUser($member->user_id, 'project-chat-notification', [
-                    'project_id' => $projectId,
-                    'message' => $messageData
-                ]);
-            }
+            $message->reply_to_message = $replyMessage?->message;
+            $message->reply_to_user_name = $replyMessage?->user_name;
         }
+
+        $message->file = $fileData;
 
         return response()->json([
-            'status' => 'success',
-            'data' => $messageData
+            'success' => true,
+            'message' => $message
         ]);
     }
-
-    /**
-     * Delete a chat message.
-     */
-    public function destroy($projectId, $chatId)
+    
+    public function deleteProjectMessage($id)
     {
-        $chat = ProjectChat::where('project_id', $projectId)
-            ->where('id', $chatId)
-            ->firstOrFail();
+        $message = DB::table('project_chats')
+            ->where('id', $id)
+            ->first();
 
-        // Check if user is owner or admin (optional)
-        if ($chat->user_id !== Auth::id() && Auth::user()->role_id !== 1) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+        if (!$message) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Message not found'
+            ], 404);
         }
 
-        // Delete associated media
-        foreach ($chat->media as $media) {
+        // Find attached media
+        $mediaFiles = DB::table('media')
+            ->where('model_type', 'App\Models\ProjectChat')
+            ->where('model_id', $id)
+            ->get();
+
+        foreach ($mediaFiles as $media) {
+
             $filePath = public_path($media->file_path);
+
             if (file_exists($filePath)) {
                 unlink($filePath);
             }
-            $media->delete();
         }
 
-        $idToDelete = $chat->id;
-        $chat->delete();
+        // Delete media records
+        DB::table('media')
+            ->where('model_type', 'App\Models\ProjectChat')
+            ->where('model_id', $id)
+            ->delete();
 
-        // Broadcast deletion
-        $this->broadcastMessage($projectId, 'event-delete-message', ['id' => $idToDelete]);
+        // Delete message
+        DB::table('project_chats')
+            ->where('id', $id)
+            ->delete();
 
-        return response()->json(['status' => 'success', 'message' => 'Message deleted']);
-    }
-
-    private function broadcastMessage($projectId, $event, $data)
-    {
-        try {
-            $ablyKey = config('broadcasting.connections.ably.key') ?? env('ABLY_KEY');
-            $name = $event === 'event-new-message' ? 'message.sent' : 'message.deleted';
-            $payload = ['name' => $name];
-            if ($name === 'message.deleted') {
-                $payload['data'] = ['messageId' => $data['id']];
-            } else {
-                $payload['data'] = ['message' => $data];
-            }
-
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, "https://rest.ably.io/channels/project-chat.{$projectId}/messages");
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-            curl_setopt($ch, CURLOPT_POST, 1);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-            if (config('app.env') === 'local') curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Basic ' . base64_encode($ablyKey), 'Content-Type: application/json']);
-            curl_exec($ch);
-            curl_close($ch);
-        } catch (\Exception $e) {
-            \Log::error("Ably Project Message Broadcast Error: " . $e->getMessage());
-        }
-    }
-
-    private function broadcastToUser($userId, $event, $data)
-    {
-        try {
-            $ablyKey = config('broadcasting.connections.ably.key') ?? env('ABLY_KEY');
-
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, "https://rest.ably.io/channels/user.{$userId}/messages");
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-            curl_setopt($ch, CURLOPT_POST, 1);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['name' => 'project-notification', 'data' => $data]));
-            if (config('app.env') === 'local') curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Basic ' . base64_encode($ablyKey), 'Content-Type: application/json']);
-            curl_exec($ch);
-            curl_close($ch);
-        } catch (\Exception $e) {
-            \Log::error("Ably User Notification Broadcast Error: " . $e->getMessage());
-        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Message deleted successfully'
+        ]);
     }
 }

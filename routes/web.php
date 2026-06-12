@@ -116,30 +116,12 @@ Route::middleware(['auth'])->group(function () {
 
     
     // Project Chat Routes
-    Route::get('/project-chat', [ProjectChatController::class, 'index'])->name('project-chat.index');
     Route::get('/projects/{project}/chat', [ProjectChatController::class, 'getMessages']);
     Route::post('/projects/{project}/chat', [ProjectChatController::class, 'store']);
     Route::delete('/projects/{project}/chat/{chatId}', [ProjectChatController::class, 'destroy']);
     Route::get('/chat/unread-counts', [ProjectChatController::class, 'getUnreadCounts']);
-    Route::get('/project-chats', [ProjectChatController::class, 'getProjectsJson']);
-    Route::get('/project-chats/by-status', [ProjectChatController::class, 'getProjectsByStatus']);
     Route::post('/projects/{project}/chat/read', [ProjectChatController::class, 'markAsRead']);
-
-
-    // New Chat System
-    Route::get('/chat/{type?}/{id?}', [ChatController::class, 'view'])->name('chat.index');
-    Route::get('/api/chats', [ChatController::class, 'index'])->name('chat.api.index');
-    Route::get('/api/chats/{chatId}/messages', [ChatController::class, 'getMessages'])->name('chat.api.messages');
-    Route::post('/api/chats/{chatId}/messages', [ChatController::class, 'sendMessage'])->name('chat.api.send');
-    Route::post('/api/chats', [ChatController::class, 'store'])->name('chat.api.store');
-    Route::get('/api/chat-visibility-users', [ChatController::class, 'getUsers'])->name('chat.api.users');
-    Route::put('/api/chats/{chatId}', [ChatController::class, 'update'])->name('chat.api.update');
-    Route::put('/api/chat-visibility-users/{userId}/group', [ChatController::class, 'updateUserChatGroup']);
-    Route::delete('/api/chats/{chatId}', [ChatController::class, 'destroy'])->name('chat.api.destroy');
-    Route::delete('/api/chats/{chatId}/messages/{messageId}', [ChatController::class, 'destroyMessage'])->name('chat.api.messages.destroy');
-    Route::get('/api/chat/unread-count', [ChatController::class, 'getUnreadCount'])->name('chat.api.unread');
-    Route::post('/api/chats/{chatId}/read', [ChatController::class, 'markAsRead'])->name('chat.api.read');
-    Route::get('/api/ably/auth', [ChatController::class, 'ablyAuth'])->name('ably.auth');
+    // Role Routes
     Route::get('/role', [RoleController::class, 'Index'])->name('role.index');
     Route::post('/role/store', [RoleController::class, 'Store'])->name('role.store');
     Route::get('/role/view/{id}', [RoleController::class, 'View'])->name('role.view');
@@ -277,8 +259,6 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/payroll/penalty-management/update/{id}', [PenaltyController::class, 'update'])->name('penalty-management.update');
     Route::delete('/payroll/penalty-management/destroy/{id}', [PenaltyController::class, 'destroy'])->name('penalty-management.destroy');
     Route::delete('/payroll/penalty-management/bulk-destroy', [PenaltyController::class, 'bulkDestroy'])->name('penalty-management.bulk-destroy');
-
-
 
 });
 
