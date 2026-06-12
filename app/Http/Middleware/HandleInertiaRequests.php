@@ -153,40 +153,40 @@ class HandleInertiaRequests extends Middleware
             },
 
             // ✅ Detailed unread chat count
-            'unreadChatCount' => function () use ($request) {
-                $user = $request->user();
-                if (!$user) return ['total' => 0, 'direct' => 0, 'group' => 0];
+            // 'unreadChatCount' => function () use ($request) {
+            //     $user = $request->user();
+            //     if (!$user) return ['total' => 0, 'direct' => 0, 'group' => 0];
                 
-                $unreadMessages = \App\Models\ChatMessage::whereHas('chat.participants', function($q) use ($user) {
-                        $q->where('user_id', $user->id);
-                    })
-                    ->where('sender_id', '!=', $user->id)
-                    ->where(function($query) use ($user) {
-                        $query->whereExists(function ($q) use ($user) {
-                            $q->select(\DB::raw(1))
-                              ->from('chat_participants')
-                              ->whereColumn('chat_participants.chat_id', 'chat_messages.chat_id')
-                              ->where('chat_participants.user_id', $user->id)
-                              ->where(function($sq) {
-                                  $sq->whereNull('chat_participants.last_read_at')
-                                     ->orWhereColumn('chat_messages.created_at', '>', 'chat_participants.last_read_at');
-                              });
-                        });
-                    })
-                    ->join('chats', 'chat_messages.chat_id', '=', 'chats.id')
-                    ->select('chats.type', \DB::raw('count(*) as count'))
-                    ->groupBy('chats.type')
-                    ->get();
+            //     $unreadMessages = \App\Models\ChatMessage::whereHas('chat.participants', function($q) use ($user) {
+            //             $q->where('user_id', $user->id);
+            //         })
+            //         ->where('sender_id', '!=', $user->id)
+            //         ->where(function($query) use ($user) {
+            //             $query->whereExists(function ($q) use ($user) {
+            //                 $q->select(\DB::raw(1))
+            //                   ->from('chat_participants')
+            //                   ->whereColumn('chat_participants.chat_id', 'chat_messages.chat_id')
+            //                   ->where('chat_participants.user_id', $user->id)
+            //                   ->where(function($sq) {
+            //                       $sq->whereNull('chat_participants.last_read_at')
+            //                          ->orWhereColumn('chat_messages.created_at', '>', 'chat_participants.last_read_at');
+            //                   });
+            //             });
+            //         })
+            //         ->join('chats', 'chat_messages.chat_id', '=', 'chats.id')
+            //         ->select('chats.type', \DB::raw('count(*) as count'))
+            //         ->groupBy('chats.type')
+            //         ->get();
 
-                $direct = $unreadMessages->where('type', 'direct')->first()?->count ?? 0;
-                $group = $unreadMessages->where('type', 'group')->first()?->count ?? 0;
+            //     $direct = $unreadMessages->where('type', 'direct')->first()?->count ?? 0;
+            //     $group = $unreadMessages->where('type', 'group')->first()?->count ?? 0;
 
-                return [
-                    'total' => $direct + $group,
-                    'direct' => (int)$direct,
-                    'group' => (int)$group
-                ];
-            },
+            //     return [
+            //         'total' => $direct + $group,
+            //         'direct' => (int)$direct,
+            //         'group' => (int)$group
+            //     ];
+            // },
         ]);
     }
 
